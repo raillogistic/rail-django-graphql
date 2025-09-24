@@ -1,0 +1,489 @@
+"""
+Mutation Generation System for Django GraphQL Auto-Generation
+
+This module provides the MutationGenerator class, which is responsible for creating
+GraphQL mutations for Django models, including CRUD operations and custom method mutations.
+"""
+
+from typing import Any, Dict, List, Optional, Type, Union, Callable
+import inspect
+
+import graphene
+from django.db import models, transaction
+from django.core.exceptions import ValidationError
+from graphene_django import DjangoObjectType
+
+from ..core.settings import MutationGeneratorSettings
+from .types import TypeGenerator
+from .introspector import ModelIntrospector, MethodInfo
+
+class MutationGenerator:
+    """
+    Creates GraphQL mutations for Django models, supporting CRUD operations
+    and custom method-based mutations.
+    """
+
+    def __init__(self, type_generator: TypeGenerator, settings: Optional[MutationGeneratorSettings] = None):
+        self.type_generator = type_generator
+        self.settings = settings or MutationGeneratorSettings()
+        self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}
+
+    def generate_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for creating a new model instance.
+        Supports nested creates for related objects.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        input_type = self.type_generator.generate_input_type(model, mutation_type='create')
+        model_name = model.__name__
+
+        class CreateMutation(graphene.Mutation):
+            class Arguments:
+                input = input_type(required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            object = graphene.Field(model_type)
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]) -> 'CreateMutation':
+                try:
+                    # Handle nested creates for related fields
+                    related_fields = {}
+                    for field_name, value in input.items():
+                        if field_name not in [f.name for f in model._meta.get_fields()]:
+                            continue
+                        field = model._meta.get_field(field_name)
+                        if isinstance(field, (models.ForeignKey, models.OneToOneField)) and isinstance(value, dict):
+                            related_model = field.related_model
+                            related_fields[field_name] = related_model.objects.create(**value)
+                            input[field_name] = related_fields[field_name]
+
+                    # Create the main instance
+                    instance = model.objects.create(**input)
+
+                    # Handle many-to-many relationships
+                    for field_name, value in input.items():
+                        if field_name not in [f.name for f in model._meta.get_fields()]:
+                            continue
+                        field = model._meta.get_field(field_name)
+                        if isinstance(field, models.ManyToManyField) and value is not None:
+                            if isinstance(value, list):
+                                getattr(instance, field_name).set(value)
+                            elif isinstance(value, dict):
+                                related_objects = [
+                                    field.related_model.objects.create(**item)
+                                    for item in value.get('create', [])
+                                ]
+                                getattr(instance, field_name).add(*related_objects)
+
+                    return cls(ok=True, object=instance, errors=None)
+
+                except ValidationError as e:
+                    return cls(ok=False, object=None, errors=[str(e)])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, object=None, errors=[f"Failed to create {model_name}: {str(e)}"])
+
+        return type(
+            f'Create{model_name}',
+            (CreateMutation,),
+            {'__doc__': f'Create a new {model_name} instance'}
+        )
+
+    def generate_update_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for updating an existing model instance.
+        Supports partial updates and nested updates for related objects.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        input_type = self.type_generator.generate_input_type(model, partial=True, mutation_type='update')
+        model_name = model.__name__
+
+        class UpdateMutation(graphene.Mutation):
+            class Arguments:
+                id = graphene.ID(required=True)
+                input = input_type(required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            object = graphene.Field(model_type)
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any]) -> 'UpdateMutation':
+                try:
+                    instance = model.objects.get(pk=id)
+
+                    # Handle nested updates for related fields
+                    for field_name, value in input.items():
+                        if field_name not in [f.name for f in model._meta.get_fields()]:
+                            continue
+                        field = model._meta.get_field(field_name)
+                        
+                        if isinstance(field, (models.ForeignKey, models.OneToOneField)) and isinstance(value, dict):
+                            if 'id' in value:
+                                # Update existing related object
+                                related_instance = field.related_model.objects.get(pk=value['id'])
+                                for k, v in value.items():
+                                    if k != 'id':
+                                        setattr(related_instance, k, v)
+                                related_instance.save()
+                                input[field_name] = related_instance
+                            else:
+                                # Create new related object
+                                related_instance = field.related_model.objects.create(**value)
+                                input[field_name] = related_instance
+
+                        elif isinstance(field, models.ManyToManyField) and value is not None:
+                            m2m_field = getattr(instance, field_name)
+                            
+                            if isinstance(value, dict):
+                                # Handle create, connect, disconnect, and delete operations
+                                if 'create' in value:
+                                    created_objects = [
+                                        field.related_model.objects.create(**item)
+                                        for item in value['create']
+                                    ]
+                                    m2m_field.add(*created_objects)
+                                
+                                if 'connect' in value:
+                                    m2m_field.add(*value['connect'])
+                                
+                                if 'disconnect' in value:
+                                    m2m_field.remove(*value['disconnect'])
+                                
+                                if 'delete' in value:
+                                    field.related_model.objects.filter(
+                                        pk__in=value['delete']
+                                    ).delete()
+                            
+                            elif isinstance(value, list):
+                                m2m_field.set(value)
+
+                            # Remove the field from input to prevent further processing
+                            input.pop(field_name)
+
+                    # Update the main instance
+                    for field_name, value in input.items():
+                        setattr(instance, field_name, value)
+                    
+                    instance.full_clean()
+                    instance.save()
+
+                    return UpdateMutation(ok=True, object=instance, errors=[])
+
+                except model.DoesNotExist:
+                    return UpdateMutation(ok=False, object=None, errors=[f"{model_name} with id {id} does not exist"])
+                except ValidationError as e:
+                    return UpdateMutation(ok=False, object=None, errors=[str(e)])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return UpdateMutation(ok=False, object=None, errors=[f"Failed to update {model_name}: {str(e)}"])
+
+        return type(
+            f'Update{model_name}',
+            (UpdateMutation,),
+            {'__doc__': f'Update an existing {model_name} instance'}
+        )
+
+    def generate_delete_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for deleting a model instance.
+        Supports cascade delete configuration.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        model_name = model.__name__
+
+        class DeleteMutation(graphene.Mutation):
+            class Arguments:
+                id = graphene.ID(required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            object = graphene.Field(model_type)
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str) -> 'DeleteMutation':
+                try:
+                    instance = model.objects.get(pk=id)
+                    deleted_instance = instance  # Store reference before deletion
+                    instance.delete()
+                    return cls(ok=True, object=deleted_instance, errors=[])
+
+                except model.DoesNotExist:
+                    return cls(ok=False, object=None, errors=[f"{model_name} with id {id} does not exist"])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, object=None, errors=[f"Failed to delete {model_name}: {str(e)}"])
+
+        return type(
+            f'Delete{model_name}',
+            (DeleteMutation,),
+            {'__doc__': f'Delete a {model_name} instance'}
+        )
+
+    def generate_bulk_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for creating multiple model instances in bulk.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        input_type = self.type_generator.generate_input_type(model, mutation_type='create')
+        model_name = model.__name__
+
+        class BulkCreateMutation(graphene.Mutation):
+            class Arguments:
+                inputs = graphene.List(input_type, required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            objects = graphene.List(model_type)  # Using 'objects' for multiple items
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]) -> 'BulkCreateMutation':
+                try:
+                    instances = []
+                    for input_data in inputs:
+                        instance = model.objects.create(**input_data)
+                        instances.append(instance)
+                    
+                    return cls(ok=True, objects=instances, errors=[])
+
+                except ValidationError as e:
+                    return cls(ok=False, objects=[], errors=[str(e)])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, objects=[], errors=[f"Failed to bulk create {model_name}s: {str(e)}"])
+
+        return type(
+            f'BulkCreate{model_name}',
+            (BulkCreateMutation,),
+            {'__doc__': f'Create multiple {model_name} instances'}
+        )
+
+    def generate_bulk_update_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for updating multiple model instances in bulk.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        input_type = self.type_generator.generate_input_type(model, partial=True, mutation_type='update')
+        model_name = model.__name__
+
+        class BulkUpdateInput(graphene.InputObjectType):
+            id = graphene.ID(required=True)
+            data = input_type(required=True)
+
+        class BulkUpdateMutation(graphene.Mutation):
+            class Arguments:
+                inputs = graphene.List(BulkUpdateInput, required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            objects = graphene.List(model_type)  # Using 'objects' for multiple items
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]) -> 'BulkUpdateMutation':
+                try:
+                    instances = []
+                    for input_data in inputs:
+                        instance = model.objects.get(pk=input_data['id'])
+                        for field, value in input_data['data'].items():
+                            setattr(instance, field, value)
+                        instance.full_clean()
+                        instance.save()
+                        instances.append(instance)
+                    
+                    return cls(ok=True, objects=instances, errors=[])
+
+                except model.DoesNotExist as e:
+                    return cls(ok=False, objects=[], errors=[f"{model_name} not found: {str(e)}"])
+                except ValidationError as e:
+                    return cls(ok=False, objects=[], errors=[str(e)])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, objects=[], errors=[f"Failed to bulk update {model_name}s: {str(e)}"])
+
+        return type(
+            f'BulkUpdate{model_name}',
+            (BulkUpdateMutation,),
+            {'__doc__': f'Update multiple {model_name} instances'}
+        )
+
+    def generate_bulk_delete_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
+        """
+        Generates a mutation for deleting multiple model instances in bulk.
+        """
+        model_type = self.type_generator.generate_object_type(model)
+        model_name = model.__name__
+
+        class BulkDeleteMutation(graphene.Mutation):
+            class Arguments:
+                ids = graphene.List(graphene.ID, required=True)
+
+            # Standardized return type
+            ok = graphene.Boolean()
+            objects = graphene.List(model_type)  # Return deleted objects
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, ids: List[str]) -> 'BulkDeleteMutation':
+                try:
+                    instances = model.objects.filter(pk__in=ids)
+                    if len(instances) != len(ids):
+                        found_ids = set(str(instance.pk) for instance in instances)
+                        missing_ids = set(ids) - found_ids
+                        return cls(
+                            ok=False, 
+                            objects=[], 
+                            errors=[f"Some {model_name} instances not found: {', '.join(missing_ids)}"]
+                        )
+                    
+                    deleted_instances = list(instances)  # Store before deletion
+                    instances.delete()
+                    return cls(ok=True, objects=deleted_instances, errors=[])
+
+                except model.DoesNotExist as e:
+                    return cls(ok=False, objects=[], errors=[str(e)])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, objects=[], errors=[f"Failed to bulk delete {model_name}s: {str(e)}"])
+
+        return type(
+            f'BulkDelete{model_name}',
+            (BulkDeleteMutation,),
+            {'__doc__': f'Delete multiple {model_name} instances'}
+        )
+
+    def generate_method_mutation(
+        self,
+        model: Type[models.Model],
+        method_info: MethodInfo
+    ) -> Optional[Type[graphene.Mutation]]:
+        """
+        Generates a mutation from a model method.
+        Analyzes method signature and return type to create appropriate mutation.
+        """
+        if not self.settings.enable_method_mutations:
+            return None
+
+        method_name = method_info.name
+        method = getattr(model, method_name)
+        signature = inspect.signature(method)
+        model_name = model.__name__
+
+        # Create input type for method arguments
+        input_fields = {}
+        for param_name, param in signature.parameters.items():
+            if param_name == 'self':
+                continue
+            
+            param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+            graphql_type = self.type_generator.FIELD_TYPE_MAP.get(param_type, graphene.String)
+            
+            if param.default == inspect.Parameter.empty:
+                input_fields[param_name] = graphql_type(required=True)
+            else:
+                input_fields[param_name] = graphql_type(default_value=param.default)
+
+        input_type = type(
+            f'{model_name}{method_name.title()}Input',
+            (graphene.InputObjectType,),
+            input_fields
+        )
+
+        # Determine return type
+        return_type = signature.return_annotation
+        if return_type == inspect.Parameter.empty:
+            output_type = graphene.Boolean
+        else:
+            output_type = self.type_generator.FIELD_TYPE_MAP.get(return_type, graphene.String)
+
+        class MethodMutation(graphene.Mutation):
+            class Arguments:
+                id = graphene.ID(required=True)
+                input = input_type(required=bool(input_fields))
+
+            Output = output_type
+
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any] = None) -> Any:
+                try:
+                    instance = model.objects.get(pk=id)
+                    method = getattr(instance, method_name)
+                    
+                    if input:
+                        result = method(**input)
+                    else:
+                        result = method()
+
+                    if isinstance(result, models.Model):
+                        result.save()
+
+                    return result
+
+                except model.DoesNotExist:
+                    raise graphene.GraphQLError(f"{model_name} with id {id} does not exist")
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    raise graphene.GraphQLError(
+                        f"Failed to execute {method_name} on {model_name}: {str(e)}"
+                    )
+
+        return type(
+            f'{model_name}{method_name.title()}',
+            (MethodMutation,),
+            {'__doc__': method.__doc__ or f'Execute {method_name} on {model_name}'}
+        )
+
+    def generate_all_mutations(self, model: Type[models.Model]) -> Dict[str, graphene.Field]:
+        """
+        Generates all mutations for a model, including CRUD operations and method mutations.
+        """
+        mutations = {}
+        model_name = model.__name__.lower()
+
+        # Generate CRUD mutations if enabled
+        if self.settings.enable_create:
+            mutation_class = self.generate_create_mutation(model)
+            mutations[f'create_{model_name}'] = mutation_class.Field()
+
+        if self.settings.enable_update:
+            mutation_class = self.generate_update_mutation(model)
+            mutations[f'update_{model_name}'] = mutation_class.Field()
+
+        if self.settings.enable_delete:
+            mutation_class = self.generate_delete_mutation(model)
+            mutations[f'delete_{model_name}'] = mutation_class.Field()
+
+        # Generate bulk mutations if enabled
+        if self.settings.enable_bulk_operations:
+            bulk_create_class = self.generate_bulk_create_mutation(model)
+            mutations[f'bulk_create_{model_name}'] = bulk_create_class.Field()
+            
+            bulk_update_class = self.generate_bulk_update_mutation(model)
+            mutations[f'bulk_update_{model_name}'] = bulk_update_class.Field()
+            
+            bulk_delete_class = self.generate_bulk_delete_mutation(model)
+            mutations[f'bulk_delete_{model_name}'] = bulk_delete_class.Field()
+
+        # Generate method mutations if enabled
+        if self.settings.enable_method_mutations:
+            introspector = ModelIntrospector(model)
+            for method_info in introspector.get_methods():
+                if method_info.is_mutation and not method_info.is_private:
+                    mutation = self.generate_method_mutation(model, method_info)
+                    if mutation:
+                        mutations[f'{model_name}_{method_info.name}'] = mutation.Field()
+
+        return mutations
