@@ -169,6 +169,41 @@ class TypeGenerator:
             if hasattr(self, resolver_name):
                 type_attrs[resolver_name] = getattr(self, resolver_name)
 
+        # Add custom resolvers for reverse relationships to return direct model lists
+        # instead of relay connections
+        for field in model._meta.get_fields():
+            if hasattr(field, 'related_name') and field.related_name:
+                related_name = field.related_name
+                if not self._should_include_field(model, related_name):
+                    continue
+                
+                # Get the related model
+                related_model = field.related_model
+                
+                # Use proper lazy type resolution to avoid recursion
+                # Create a closure that captures the related_model
+                def make_lazy_type(model_ref):
+                    def lazy_type():
+                        # Check if type already exists to avoid infinite recursion
+                        if model_ref in self._type_registry:
+                            return self._type_registry[model_ref]
+                        return self.generate_object_type(model_ref)
+                    return lazy_type
+                
+                # Add the field as a direct list with proper lazy type resolution
+                type_attrs[related_name] = graphene.List(
+                    make_lazy_type(related_model),
+                    description=f"Related {related_model.__name__} objects"
+                )
+                
+                # Add resolver that returns direct queryset
+                def make_resolver(related_name):
+                    def resolver(self, info):
+                        return getattr(self, related_name).all()
+                    return resolver
+                
+                type_attrs[f'resolve_{related_name}'] = make_resolver(related_name)
+
         # Create the type class
         model_type = type(
             class_name,

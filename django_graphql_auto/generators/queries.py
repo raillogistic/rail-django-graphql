@@ -37,6 +37,10 @@ class QueryGenerator:
 
         def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> Optional[models.Model]:
             try:
+                # If no arguments provided, return None instead of trying to get all records
+                if not kwargs:
+                    return None
+                    
                 filters = Q()
                 for key, value in kwargs.items():
                     filters |= Q(**{key: value})
