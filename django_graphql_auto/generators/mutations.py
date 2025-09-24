@@ -16,6 +16,7 @@ from graphene_django import DjangoObjectType
 from ..core.settings import MutationGeneratorSettings
 from .types import TypeGenerator
 from .introspector import ModelIntrospector, MethodInfo
+from .nested_operations import NestedOperationHandler
 
 class MutationGenerator:
     """
@@ -27,6 +28,7 @@ class MutationGenerator:
         self.type_generator = type_generator
         self.settings = settings or MutationGeneratorSettings()
         self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}
+        self.nested_handler = NestedOperationHandler()
 
     def generate_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
         """
@@ -50,45 +52,17 @@ class MutationGenerator:
             @transaction.atomic
             def mutate(cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]) -> 'CreateMutation':
                 try:
-                    # Handle nested creates for related fields
-                    related_fields = {}
-                    for field_name, value in input.items():
-                        if field_name not in [f.name for f in model._meta.get_fields()]:
-                            continue
-                        field = model._meta.get_field(field_name)
-                        if isinstance(field, (models.ForeignKey, models.OneToOneField)):
-                            if isinstance(value, dict):
-                                # Create new related object from nested data
-                                related_model = field.related_model
-                                related_fields[field_name] = related_model.objects.create(**value)
-                                input[field_name] = related_fields[field_name]
-                            elif isinstance(value, (str, int)):
-                                # Fetch existing related object by ID
-                                related_model = field.related_model
-                                try:
-                                    related_instance = related_model.objects.get(pk=value)
-                                    input[field_name] = related_instance
-                                except related_model.DoesNotExist:
-                                    raise ValidationError(f"{related_model.__name__} with id '{value}' does not exist")
-
-                    # Create the main instance
-                    instance = model.objects.create(**input)
-
-                    # Handle many-to-many relationships
-                    for field_name, value in input.items():
-                        if field_name not in [f.name for f in model._meta.get_fields()]:
-                            continue
-                        field = model._meta.get_field(field_name)
-                        if isinstance(field, models.ManyToManyField) and value is not None:
-                            if isinstance(value, list):
-                                getattr(instance, field_name).set(value)
-                            elif isinstance(value, dict):
-                                related_objects = [
-                                    field.related_model.objects.create(**item)
-                                    for item in value.get('create', [])
-                                ]
-                                getattr(instance, field_name).add(*related_objects)
-
+                    # Use the nested operation handler for advanced nested operations
+                    nested_handler = cls._get_nested_handler(info)
+                    
+                    # Validate nested data before processing
+                    validation_errors = nested_handler.validate_nested_data(model, input, 'create')
+                    if validation_errors:
+                        return cls(ok=False, object=None, errors=validation_errors)
+                    
+                    # Handle nested create with comprehensive validation and transaction management
+                    instance = nested_handler.handle_nested_create(model, input)
+                    
                     return cls(ok=True, object=instance, errors=None)
 
                 except ValidationError as e:
@@ -96,6 +70,15 @@ class MutationGenerator:
                 except Exception as e:
                     transaction.set_rollback(True)
                     return cls(ok=False, object=None, errors=[f"Failed to create {model_name}: {str(e)}"])
+            
+            @classmethod
+            def _get_nested_handler(cls, info: graphene.ResolveInfo) -> NestedOperationHandler:
+                """Get the nested operation handler from the mutation generator."""
+                # Access the mutation generator through the schema context
+                if hasattr(info.context, 'mutation_generator'):
+                    return info.context.mutation_generator.nested_handler
+                # Fallback to creating a new handler
+                return NestedOperationHandler()
 
         return type(
             f'Create{model_name}',

@@ -15,6 +15,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 
 from ..core.settings import QueryGeneratorSettings
 from .types import TypeGenerator
+from .filters import AdvancedFilterGenerator
 
 class QueryGenerator:
     """
@@ -25,6 +26,7 @@ class QueryGenerator:
     def __init__(self, type_generator: TypeGenerator, settings: Optional[QueryGeneratorSettings] = None):
         self.type_generator = type_generator
         self.settings = settings or QueryGeneratorSettings()
+        self.filter_generator = AdvancedFilterGenerator()
         self._query_fields: Dict[str, graphene.Field] = {}
 
     def generate_single_query(self, model: Type[models.Model]) -> graphene.Field:
@@ -69,11 +71,12 @@ class QueryGenerator:
     def generate_list_query(self, model: Type[models.Model]) -> Union[graphene.List, DjangoFilterConnectionField]:
         """
         Generates a query field for retrieving a list of model instances.
-        Supports filtering, pagination, and ordering.
+        Supports advanced filtering, pagination, and ordering.
         """
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
-        filter_class = self.type_generator.generate_filter_type(model)
+        filter_class = self.filter_generator.generate_filter_set(model)
+        complex_filter_input = self.filter_generator.generate_complex_filter_input(model)
 
         if self.settings.use_relay:
             # Use Relay connection for cursor-based pagination
@@ -86,9 +89,15 @@ class QueryGenerator:
             def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> List[models.Model]:
                 queryset = model.objects.all()
 
-                # Apply filtering
-                if filter_class and kwargs:
-                    filterset = filter_class(kwargs, queryset=queryset)
+                # Apply advanced filtering
+                filters = kwargs.get('filters')
+                if filters:
+                    queryset = self.filter_generator.apply_complex_filters(queryset, filters)
+
+                # Apply basic filtering
+                basic_filters = {k: v for k, v in kwargs.items() if k not in ['filters', 'order_by', 'offset', 'limit']}
+                if basic_filters and filter_class:
+                    filterset = filter_class(basic_filters, queryset=queryset)
                     queryset = filterset.qs
 
                 # Apply ordering
@@ -109,13 +118,29 @@ class QueryGenerator:
             # Define arguments for the query
             arguments = {}
 
-            # Add filtering arguments if filter class is available
+            # Add complex filtering argument
+            arguments['filters'] = graphene.Argument(
+                complex_filter_input,
+                description="Advanced filtering with AND, OR, NOT operations"
+            )
+
+            # Add basic filtering arguments if filter class is available
             if filter_class:
                 for name, field in filter_class.base_filters.items():
+                    field_type = graphene.String  # Default to String
+                    
+                    # Map filter types to GraphQL types
+                    if hasattr(field, 'field_class'):
+                        if 'Number' in field.__class__.__name__ or 'Integer' in field.__class__.__name__:
+                            field_type = graphene.Float
+                        elif 'Boolean' in field.__class__.__name__:
+                            field_type = graphene.Boolean
+                        elif 'Date' in field.__class__.__name__:
+                            field_type = graphene.Date
+                    
                     arguments[name] = graphene.Argument(
-                        self.type_generator.FIELD_TYPE_MAP.get(
-                            type(field), graphene.String
-                        )
+                        field_type,
+                        description=getattr(field, 'help_text', f'Filter by {name}')
                     )
 
             # Add pagination arguments
