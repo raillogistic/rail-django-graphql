@@ -56,10 +56,20 @@ class MutationGenerator:
                         if field_name not in [f.name for f in model._meta.get_fields()]:
                             continue
                         field = model._meta.get_field(field_name)
-                        if isinstance(field, (models.ForeignKey, models.OneToOneField)) and isinstance(value, dict):
-                            related_model = field.related_model
-                            related_fields[field_name] = related_model.objects.create(**value)
-                            input[field_name] = related_fields[field_name]
+                        if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+                            if isinstance(value, dict):
+                                # Create new related object from nested data
+                                related_model = field.related_model
+                                related_fields[field_name] = related_model.objects.create(**value)
+                                input[field_name] = related_fields[field_name]
+                            elif isinstance(value, (str, int)):
+                                # Fetch existing related object by ID
+                                related_model = field.related_model
+                                try:
+                                    related_instance = related_model.objects.get(pk=value)
+                                    input[field_name] = related_instance
+                                except related_model.DoesNotExist:
+                                    raise ValidationError(f"{related_model.__name__} with id '{value}' does not exist")
 
                     # Create the main instance
                     instance = model.objects.create(**input)

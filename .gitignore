@@ -9,6 +9,7 @@ src/staticfiles
 src/static
 # Icon must end with two \r
 Icon
+*.sqlite3
 /before
 /after
 /avant arrivage
