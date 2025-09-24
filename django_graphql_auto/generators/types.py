@@ -80,14 +80,20 @@ class TypeGenerator:
             return None
         return self.settings.include_fields.get(model.__name__, None)
 
-    def _should_field_be_required_for_create(self, field_info: 'FieldInfo') -> bool:
+    def _should_field_be_required_for_create(self, field_info: 'FieldInfo', field_name: str = None) -> bool:
+
         """
         Determine if a field should be required for create mutations based on:
-        - auto_now and auto_now_add fields are not required
-        - fields with defaults are not required  
-        - only blank=False fields are required
-        - id fields are not required for create
+        - auto_now and auto_now_add fields are not required (automatically set)
+        - fields with defaults are not required (Django will use the default)
+        - fields with blank=True are not required (can be empty)
+        - fields with blank=False AND no default ARE required
+        - id/primary key fields are not required for create (auto-generated)
         """
+        # Primary key fields (id, pk) are not required for create
+        if field_name and field_name in ('id', 'pk'):
+            return False
+            
         # auto_now and auto_now_add fields are automatically set
         if field_info.has_auto_now or field_info.has_auto_now_add:
             return False
@@ -96,8 +102,12 @@ class TypeGenerator:
         if field_info.has_default:
             return False
             
-        # Only require fields that have blank=False
-        return not field_info.blank
+        # Fields with blank=True can be left empty, so not required
+        if field_info.blank:
+            return False
+            
+        # Fields with blank=False (default) and no default value are required
+        return True
     def _should_field_be_required_for_update(self, field_name: str, field_info: Any) -> bool:
         """
         Determine if a field should be required for update mutations.
@@ -164,7 +174,7 @@ class TypeGenerator:
 
         self._type_registry[model] = model_type
         return model_type
-
+    
     def generate_input_type(self, model: Type[models.Model], partial: bool = False, 
                            mutation_type: str = 'create') -> Type[graphene.InputObjectType]:
         """
@@ -195,29 +205,59 @@ class TypeGenerator:
             if mutation_type == 'create' and field_name == 'id':
                 continue
 
+            # Get field type, fallback to handle_custom_fields if not in mapping
             field_type = self._get_input_field_type(field_info.field_type)
-            if field_type:
-                # Determine if field should be required based on mutation type
-                if mutation_type == 'create':
-                    is_required = self._should_field_be_required_for_create(field_info) and not partial
-                else:  # update
-                    is_required = self._should_field_be_required_for_update(field_name, field_info) and not partial
-                
-                input_fields[field_name] = field_type(
-                    required=is_required,
-                    description=field_info.help_text
-                )
+            if not field_type:
+                # Handle custom fields that aren't in FIELD_TYPE_MAP
+                field_type = self.handle_custom_fields(field_info.field_type)
+            
+            # Determine if field should be required based on mutation type
+            if mutation_type == 'create':
+                is_required = self._should_field_be_required_for_create(field_info, field_name) and not partial
+            else:  # update
+                is_required = self._should_field_be_required_for_update(field_name, field_info) and not partial
+            
+            input_fields[field_name] = field_type(
+                required=is_required,
+                description=field_info.help_text
+            )
 
         # Add relationship fields (simplified to avoid recursion)
         for field_name, rel_info in relationships.items():
             if not self._should_include_field(model, field_name):
                 continue
 
+            # Get the actual Django field to check its requirements
+            django_field = model._meta.get_field(field_name)
+            
+            # Create a FieldInfo object for the relationship field to check requirements
+            from .introspector import FieldInfo
+            rel_field_info = FieldInfo(
+                field_type=type(django_field),
+                is_required=not django_field.null,
+                default_value=django_field.default if django_field.default is not models.NOT_PROVIDED else None,
+                help_text=str(django_field.help_text),
+                has_auto_now=getattr(django_field, 'auto_now', False),
+                has_auto_now_add=getattr(django_field, 'auto_now_add', False),
+                blank=getattr(django_field, 'blank', False),
+                has_default=django_field.default is not models.NOT_PROVIDED
+            )
+            
+            # Apply field requirement logic to relationship fields
+            # For ManyToMany fields, use blank attribute instead of null
+            if rel_info.relationship_type == 'ManyToManyField':
+                is_required = not django_field.blank
+            else:
+                is_required = self._should_field_be_required_for_create(rel_field_info, field_name) if mutation_type == 'create' else self._should_field_be_required_for_update(field_name, rel_field_info)
+
             # Use ID references instead of nested input types to avoid recursion
             if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
-                input_fields[field_name] = graphene.ID(required=False)
+                input_fields[field_name] = graphene.ID(required=is_required)
             elif rel_info.relationship_type == 'ManyToManyField':
-                input_fields[field_name] = graphene.List(graphene.ID, required=False)
+                if is_required:
+                    input_fields[field_name] = graphene.NonNull(graphene.List(graphene.ID))
+                else:
+                    input_fields[field_name] = graphene.List(graphene.ID)
 
         # Create the input type class
         class_name = f"{model.__name__}Input"
@@ -327,7 +367,7 @@ class TypeGenerator:
                     
         return filterable_fields
 
-    def handle_custom_fields(self, field: Field) -> graphene.Scalar:
+    def handle_custom_fields(self, field: Field) -> Type[graphene.Scalar]:
         """
         Handles custom field types by attempting to map them to appropriate GraphQL types.
         Falls back to String if no specific mapping is found.
