@@ -157,6 +157,10 @@ class TypeGenerator:
             '__doc__': f"GraphQL type for the {model.__name__} model."
         }
 
+        # Add pk field that resolves to the model's primary key
+        type_attrs['pk'] = graphene.ID(description="Primary key of the model")
+        type_attrs['resolve_pk'] = lambda self, info: getattr(self, self._meta.pk.name)
+
         # Add custom field resolvers
         for field_name, field_info in fields.items():
             if not self._should_include_field(model, field_name):
