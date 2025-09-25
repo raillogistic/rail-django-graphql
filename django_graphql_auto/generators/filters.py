@@ -89,6 +89,8 @@ class AdvancedFilterGenerator:
             filters.update(self._generate_date_filters(field_name))
         elif isinstance(field, models.BooleanField):
             filters.update(self._generate_boolean_filters(field_name))
+        elif isinstance(field, (models.FileField, models.ImageField)):
+            filters.update(self._generate_file_filters(field_name))
         elif hasattr(field, 'choices') and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
