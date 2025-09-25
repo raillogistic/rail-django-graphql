@@ -2698,7 +2698,7 @@ type CreateLogEntry {
 }
 
 """
-Input type for creating/updating LogEntry instances with dual field support (both ID and nested object fields).
+Input type for creating/updating LogEntry instances with nested relationships.
 """
 input LogEntryInput {
   """"""
@@ -2741,7 +2741,7 @@ type CreatePermission {
 }
 
 """
-Input type for creating/updating Permission instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Permission instances with nested relationships.
 """
 input PermissionInput {
   """"""
@@ -2751,23 +2751,19 @@ input PermissionInput {
   codename: String!
   content_type: ID!
   group_set: [ID]
-  nested_group_set: [GroupNestedCreateInput]
+  nested_group_set: [GroupNestedCreateInput_exclude_Permission]
   user_set: [ID]
-  nested_user_set: [UserNestedCreateInput]
+  nested_user_set: [UserNestedCreateInput_exclude_Permission]
 }
 
-"""
-Nested input type for Group in create operations (simplified to prevent circular references).
-"""
-input GroupNestedCreateInput {
+"""Nested input type for Group in create operations."""
+input GroupNestedCreateInput_exclude_Permission {
   """"""
   name: String!
 }
 
-"""
-Nested input type for User in create operations (simplified to prevent circular references).
-"""
-input UserNestedCreateInput {
+"""Nested input type for User in create operations."""
+input UserNestedCreateInput_exclude_Permission {
   """"""
   password: String!
 
@@ -2802,7 +2798,6 @@ input UserNestedCreateInput {
   """"""
   date_joined: DateTime
   groups: [ID]
-  user_permissions: [ID]
 }
 
 """Update an existing Permission instance"""
@@ -2827,27 +2822,63 @@ type CreateGroup {
 }
 
 """
-Input type for creating/updating Group instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Group instances with nested relationships.
 """
 input GroupInput {
   """"""
   name: String!
   permissions: [ID]
-  nested_permissions: [PermissionNestedCreateInput]
+  nested_permissions: [PermissionNestedCreateInput_exclude_Group]
   user_set: [ID]
-  nested_user_set: [UserNestedCreateInput]
+  nested_user_set: [UserNestedCreateInput_exclude_Group]
 }
 
-"""
-Nested input type for Permission in create operations (simplified to prevent circular references).
-"""
-input PermissionNestedCreateInput {
+"""Nested input type for Permission in create operations."""
+input PermissionNestedCreateInput_exclude_Group {
   """"""
   name: String!
 
   """"""
   codename: String!
   content_type: ID
+}
+
+"""Nested input type for User in create operations."""
+input UserNestedCreateInput_exclude_Group {
+  """"""
+  password: String!
+
+  """"""
+  last_login: DateTime
+
+  """
+  Designates that this user has all permissions without explicitly assigning them.
+  """
+  is_superuser: Boolean
+
+  """Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."""
+  username: String!
+
+  """"""
+  first_name: String
+
+  """"""
+  last_name: String
+
+  """"""
+  email: String
+
+  """Designates whether the user can log into this admin site."""
+  is_staff: Boolean
+
+  """
+  Designates whether this user should be treated as active. Unselect this instead of deleting accounts.
+  """
+  is_active: Boolean
+
+  """"""
+  date_joined: DateTime
+  user_permissions: [ID]
 }
 
 """Update an existing Group instance"""
@@ -2872,7 +2903,7 @@ type CreateUser {
 }
 
 """
-Input type for creating/updating User instances with dual field support (both ID and nested object fields).
+Input type for creating/updating User instances with nested relationships.
 """
 input UserInput {
   """"""
@@ -2909,21 +2940,36 @@ input UserInput {
   """"""
   date_joined: DateTime
   groups: [ID]
-  nested_groups: [GroupNestedCreateInput]
+  nested_groups: [GroupNestedCreateInput_exclude_User]
   user_permissions: [ID]
-  nested_user_permissions: [PermissionNestedCreateInput]
+  nested_user_permissions: [PermissionNestedCreateInput_exclude_User]
   logentry_set: [ID]
-  nested_logentry_set: [LogEntryNestedCreateInput]
+  nested_logentry_set: [LogEntryNestedCreateInput_exclude_User]
   posts: [ID]
-  nested_posts: [PostNestedCreateInput]
+  nested_posts: [PostNestedCreateInput_exclude_User]
   comments: [ID]
-  nested_comments: [CommentNestedCreateInput]
+  nested_comments: [CommentNestedCreateInput_exclude_User]
 }
 
-"""
-Nested input type for LogEntry in create operations (simplified to prevent circular references).
-"""
-input LogEntryNestedCreateInput {
+"""Nested input type for Group in create operations."""
+input GroupNestedCreateInput_exclude_User {
+  """"""
+  name: String!
+  permissions: [ID]
+}
+
+"""Nested input type for Permission in create operations."""
+input PermissionNestedCreateInput_exclude_User {
+  """"""
+  name: String!
+
+  """"""
+  codename: String!
+  content_type: ID
+}
+
+"""Nested input type for LogEntry in create operations."""
+input LogEntryNestedCreateInput_exclude_User {
   """"""
   action_time: DateTime
 
@@ -2941,10 +2987,8 @@ input LogEntryNestedCreateInput {
   content_type: ID
 }
 
-"""
-Nested input type for Post in create operations (simplified to prevent circular references).
-"""
-input PostNestedCreateInput {
+"""Nested input type for Post in create operations."""
+input PostNestedCreateInput_exclude_User {
   """"""
   title: String!
 
@@ -2988,10 +3032,8 @@ input PostNestedCreateInput {
   related_posts: [ID]
 }
 
-"""
-Nested input type for Comment in create operations (simplified to prevent circular references).
-"""
-input CommentNestedCreateInput {
+"""Nested input type for Comment in create operations."""
+input CommentNestedCreateInput_exclude_User {
   """"""
   content: String!
 
@@ -3029,7 +3071,7 @@ type CreateContentType {
 }
 
 """
-Input type for creating/updating ContentType instances with dual field support (both ID and nested object fields).
+Input type for creating/updating ContentType instances with nested relationships.
 """
 input ContentTypeInput {
   """"""
@@ -3038,9 +3080,37 @@ input ContentTypeInput {
   """"""
   model: String!
   logentry_set: [ID]
-  nested_logentry_set: [LogEntryNestedCreateInput]
+  nested_logentry_set: [LogEntryNestedCreateInput_exclude_ContentType]
   permission_set: [ID]
-  nested_permission_set: [PermissionNestedCreateInput]
+  nested_permission_set: [PermissionNestedCreateInput_exclude_ContentType]
+}
+
+"""Nested input type for LogEntry in create operations."""
+input LogEntryNestedCreateInput_exclude_ContentType {
+  """"""
+  action_time: DateTime
+
+  """"""
+  object_id: String
+
+  """"""
+  object_repr: String!
+
+  """"""
+  action_flag: Int!
+
+  """"""
+  change_message: String
+  user: ID
+}
+
+"""Nested input type for Permission in create operations."""
+input PermissionNestedCreateInput_exclude_ContentType {
+  """"""
+  name: String!
+
+  """"""
+  codename: String!
 }
 
 """Update an existing ContentType instance"""
@@ -3065,7 +3135,7 @@ type CreateSession {
 }
 
 """
-Input type for creating/updating Session instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Session instances with nested relationships.
 """
 input SessionInput {
   """"""
@@ -3100,7 +3170,7 @@ type CreateCategory {
 }
 
 """
-Input type for creating/updating Category instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Category instances with nested relationships.
 """
 input CategoryInput {
   """"""
@@ -3121,7 +3191,52 @@ input CategoryInput {
   """"""
   order: Int
   posts: [ID]
-  nested_posts: [PostNestedCreateInput]
+  nested_posts: [PostNestedCreateInput_exclude_Category]
+}
+
+"""Nested input type for Post in create operations."""
+input PostNestedCreateInput_exclude_Category {
+  """"""
+  title: String!
+
+  """"""
+  slug: String!
+
+  """"""
+  content: String!
+
+  """"""
+  excerpt: String
+
+  """"""
+  view_count: Int
+
+  """"""
+  rating: Decimal
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  published_at: DateTime
+
+  """"""
+  is_featured: Boolean
+
+  """"""
+  status: String
+
+  """"""
+  featured_image: String
+
+  """"""
+  attachment: String
+  author: ID
+  tags: [ID]
+  related_posts: [ID]
 }
 
 """Update an existing Category instance"""
@@ -3146,7 +3261,7 @@ type CreateTag {
 }
 
 """
-Input type for creating/updating Tag instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Tag instances with nested relationships.
 """
 input TagInput {
   """"""
@@ -3155,7 +3270,52 @@ input TagInput {
   """"""
   slug: String!
   posts: [ID]
-  nested_posts: [PostNestedCreateInput]
+  nested_posts: [PostNestedCreateInput_exclude_Tag]
+}
+
+"""Nested input type for Post in create operations."""
+input PostNestedCreateInput_exclude_Tag {
+  """"""
+  title: String!
+
+  """"""
+  slug: String!
+
+  """"""
+  content: String!
+
+  """"""
+  excerpt: String
+
+  """"""
+  view_count: Int
+
+  """"""
+  rating: Decimal
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  published_at: DateTime
+
+  """"""
+  is_featured: Boolean
+
+  """"""
+  status: String
+
+  """"""
+  featured_image: String
+
+  """"""
+  attachment: String
+  author: ID
+  category: ID
+  related_posts: [ID]
 }
 
 """Update an existing Tag instance"""
@@ -3180,7 +3340,7 @@ type CreatePost {
 }
 
 """
-Input type for creating/updating Post instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Post instances with nested relationships.
 """
 input PostInput {
   """"""
@@ -3224,24 +3384,84 @@ input PostInput {
   author: ID!
   category: ID!
   tags: [ID]
-  nested_tags: [TagNestedCreateInput]
+  nested_tags: [TagNestedCreateInput_exclude_Post]
   related_posts: [ID]
-  nested_related_posts: [PostNestedCreateInput]
+  nested_related_posts: [PostNestedCreateInput_exclude_Post]
   related_to: [ID]
-  nested_related_to: [PostNestedCreateInput]
+  nested_related_to: [PostNestedCreateInput_exclude_Post]
   comments: [ID]
-  nested_comments: [CommentNestedCreateInput]
+  nested_comments: [CommentNestedCreateInput_exclude_Post]
 }
 
-"""
-Nested input type for Tag in create operations (simplified to prevent circular references).
-"""
-input TagNestedCreateInput {
+"""Nested input type for Tag in create operations."""
+input TagNestedCreateInput_exclude_Post {
   """"""
   name: String!
 
   """"""
   slug: String!
+}
+
+"""Nested input type for Post in create operations."""
+input PostNestedCreateInput_exclude_Post {
+  """"""
+  title: String!
+
+  """"""
+  slug: String!
+
+  """"""
+  content: String!
+
+  """"""
+  excerpt: String
+
+  """"""
+  view_count: Int
+
+  """"""
+  rating: Decimal
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  published_at: DateTime
+
+  """"""
+  is_featured: Boolean
+
+  """"""
+  status: String
+
+  """"""
+  featured_image: String
+
+  """"""
+  attachment: String
+  author: ID
+  category: ID
+  tags: [ID]
+}
+
+"""Nested input type for Comment in create operations."""
+input CommentNestedCreateInput_exclude_Post {
+  """"""
+  content: String!
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  is_approved: Boolean
+  author: ID
+  parent: ID
 }
 
 """Update an existing Post instance"""
@@ -3266,7 +3486,7 @@ type CreateComment {
 }
 
 """
-Input type for creating/updating Comment instances with dual field support (both ID and nested object fields).
+Input type for creating/updating Comment instances with nested relationships.
 """
 input CommentInput {
   """"""
@@ -3284,7 +3504,24 @@ input CommentInput {
   author: ID!
   parent: ID
   replies: [ID]
-  nested_replies: [CommentNestedCreateInput]
+  nested_replies: [CommentNestedCreateInput_exclude_Comment]
+}
+
+"""Nested input type for Comment in create operations."""
+input CommentNestedCreateInput_exclude_Comment {
+  """"""
+  content: String!
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  is_approved: Boolean
+  post: ID
+  author: ID
 }
 
 """Update an existing Comment instance"""

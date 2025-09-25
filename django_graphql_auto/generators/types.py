@@ -510,7 +510,9 @@ class TypeGenerator:
             GraphQL input type for the model
         """
         # Create a simplified input type to avoid infinite recursion
-        cache_key = f"{model.__name__}Nested{mutation_type.title()}Input"
+        # Include exclude_parent_field in cache key to ensure different types for different parents
+        exclude_suffix = f"_exclude_{exclude_parent_field.__name__}" if exclude_parent_field else ""
+        cache_key = f"{model.__name__}Nested{mutation_type.title()}Input{exclude_suffix}"
         
         if cache_key in self._input_type_registry:
             return self._input_type_registry[cache_key]
