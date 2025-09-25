@@ -32,7 +32,7 @@ def load_mutation_settings() -> MutationGeneratorSettings:
     
     # Create settings instance with loaded configuration
     mutation_settings = MutationGeneratorSettings(
-        enable_nested_relations=mutation_config.get('enable_nested_relations', True),
+        enable_nested_relations=mutation_config.get('enable_nested_relations', False),
         nested_relations_config=mutation_config.get('nested_relations_config', {}),
         nested_field_config=mutation_config.get('nested_field_config', {}),
         # Keep other default values

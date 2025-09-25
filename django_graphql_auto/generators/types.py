@@ -293,12 +293,20 @@ class TypeGenerator:
 
             # Support both ID references and nested object creation
             if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
-                # For ForeignKey/OneToOne, use ID field instead of Union to avoid GraphQL complexity
-                # Users can provide either the ID directly or use nested mutations separately
-                if is_required:
-                    input_fields[field_name] = graphene.NonNull(graphene.ID)
+                # Check if nested operations are enabled for this field
+                if self._should_include_nested_field(model, field_name):
+                    # Create nested input type for ForeignKey/OneToOne relations
+                    nested_input_type = self._get_or_create_nested_input_type(rel_info.related_model, mutation_type, exclude_parent_field=model)
+                    if is_required:
+                        input_fields[field_name] = graphene.NonNull(nested_input_type)
+                    else:
+                        input_fields[field_name] = nested_input_type
                 else:
-                    input_fields[field_name] = graphene.ID()
+                    # Use ID field for ID-based operations
+                    if is_required:
+                        input_fields[field_name] = graphene.NonNull(graphene.ID)
+                    else:
+                        input_fields[field_name] = graphene.ID()
             elif rel_info.relationship_type == 'ManyToManyField':
                 # For ManyToMany, use List of IDs
                 list_type = graphene.List(graphene.ID)
@@ -308,19 +316,20 @@ class TypeGenerator:
                     input_fields[field_name] = list_type
 
         # Add reverse relationship fields for nested creation (e.g., comments for Post)
-        if include_reverse_relations and mutation_type == 'create' and self._should_include_nested_relations(model):
+        if include_reverse_relations and mutation_type == 'create':
             reverse_relations = self._get_reverse_relations(model)
             for field_name, related_model in reverse_relations.items():
                 if not self._should_include_field(model, field_name):
                     continue
                 
-                # Check if this specific field should be nested
-                if not self._should_include_nested_field(model, field_name):
-                    continue
-                
-                # Create nested input type for reverse relations
-                nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
-                input_fields[field_name] = graphene.List(nested_input_type)
+                # Always include the field, but determine its type based on nested configuration
+                if self._should_include_nested_field(model, field_name):
+                    # Create nested input type for reverse relations
+                    nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
+                    input_fields[field_name] = graphene.List(nested_input_type)
+                else:
+                    # When nested=False or no config, include as List[ID] for ID-based operations
+                    input_fields[field_name] = graphene.List(graphene.ID)
 
         # Create the input type class
         class_name = f"{model.__name__}Input"
@@ -603,5 +612,13 @@ class TypeGenerator:
             if field_name in field_config:
                 return field_config[field_name]
         
-        # Default to enabled if no specific configuration
-        return True
+        # Check per-model configuration
+        if model_name in self.mutation_settings.nested_relations_config:
+            return self.mutation_settings.nested_relations_config[model_name]
+        
+        # Check global configuration
+        if hasattr(self.mutation_settings, 'enable_nested_relations'):
+            return self.mutation_settings.enable_nested_relations
+        
+        # Default to ID-based operations when no configuration is specified
+        return False

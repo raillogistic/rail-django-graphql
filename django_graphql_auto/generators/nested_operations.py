@@ -85,9 +85,18 @@ class NestedOperationHandler:
             regular_fields = {}
             nested_fields = {}
             m2m_fields = {}
+            reverse_fields = {}
+
+            # Get reverse relationships for this model
+            reverse_relations = self._get_reverse_relations(model)
 
             for field_name, value in input_data.items():
                 if not hasattr(model, field_name):
+                    continue
+                
+                # Check if this is a reverse relationship field
+                if field_name in reverse_relations:
+                    reverse_fields[field_name] = (reverse_relations[field_name], value)
                     continue
                     
                 try:
@@ -139,6 +148,53 @@ class NestedOperationHandler:
 
             # Create the main instance
             instance = model.objects.create(**regular_fields)
+
+            # Handle reverse relationships after instance creation
+            for field_name, (related_field, value) in reverse_fields.items():
+                if value is None:
+                    continue
+                    
+                # Handle different types of reverse relationship data
+                if isinstance(value, list):
+                    # List can contain either IDs (to connect existing objects) or dicts (to create new objects)
+                    for item in value:
+                        if isinstance(item, dict):
+                            # Create new object and set the foreign key to point to our instance
+                            item[related_field.field.name] = instance.pk
+                            self.handle_nested_create(related_field.related_model, item)
+                        elif isinstance(item, (str, int)):
+                            # Connect existing object to this instance
+                            try:
+                                related_field.related_model.objects.filter(
+                                    pk=item
+                                ).update(**{related_field.field.name: instance})
+                            except Exception as e:
+                                raise ValidationError(
+                                    f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
+                                )
+                                
+                elif isinstance(value, dict):
+                    # Handle operations like create, connect, disconnect
+                    if 'create' in value:
+                        create_data = value['create']
+                        if isinstance(create_data, list):
+                            for item in create_data:
+                                if isinstance(item, dict):
+                                    # Set the foreign key to point to our instance
+                                    item[related_field.field.name] = instance.pk
+                                    self.handle_nested_create(related_field.related_model, item)
+                        elif isinstance(create_data, dict):
+                            # Single object to create
+                            create_data[related_field.field.name] = instance.pk
+                            self.handle_nested_create(related_field.related_model, create_data)
+                    
+                    if 'connect' in value:
+                        # Connect existing objects to this instance
+                        connect_ids = value['connect']
+                        if isinstance(connect_ids, list):
+                            related_field.related_model.objects.filter(
+                                pk__in=connect_ids
+                            ).update(**{related_field.field.name: instance})
 
             # Handle many-to-many relationships after instance creation
             for field_name, (field, value) in m2m_fields.items():
@@ -564,12 +620,22 @@ class NestedOperationHandler:
                 
             # Handle different types of reverse relationship data
             if isinstance(value, list):
-                # List of objects to create
+                # List can contain either IDs (to connect existing objects) or dicts (to create new objects)
                 for item in value:
                     if isinstance(item, dict):
-                        # Set the foreign key to point to our instance
+                        # Create new object and set the foreign key to point to our instance
                         item[related_field.field.name] = instance.pk
                         self.handle_nested_create(related_field.related_model, item)
+                    elif isinstance(item, (str, int)):
+                        # Connect existing object to this instance
+                        try:
+                            related_field.related_model.objects.filter(
+                                pk=item
+                            ).update(**{related_field.field.name: instance})
+                        except Exception as e:
+                            raise ValidationError(
+                                f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
+                            )
                         
             elif isinstance(value, dict):
                 # Handle operations like create, connect, disconnect
