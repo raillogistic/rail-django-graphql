@@ -263,7 +263,7 @@ class TypeGenerator:
                 description=field_info.help_text
             )
 
-        # Add forward relationship fields (ForeignKey, OneToOne, ManyToMany)
+        # Add forward relationship fields with automatic dual field generation
         for field_name, rel_info in relationships.items():
             if not self._should_include_field(model, field_name):
                 continue
@@ -291,45 +291,47 @@ class TypeGenerator:
             else:
                 is_required = self._should_field_be_required_for_create(rel_field_info, field_name) if mutation_type == 'create' else self._should_field_be_required_for_update(field_name, rel_field_info)
 
-            # Support both ID references and nested object creation
+            # Always generate both nested and direct ID fields for all relationships
             if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
-                # Check if nested operations are enabled for this field
-                if self._should_include_nested_field(model, field_name):
-                    # Create nested input type for ForeignKey/OneToOne relations
-                    nested_input_type = self._get_or_create_nested_input_type(rel_info.related_model, mutation_type, exclude_parent_field=model)
-                    if is_required:
-                        input_fields[field_name] = graphene.NonNull(nested_input_type)
-                    else:
-                        input_fields[field_name] = nested_input_type
+                # 1. Add direct ID field: <field_name>
+                if is_required:
+                    input_fields[field_name] = graphene.NonNull(graphene.ID)
                 else:
-                    # Use ID field for ID-based operations
-                    if is_required:
-                        input_fields[field_name] = graphene.NonNull(graphene.ID)
-                    else:
-                        input_fields[field_name] = graphene.ID()
+                    input_fields[field_name] = graphene.ID()
+                
+                # 2. Add nested field: nested_<field_name>
+                nested_field_name = f"nested_{field_name}"
+                nested_input_type = self._get_or_create_nested_input_type(rel_info.related_model, mutation_type, exclude_parent_field=model)
+                input_fields[nested_field_name] = nested_input_type
+                    
             elif rel_info.relationship_type == 'ManyToManyField':
-                # For ManyToMany, use List of IDs
+                # 1. Add direct ID list field: <field_name>
                 list_type = graphene.List(graphene.ID)
                 if is_required:
                     input_fields[field_name] = graphene.NonNull(list_type)
                 else:
                     input_fields[field_name] = list_type
+                
+                # 2. Add nested field: nested_<field_name>
+                nested_field_name = f"nested_{field_name}"
+                nested_input_type = self._get_or_create_nested_input_type(rel_info.related_model, mutation_type, exclude_parent_field=model)
+                input_fields[nested_field_name] = graphene.List(nested_input_type)
 
-        # Add reverse relationship fields for nested creation (e.g., comments for Post)
+        # Add reverse relationship fields with dual field generation for nested creation (e.g., comments for Post)
         if include_reverse_relations and mutation_type == 'create':
             reverse_relations = self._get_reverse_relations(model)
             for field_name, related_model in reverse_relations.items():
                 if not self._should_include_field(model, field_name):
                     continue
                 
-                # Always include the field, but determine its type based on nested configuration
-                if self._should_include_nested_field(model, field_name):
-                    # Create nested input type for reverse relations
-                    nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
-                    input_fields[field_name] = graphene.List(nested_input_type)
-                else:
-                    # When nested=False or no config, include as List[ID] for ID-based operations
-                    input_fields[field_name] = graphene.List(graphene.ID)
+                # Always generate both direct ID list and nested fields for reverse relations
+                # 1. Add direct ID list field: <field_name>
+                input_fields[field_name] = graphene.List(graphene.ID)
+                
+                # 2. Add nested field: nested_<field_name>
+                nested_field_name = f"nested_{field_name}"
+                nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
+                input_fields[nested_field_name] = graphene.List(nested_input_type)
 
         # Create the input type class
         class_name = f"{model.__name__}Input"

@@ -180,3 +180,37 @@ class ModelIntrospector:
 
     def analyze_inheritance(self) -> InheritanceInfo:
         return self.inheritance
+
+    def get_reverse_relations(self) -> Dict[str, Type[models.Model]]:
+        """
+        Get reverse relationships for the model (e.g., comments for Post).
+        
+        Returns:
+            Dict mapping field names to related models
+        """
+        reverse_relations = {}
+        
+        if not self._meta:
+            return reverse_relations
+        
+        # For modern Django versions, use related_objects
+        if hasattr(self._meta, 'related_objects'):
+            for rel in self._meta.related_objects:
+                # Get the accessor name (e.g., 'comments' for Comment.post -> Post)
+                accessor_name = rel.get_accessor_name()
+                reverse_relations[accessor_name] = rel.related_model
+        else:
+            # Fallback for older Django versions
+            try:
+                for rel in self._meta.get_all_related_objects():
+                    if hasattr(rel, 'get_accessor_name'):
+                        accessor_name = rel.get_accessor_name()
+                    else:
+                        accessor_name = rel.name
+                    
+                    reverse_relations[accessor_name] = rel.related_model
+            except AttributeError:
+                # If get_all_related_objects doesn't exist, skip reverse relations
+                pass
+        
+        return reverse_relations

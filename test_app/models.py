@@ -54,7 +54,7 @@ class Post(models.Model):
         max_length=200,
         validators=[MinLengthValidator(5), MaxLengthValidator(200)]
     )
-    slug = models.SlugField(unique=True, max_length=200)
+    slug = models.SlugField( max_length=200)
     content = models.TextField()
     excerpt = models.CharField(max_length=500, blank=True)
     
