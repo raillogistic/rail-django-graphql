@@ -190,8 +190,23 @@ LOGGING = {
 }
 
 DJANGO_GRAPHQL_AUTO = {
+    'QUERY_SETTINGS': {
+        'use_relay': False,  # Disable Relay connections for direct list access
+    },
     'MUTATION_SETTINGS': {
         # Global setting: disable nested relations by default, use [ID] for unmentioned fields
         # 'enable_nested_relations': False,
+        
+        # Per-model overrides
+        'nested_relations_config': {
+            # 'Comment': False,  # Disable all nested relations for comments
+        },
+        
+        # Per-field granular control
+        'nested_field_config': {
+            "Post":{
+                "category":True,
+            }
+        }
     }
 }

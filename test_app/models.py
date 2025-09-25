@@ -3,6 +3,7 @@ Test models for GraphQL schema generation testing.
 These models represent a simple blog system with various field types and relationships.
 """
 
+from tabnanny import verbose
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinLengthValidator, MaxLengthValidator, MinValueValidator
@@ -162,6 +163,12 @@ class Comment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_approved = models.BooleanField(default=False)
+    tags = models.ManyToManyField(
+        Tag,
+        related_name="comments",
+        blank=True,
+        verbose_name="Étiquettes"
+    )
     
     class Meta:
         ordering = ["created_at"]
@@ -173,3 +180,12 @@ class Comment(models.Model):
     def reply_count(self):
         """Get the number of replies to this comment."""
         return self.replies.count()
+
+
+class Bill(models.Model):
+    ref = models.CharField(max_length=100)
+    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="bills")
+    
+class Client(models.Model):
+    charfield = models.CharField(max_length=100)
+

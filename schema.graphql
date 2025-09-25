@@ -1790,6 +1790,181 @@ type Query {
     is_approved__in: String
     is_approved__isnull: String
   ): PaginatedConnection
+
+  """Retrieve a single bill instance"""
+  bill(
+    """The ID of the bill to retrieve"""
+    id: ID
+  ): BillType
+
+  """Retrieve a list of bill instances"""
+  bills(
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: BillComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by ref"""
+    ref: String
+
+    """Filter by ref__icontains"""
+    ref__icontains: String
+
+    """Filter by ref__startswith"""
+    ref__startswith: String
+
+    """Filter by ref__endswith"""
+    ref__endswith: String
+
+    """Filter by client"""
+    client: Float
+
+    """Filter by client__in"""
+    client__in: String
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by ref__contains"""
+    ref__contains: String
+
+    """Filter by ref__exact"""
+    ref__exact: String
+
+    """Number of records to skip"""
+    offset: Int
+
+    """Number of records to return"""
+    limit: Int
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): [BillType]
+
+  """Retrieve a paginated list of bill instances"""
+  bill_pages(
+    """Page number (1-based)"""
+    page: Int = 1
+
+    """Number of records per page"""
+    per_page: Int = 20
+    id: String
+    id__in: String
+    id__isnull: String
+    id__gt: String
+    id__gte: String
+    id__lt: String
+    id__lte: String
+    id__range: String
+    ref: String
+    ref__in: String
+    ref__isnull: String
+    ref__contains: String
+    ref__icontains: String
+    ref__startswith: String
+    ref__istartswith: String
+    ref__endswith: String
+    ref__iendswith: String
+  ): PaginatedConnection
+
+  """Retrieve a single client instance"""
+  client(
+    """The ID of the client to retrieve"""
+    id: ID
+  ): ClientType
+
+  """Retrieve a list of client instances"""
+  clients(
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: ClientComplexFilter
+
+    """Filter by bills"""
+    bills: String
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by charfield"""
+    charfield: String
+
+    """Filter by charfield__icontains"""
+    charfield__icontains: String
+
+    """Filter by charfield__startswith"""
+    charfield__startswith: String
+
+    """Filter by charfield__endswith"""
+    charfield__endswith: String
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by charfield__contains"""
+    charfield__contains: String
+
+    """Filter by charfield__exact"""
+    charfield__exact: String
+
+    """Number of records to skip"""
+    offset: Int
+
+    """Number of records to return"""
+    limit: Int
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): [ClientType]
+
+  """Retrieve a paginated list of client instances"""
+  client_pages(
+    """Page number (1-based)"""
+    page: Int = 1
+
+    """Number of records per page"""
+    per_page: Int = 20
+    id: String
+    id__in: String
+    id__isnull: String
+    id__gt: String
+    id__gte: String
+    id__lt: String
+    id__lte: String
+    id__range: String
+    charfield: String
+    charfield__in: String
+    charfield__isnull: String
+    charfield__contains: String
+    charfield__icontains: String
+    charfield__startswith: String
+    charfield__istartswith: String
+    charfield__endswith: String
+    charfield__iendswith: String
+  ): PaginatedConnection
   _debug: DjangoDebug
 }
 
@@ -1834,13 +2009,11 @@ type UserType implements Node {
   """
   is_superuser: Boolean!
 
-  """
-  The groups this user belongs to. A user will get all permissions granted to each of their groups.
-  """
-  groups(offset: Int, before: String, after: String, first: Int, last: Int): GroupTypeConnection!
+  """Related Group objects"""
+  groups: [GroupType]
 
-  """Specific permissions for this user."""
-  user_permissions(offset: Int, before: String, after: String, first: Int, last: Int): PermissionTypeConnection!
+  """Related Permission objects"""
+  user_permissions: [PermissionType]
 
   """Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."""
   username: String!
@@ -1868,69 +2041,20 @@ type UserType implements Node {
   pk: ID
 }
 
-type GroupTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [GroupTypeEdge]!
-}
-
-"""
-The Relay compliant `PageInfo` type, containing data necessary to paginate this connection.
-"""
-type PageInfo {
-  """When paginating forwards, are there more items?"""
-  hasNextPage: Boolean!
-
-  """When paginating backwards, are there more items?"""
-  hasPreviousPage: Boolean!
-
-  """When paginating backwards, the cursor to continue."""
-  startCursor: String
-
-  """When paginating forwards, the cursor to continue."""
-  endCursor: String
-}
-
-"""A Relay edge containing a `GroupType` and its cursor."""
-type GroupTypeEdge {
-  """The item at the end of the edge"""
-  node: GroupType
-
-  """A cursor for use in pagination"""
-  cursor: String!
-}
-
 """GraphQL type for the Group model."""
 type GroupType implements Node {
   """The ID of the object"""
   id: ID!
   name: String!
-  permissions(offset: Int, before: String, after: String, first: Int, last: Int): PermissionTypeConnection!
+
+  """Related Permission objects"""
+  permissions: [PermissionType]
 
   """Related User objects"""
   user_set: [UserType]
 
   """Primary key of the model"""
   pk: ID
-}
-
-type PermissionTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [PermissionTypeEdge]!
-}
-
-"""A Relay edge containing a `PermissionType` and its cursor."""
-type PermissionTypeEdge {
-  """The item at the end of the edge"""
-  node: PermissionType
-
-  """A cursor for use in pagination"""
-  cursor: String!
 }
 
 """GraphQL type for the Permission model."""
@@ -1970,10 +2094,61 @@ type LogEntryTypeConnection {
   edges: [LogEntryTypeEdge]!
 }
 
+"""
+The Relay compliant `PageInfo` type, containing data necessary to paginate this connection.
+"""
+type PageInfo {
+  """When paginating forwards, are there more items?"""
+  hasNextPage: Boolean!
+
+  """When paginating backwards, are there more items?"""
+  hasPreviousPage: Boolean!
+
+  """When paginating backwards, the cursor to continue."""
+  startCursor: String
+
+  """When paginating forwards, the cursor to continue."""
+  endCursor: String
+}
+
 """A Relay edge containing a `LogEntryType` and its cursor."""
 type LogEntryTypeEdge {
   """The item at the end of the edge"""
   node: LogEntryType
+
+  """A cursor for use in pagination"""
+  cursor: String!
+}
+
+type PermissionTypeConnection {
+  """Pagination data for this connection."""
+  pageInfo: PageInfo!
+
+  """Contains the nodes in this connection."""
+  edges: [PermissionTypeEdge]!
+}
+
+"""A Relay edge containing a `PermissionType` and its cursor."""
+type PermissionTypeEdge {
+  """The item at the end of the edge"""
+  node: PermissionType
+
+  """A cursor for use in pagination"""
+  cursor: String!
+}
+
+type GroupTypeConnection {
+  """Pagination data for this connection."""
+  pageInfo: PageInfo!
+
+  """Contains the nodes in this connection."""
+  edges: [GroupTypeEdge]!
+}
+
+"""A Relay edge containing a `GroupType` and its cursor."""
+type GroupTypeEdge {
+  """The item at the end of the edge"""
+  node: GroupType
 
   """A cursor for use in pagination"""
   cursor: String!
@@ -1998,8 +2173,12 @@ type PostType implements Node {
   attachment: String
   author: UserType!
   category: CategoryType!
-  tags(offset: Int, before: String, after: String, first: Int, last: Int): TagTypeConnection!
-  related_posts(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
+
+  """Related Tag objects"""
+  tags: [TagType]
+
+  """Related Post objects"""
+  related_posts: [PostType]
 
   """Related Post objects"""
   related_to: [PostType]
@@ -2044,23 +2223,6 @@ type CategoryType implements Node {
   pk: ID
 }
 
-type TagTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [TagTypeEdge]!
-}
-
-"""A Relay edge containing a `TagType` and its cursor."""
-type TagTypeEdge {
-  """The item at the end of the edge"""
-  node: TagType
-
-  """A cursor for use in pagination"""
-  cursor: String!
-}
-
 """GraphQL type for the Tag model."""
 type TagType implements Node {
   """The ID of the object"""
@@ -2071,25 +2233,11 @@ type TagType implements Node {
   """Related Post objects"""
   posts: [PostType]
 
+  """Related Comment objects"""
+  comments: [CommentType]
+
   """Primary key of the model"""
   pk: ID
-}
-
-type PostTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [PostTypeEdge]!
-}
-
-"""A Relay edge containing a `PostType` and its cursor."""
-type PostTypeEdge {
-  """The item at the end of the edge"""
-  node: PostType
-
-  """A cursor for use in pagination"""
-  cursor: String!
 }
 
 """GraphQL type for the Comment model."""
@@ -2103,6 +2251,9 @@ type CommentType implements Node {
   created_at: DateTime!
   updated_at: DateTime!
   is_approved: Boolean!
+
+  """Related Tag objects"""
+  tags: [TagType]
 
   """Related Comment objects"""
   replies: [CommentType]
@@ -2532,6 +2683,65 @@ input CommentComplexFilter {
   NOT: CommentComplexFilter = null
 }
 
+"""GraphQL type for the Bill model."""
+type BillType implements Node {
+  """The ID of the object"""
+  id: ID!
+  ref: String!
+  client: ClientType!
+
+  """Primary key of the model"""
+  pk: ID
+}
+
+"""GraphQL type for the Client model."""
+type ClientType implements Node {
+  """The ID of the object"""
+  id: ID!
+  charfield: String!
+
+  """Related Bill objects"""
+  bills: [BillType]
+
+  """Primary key of the model"""
+  pk: ID
+}
+
+input BillComplexFilter {
+  id: Float
+  id__gt: Float
+  id__gte: Float
+  id__lt: Float
+  id__lte: Float
+  ref: String
+  ref__icontains: String
+  ref__startswith: String
+  ref__endswith: String
+  client: Float
+  ref__contains: String
+  ref__exact: String
+  AND: [BillComplexFilter]
+  OR: [BillComplexFilter]
+  NOT: BillComplexFilter = null
+}
+
+input ClientComplexFilter {
+  id: Float
+  id__gt: Float
+  id__gte: Float
+  id__lt: Float
+  id__lte: Float
+  charfield: String
+  charfield__icontains: String
+  charfield__startswith: String
+  charfield__endswith: String
+  charfield__contains: String
+  charfield__exact: String
+  AND: [ClientComplexFilter]
+  OR: [ClientComplexFilter]
+  NOT: ClientComplexFilter = null
+}
+
 """Debugging information for the current query."""
 type DjangoDebug {
   """Executed SQL queries for this API query."""
@@ -2688,6 +2898,24 @@ type Mutation {
 
   """Delete a Comment instance"""
   delete_comment(id: ID!): DeleteComment
+
+  """Create a new Bill instance"""
+  create_bill(input: BillInput!): CreateBill
+
+  """Update an existing Bill instance"""
+  update_bill(id: ID!, input: BillInput!): UpdateBill
+
+  """Delete a Bill instance"""
+  delete_bill(id: ID!): DeleteBill
+
+  """Create a new Client instance"""
+  create_client(input: ClientInput!): CreateClient
+
+  """Update an existing Client instance"""
+  update_client(id: ID!, input: ClientInput!): UpdateClient
+
+  """Delete a Client instance"""
+  delete_client(id: ID!): DeleteClient
 }
 
 """Create a new LogEntry instance"""
@@ -3047,6 +3275,7 @@ input CommentNestedCreateInput_exclude_User {
   is_approved: Boolean
   post: ID
   parent: ID
+  tags: [ID]
 }
 
 """Update an existing User instance"""
@@ -3271,6 +3500,8 @@ input TagInput {
   slug: String!
   posts: [ID]
   nested_posts: [PostNestedCreateInput_exclude_Tag]
+  comments: [ID]
+  nested_comments: [CommentNestedCreateInput_exclude_Tag]
 }
 
 """Nested input type for Post in create operations."""
@@ -3316,6 +3547,24 @@ input PostNestedCreateInput_exclude_Tag {
   author: ID
   category: ID
   related_posts: [ID]
+}
+
+"""Nested input type for Comment in create operations."""
+input CommentNestedCreateInput_exclude_Tag {
+  """"""
+  content: String!
+
+  """"""
+  created_at: DateTime
+
+  """"""
+  updated_at: DateTime
+
+  """"""
+  is_approved: Boolean
+  post: ID
+  author: ID
+  parent: ID
 }
 
 """Update an existing Tag instance"""
@@ -3462,6 +3711,7 @@ input CommentNestedCreateInput_exclude_Post {
   is_approved: Boolean
   author: ID
   parent: ID
+  tags: [ID]
 }
 
 """Update an existing Post instance"""
@@ -3503,8 +3753,19 @@ input CommentInput {
   post: ID!
   author: ID!
   parent: ID
+  tags: [ID]
+  nested_tags: [TagNestedCreateInput_exclude_Comment]
   replies: [ID]
   nested_replies: [CommentNestedCreateInput_exclude_Comment]
+}
+
+"""Nested input type for Tag in create operations."""
+input TagNestedCreateInput_exclude_Comment {
+  """"""
+  name: String!
+
+  """"""
+  slug: String!
 }
 
 """Nested input type for Comment in create operations."""
@@ -3522,6 +3783,7 @@ input CommentNestedCreateInput_exclude_Comment {
   is_approved: Boolean
   post: ID
   author: ID
+  tags: [ID]
 }
 
 """Update an existing Comment instance"""
@@ -3535,5 +3797,72 @@ type UpdateComment {
 type DeleteComment {
   ok: Boolean
   object: CommentType
+  errors: [String]
+}
+
+"""Create a new Bill instance"""
+type CreateBill {
+  ok: Boolean
+  object: BillType
+  errors: [String]
+}
+
+"""
+Input type for creating/updating Bill instances with nested relationships.
+"""
+input BillInput {
+  """"""
+  ref: String!
+  client: ID!
+}
+
+"""Update an existing Bill instance"""
+type UpdateBill {
+  ok: Boolean
+  object: BillType
+  errors: [String]
+}
+
+"""Delete a Bill instance"""
+type DeleteBill {
+  ok: Boolean
+  object: BillType
+  errors: [String]
+}
+
+"""Create a new Client instance"""
+type CreateClient {
+  ok: Boolean
+  object: ClientType
+  errors: [String]
+}
+
+"""
+Input type for creating/updating Client instances with nested relationships.
+"""
+input ClientInput {
+  """"""
+  charfield: String!
+  bills: [ID]
+  nested_bills: [BillNestedCreateInput_exclude_Client]
+}
+
+"""Nested input type for Bill in create operations."""
+input BillNestedCreateInput_exclude_Client {
+  """"""
+  ref: String!
+}
+
+"""Update an existing Client instance"""
+type UpdateClient {
+  ok: Boolean
+  object: ClientType
+  errors: [String]
+}
+
+"""Delete a Client instance"""
+type DeleteClient {
+  ok: Boolean
+  object: ClientType
   errors: [String]
 }

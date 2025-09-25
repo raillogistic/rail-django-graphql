@@ -170,6 +170,38 @@ class TypeGenerator:
             if hasattr(self, resolver_name):
                 type_attrs[resolver_name] = getattr(self, resolver_name)
 
+        # Override ManyToMany fields to use direct lists instead of connections
+        for field_name, rel_info in relationships.items():
+            if not self._should_include_field(model, field_name):
+                continue
+                
+            if rel_info.relationship_type == 'ManyToManyField':
+                # Get the related model
+                related_model = rel_info.related_model
+                
+                # Use proper lazy type resolution to avoid recursion
+                def make_lazy_type(model_ref):
+                    def lazy_type():
+                        # Check if type already exists to avoid infinite recursion
+                        if model_ref in self._type_registry:
+                            return self._type_registry[model_ref]
+                        return self.generate_object_type(model_ref)
+                    return lazy_type
+                
+                # Override the field as a direct list
+                type_attrs[field_name] = graphene.List(
+                    make_lazy_type(related_model),
+                    description=f"Related {related_model.__name__} objects"
+                )
+                
+                # Add resolver that returns direct queryset
+                def make_resolver(field_name):
+                    def resolver(self, info):
+                        return getattr(self, field_name).all()
+                    return resolver
+                
+                type_attrs[f'resolve_{field_name}'] = make_resolver(field_name)
+
         # Add custom resolvers for reverse relationships to return direct model lists
         # instead of relay connections
         for field in model._meta.get_fields():

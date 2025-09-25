@@ -505,8 +505,6 @@ history/
 ├── 03_smart_field_requirements_enhancement.md   # Intelligent field requirement logic
 ├── 04_documentation_updates.md                  # Project documentation improvements
 ├── 05_fieldinfo_import_fix.md                  # Linter error resolution
-├── 06_recursion_fix_and_direct_relationships.md # Recursion fix and direct relationships
-├── 07_phase3_advanced_features_implementation.md # Phase 3: Advanced Features completion
 └── [sequential_number]_[descriptive_title].md   # Future chat sessions
 ```
 
