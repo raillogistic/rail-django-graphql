@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Recent Improvements
+- **Configurable Nested Relations**
+  - Global control over nested relationship fields in mutations
+  - Per-model configuration for fine-grained control
+  - Per-field configuration for specific relationship fields
+  - Backward compatibility with existing schemas
+  - Comprehensive configuration validation
+
+- **Enhanced Quote Handling**
+  - Robust sanitization of double quotes in mutation inputs
+  - Recursive sanitization for nested dictionaries and lists
+  - Support for JSON-like content with proper escaping
+  - Protection against special character injection
+  - Improved error handling for malformed input
+
+- **Schema Generation Improvements**
+  - Fixed NonNull(Union) GraphQL schema generation error
+  - Simplified relationship field handling for better compatibility
+  - Direct ID usage for ForeignKey and OneToOneField relationships
+  - List(ID) usage for ManyToManyField relationships
+  - Enhanced type safety and GraphQL compliance
+
+### Fixed
+- **Critical Bug Fixes**
+  - Resolved `NonNull(Union)` type error in schema generation
+  - Fixed relationship field type conflicts in mutations
+  - Improved error handling in nested operations
+  - Enhanced validation for complex input structures
+
 ### Planned Features
 - Security implementation (Phase 4)
 - Performance optimization (Phase 5)

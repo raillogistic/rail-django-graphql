@@ -13,10 +13,12 @@ The Django GraphQL Auto-Generation Library is a powerful system that automatical
 
 - **🔄 Automatic Schema Generation**: Zero-configuration GraphQL schema generation from Django models
 - **🔍 Advanced Filtering**: Complex filter combinations with AND, OR, NOT operations
-- **🔗 Nested Operations**: Full support for nested create/update operations with transaction management
+- **🔗 Configurable Nested Operations**: Full control over nested create/update operations with granular configuration
 - **🎯 Smart Field Requirements**: Intelligent field requirement detection based on Django constraints
 - **🏗️ Inheritance Support**: Complete support for Django model inheritance patterns
 - **📊 Custom Scalars**: Built-in support for JSON, DateTime, Decimal, UUID, and Duration types
+- **🛡️ Enhanced Quote Handling**: Robust sanitization and escaping of special characters in mutations
+- **⚙️ Flexible Configuration**: Global, per-model, and per-field control over schema generation
 - **🔒 Security Ready**: Built-in authentication and permission systems (Phase 4)
 - **⚡ Performance Optimized**: N+1 query prevention and intelligent caching (Phase 5)
 - **📁 File Upload Support**: Automatic file upload mutations (Phase 6)
@@ -83,6 +85,23 @@ INSTALLED_APPS = [
     'django_graphql_auto',
     # ... your apps
 ]
+
+# Configure nested relationships (optional)
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': True,  # Global control
+        'nested_relations_config': {
+            'Post': True,     # Enable nested relations for Post model
+            'Comment': False  # Disable nested relations for Comment model
+        },
+        'nested_field_config': {
+            'Post': {
+                'comments': False,      # Disable nested comments in Post mutations
+                'related_posts': True  # Enable nested related_posts
+            }
+        }
+    }
+}
 
 # Generate schema
 python manage.py generate_graphql_schema

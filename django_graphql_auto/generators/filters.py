@@ -56,6 +56,20 @@ class AdvancedFilterGenerator:
             'Meta': type('Meta', (), {
                 'model': model,
                 'fields': meta_fields,
+                'filter_overrides': {
+                    models.ImageField: {
+                        'filter_class': CharFilter,
+                        'extra': lambda f: {
+                            'lookup_expr': 'icontains',
+                        },
+                    },
+                    models.FileField: {
+                        'filter_class': CharFilter,
+                        'extra': lambda f: {
+                            'lookup_expr': 'icontains',
+                        },
+                    },
+                }
             })
         }
 
@@ -216,6 +230,19 @@ class AdvancedFilterGenerator:
             ),
         }
 
+    def _generate_file_filters(self, field_name: str) -> Dict[str, CharFilter]:
+        """Generate file-specific filters: isnull, exact."""
+        return {
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                label=f'{field_name.replace("_", " ").title()} Is Null'
+            ),
+            f'{field_name}__exact': CharFilter(
+                field_name=f'{field_name}__exact',
+                label=f'{field_name.replace("_", " ").title()} Exact'
+            ),
+        }
+
     def _generate_foreign_key_filters(self, field_name: str) -> Dict[str, NumberFilter]:
         """Generate foreign key filters: exact, in."""
         return {
@@ -248,6 +275,8 @@ class AdvancedFilterGenerator:
             return ['exact', 'year', 'month', 'day', 'gt', 'lt']
         elif isinstance(field, models.BooleanField):
             return ['exact']
+        elif isinstance(field, (models.FileField, models.ImageField)):
+            return ['exact', 'isnull']
         elif hasattr(field, 'choices') and field.choices:
             return ['exact', 'in']
         elif isinstance(field, models.ForeignKey):

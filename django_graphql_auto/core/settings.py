@@ -107,6 +107,15 @@ class MutationGeneratorSettings:
     
     # Fields required for update operations
     required_update_fields: Dict[str, List[str]] = field(default_factory=dict)
+    
+    # NEW: Enable/disable nested relationship fields in mutations
+    enable_nested_relations: bool = True
+    
+    # NEW: Per-model configuration for nested relations
+    nested_relations_config: Dict[str, bool] = field(default_factory=dict)
+    
+    # NEW: Per-field configuration for nested relations (model.field -> bool)
+    nested_field_config: Dict[str, Dict[str, bool]] = field(default_factory=dict)
 
 
 @dataclass

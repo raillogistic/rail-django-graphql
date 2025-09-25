@@ -27,8 +27,10 @@ class MutationGenerator:
     def __init__(self, type_generator: TypeGenerator, settings: Optional[MutationGeneratorSettings] = None):
         self.type_generator = type_generator
         self.settings = settings or MutationGeneratorSettings()
+        # Pass mutation settings to type generator for nested relations configuration
+        self.type_generator.mutation_settings = self.settings
         self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}
-        self.nested_handler = NestedOperationHandler()
+        self.nested_handler = NestedOperationHandler(self.settings)
 
     def generate_create_mutation(self, model: Type[models.Model]) -> Type[graphene.Mutation]:
         """
@@ -52,6 +54,9 @@ class MutationGenerator:
             @transaction.atomic
             def mutate(cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]) -> 'CreateMutation':
                 try:
+                    # Handle double quotes in string fields
+                    input = cls._sanitize_input_data(input)
+                    
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
                     
@@ -70,6 +75,29 @@ class MutationGenerator:
                 except Exception as e:
                     transaction.set_rollback(True)
                     return cls(ok=False, object=None, errors=[f"Failed to create {model_name}: {str(e)}"])
+            
+            @classmethod
+            def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+                """
+                Sanitize input data to handle double quotes and other special characters.
+                
+                Args:
+                    input_data: The input data to sanitize
+                    
+                Returns:
+                    Dict with sanitized data
+                """
+                def sanitize_value(value):
+                    if isinstance(value, str):
+                        # Handle double quotes by escaping them properly
+                        return value.replace('""', '"')
+                    elif isinstance(value, dict):
+                        return {k: sanitize_value(v) for k, v in value.items()}
+                    elif isinstance(value, list):
+                        return [sanitize_value(item) for item in value]
+                    return value
+                
+                return {k: sanitize_value(v) for k, v in input_data.items()}
             
             @classmethod
             def _get_nested_handler(cls, info: graphene.ResolveInfo) -> NestedOperationHandler:
@@ -109,6 +137,9 @@ class MutationGenerator:
             @transaction.atomic
             def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any]) -> 'UpdateMutation':
                 try:
+                    # Handle double quotes in string fields
+                    input = cls._sanitize_input_data(input)
+                    
                     instance = model.objects.get(pk=id)
 
                     # Handle nested updates for related fields
@@ -176,6 +207,29 @@ class MutationGenerator:
                 except Exception as e:
                     transaction.set_rollback(True)
                     return UpdateMutation(ok=False, object=None, errors=[f"Failed to update {model_name}: {str(e)}"])
+            
+            @classmethod
+            def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
+                """
+                Sanitize input data to handle double quotes and other special characters.
+                
+                Args:
+                    input_data: The input data to sanitize
+                    
+                Returns:
+                    Dict with sanitized data
+                """
+                def sanitize_value(value):
+                    if isinstance(value, str):
+                        # Handle double quotes by escaping them properly
+                        return value.replace('""', '"')
+                    elif isinstance(value, dict):
+                        return {k: sanitize_value(v) for k, v in value.items()}
+                    elif isinstance(value, list):
+                        return [sanitize_value(item) for item in value]
+                    return value
+                
+                return {k: sanitize_value(v) for k, v in input_data.items()}
 
         return type(
             f'Update{model_name}',

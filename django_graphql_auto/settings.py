@@ -184,6 +184,33 @@ LOGGING = {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': True,
+            
         },
     },
+}
+
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        # Global setting: enable nested relations by default
+        'enable_nested_relations': True,
+        
+        # Per-model overrides
+        'nested_relations_config': {
+            # 'Comment': False,  # Disable all nested relations for comments
+        },
+        
+        # Per-field granular control
+        'nested_field_config': {
+            'Post': {
+                'comments': False,      # Disable nested comment creation/updates
+                'related_posts': False, # Disable nested related posts
+                'tags': True,          # Enable nested tag operations
+                'category': True,      # Enable nested category operations
+                'author': False,       # Disable nested author updates
+            },
+            'Author': {
+                'posts': False,        # Disable nested post creation in author mutations
+            }
+        }
+    }
 }

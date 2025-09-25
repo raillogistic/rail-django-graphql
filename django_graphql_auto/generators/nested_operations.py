@@ -18,9 +18,47 @@ class NestedOperationHandler:
     nested creates, updates, and cascade operations with proper validation.
     """
 
-    def __init__(self):
+    def __init__(self, mutation_settings=None):
         self._processed_objects: Set[str] = set()
         self._validation_errors: List[str] = []
+        self.mutation_settings = mutation_settings or {}
+        self.circular_reference_tracker = set()
+        self.max_depth = 10  # Prevent infinite recursion
+
+    def _should_use_nested_operations(self, model, field_name):
+        """
+        Check if nested operations should be used for a specific field.
+        
+        Args:
+            model: Django model class
+            field_name: Name of the field to check
+            
+        Returns:
+            bool: True if nested operations should be used, False for ID-only operations
+        """
+        if not self.mutation_settings:
+            return True  # Default to nested operations if no settings
+            
+        model_name = model.__name__
+        
+        # Check per-field configuration first (highest priority)
+        if hasattr(self.mutation_settings, 'nested_field_config'):
+            field_config = self.mutation_settings.nested_field_config
+            if model_name in field_config and field_name in field_config[model_name]:
+                return field_config[model_name][field_name]
+        
+        # Check per-model configuration
+        if hasattr(self.mutation_settings, 'nested_relations_config'):
+            model_config = self.mutation_settings.nested_relations_config
+            if model_name in model_config:
+                return model_config[model_name]
+        
+        # Check global configuration
+        if hasattr(self.mutation_settings, 'enable_nested_relations'):
+            return self.mutation_settings.enable_nested_relations
+        
+        # Default to enabled
+        return True
 
     def handle_nested_create(
         self, 
@@ -109,24 +147,42 @@ class NestedOperationHandler:
                     
                 m2m_manager = getattr(instance, field_name)
                 
+                # Check if nested operations should be used for this field
+                use_nested = self._should_use_nested_operations(model, field_name)
+                
                 if isinstance(value, list):
                     related_objects = []
                     for item in value:
-                        if isinstance(item, dict):
+                        if isinstance(item, dict) and use_nested:
                             if 'id' in item:
                                 # Reference existing object
                                 related_obj = field.related_model.objects.get(pk=item['id'])
                             else:
-                                # Create new object
+                                # Create new object only if nested operations are enabled
                                 related_obj = self.handle_nested_create(field.related_model, item)
                             related_objects.append(related_obj)
                         elif isinstance(item, (str, int)):
-                            # Direct ID reference
+                            # Direct ID reference - always allowed
                             related_obj = field.related_model.objects.get(pk=item)
                             related_objects.append(related_obj)
+                        elif isinstance(item, dict) and not use_nested:
+                            # If nested is disabled but dict is provided, raise error
+                            raise ValidationError(
+                                f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                                f"Use ID references instead."
+                            )
                     
                     m2m_manager.set(related_objects)
                 elif isinstance(value, dict):
+                    # Check if nested operations should be used for this field
+                    use_nested = self._should_use_nested_operations(model, field_name)
+                    
+                    if not use_nested:
+                        raise ValidationError(
+                            f"Nested operations are disabled for {model.__name__}.{field_name}. "
+                            f"Use ID references instead."
+                        )
+                    
                     # Handle operations like connect, create, disconnect
                     if 'connect' in value:
                         connect_ids = value['connect']
@@ -148,6 +204,9 @@ class NestedOperationHandler:
                         if isinstance(disconnect_ids, list):
                             objects_to_remove = field.related_model.objects.filter(pk__in=disconnect_ids)
                             m2m_manager.remove(*objects_to_remove)
+
+            # Handle reverse relationships (e.g., creating comments for a post)
+            self._handle_reverse_relationships(instance, input_data)
 
             return instance
 
@@ -481,3 +540,113 @@ class NestedOperationHandler:
             
         except Exception as e:
             return [f"Field validation error for '{field.name}': {str(e)}"]
+
+    def _handle_reverse_relationships(self, instance: models.Model, input_data: Dict[str, Any]) -> None:
+        """
+        Handle reverse relationships (e.g., creating comments for a post).
+        
+        Args:
+            instance: The main instance that was just created
+            input_data: The input data containing potential reverse relationship data
+        """
+        model = instance.__class__
+        
+        # Get all reverse relationships for this model
+        reverse_relations = self._get_reverse_relations(model)
+        
+        for field_name, related_field in reverse_relations.items():
+            if field_name not in input_data:
+                continue
+                
+            value = input_data[field_name]
+            if value is None:
+                continue
+                
+            # Handle different types of reverse relationship data
+            if isinstance(value, list):
+                # List of objects to create
+                for item in value:
+                    if isinstance(item, dict):
+                        # Set the foreign key to point to our instance
+                        item[related_field.field.name] = instance.pk
+                        self.handle_nested_create(related_field.related_model, item)
+                        
+            elif isinstance(value, dict):
+                # Handle operations like create, connect, disconnect
+                if 'create' in value:
+                    create_data = value['create']
+                    if isinstance(create_data, list):
+                        for item in create_data:
+                            if isinstance(item, dict):
+                                # Set the foreign key to point to our instance
+                                item[related_field.field.name] = instance.pk
+                                self.handle_nested_create(related_field.related_model, item)
+                    elif isinstance(create_data, dict):
+                        # Single object to create
+                        create_data[related_field.field.name] = instance.pk
+                        self.handle_nested_create(related_field.related_model, create_data)
+                
+                if 'connect' in value:
+                    # Connect existing objects to this instance
+                    connect_ids = value['connect']
+                    if isinstance(connect_ids, list):
+                        related_field.related_model.objects.filter(
+                            pk__in=connect_ids
+                        ).update(**{related_field.field.name: instance})
+
+    def _get_reverse_relations(self, model: Type[models.Model]) -> Dict[str, Any]:
+        """
+        Get reverse relationships for a model.
+        
+        Args:
+            model: The Django model to get reverse relations for
+            
+        Returns:
+            Dict mapping field names to related field objects
+        """
+        reverse_relations = {}
+        
+        # Use the modern Django approach
+        if hasattr(model._meta, 'related_objects'):
+            for rel in model._meta.related_objects:
+                if hasattr(rel, 'get_accessor_name'):
+                    accessor_name = rel.get_accessor_name()
+                else:
+                    accessor_name = rel.related_name or f"{rel.related_model._meta.model_name}_set"
+                
+                # Only include if it should be included based on field rules
+                if self._should_include_reverse_field(rel):
+                    reverse_relations[accessor_name] = rel
+        
+        # Fallback for older Django versions
+        elif hasattr(model._meta, 'get_all_related_objects'):
+            for rel in model._meta.get_all_related_objects():
+                accessor_name = rel.get_accessor_name()
+                if self._should_include_reverse_field(rel):
+                    reverse_relations[accessor_name] = rel
+        
+        return reverse_relations
+
+    def _should_include_reverse_field(self, rel) -> bool:
+        """
+        Determine if a reverse relationship field should be included.
+        
+        Args:
+            rel: The relationship object
+            
+        Returns:
+            bool: True if the field should be included
+        """
+        # Skip if it's a many-to-many through relationship
+        if hasattr(rel, 'through') and rel.through and not rel.through._meta.auto_created:
+            return False
+            
+        # Skip if it's marked as hidden
+        if hasattr(rel, 'hidden') and rel.hidden:
+            return False
+            
+        # Skip if the related model is abstract
+        if hasattr(rel, 'related_model') and rel.related_model._meta.abstract:
+            return False
+            
+        return True

@@ -1,29 +1,97 @@
 # Nested Operations
 
-This document explains the nested operations system in the Django GraphQL Auto-Generation Library, including nested create, update, and delete operations with complex relationship handling.
+This document explains the configurable nested operations system in the Django GraphQL Auto-Generation Library, including nested create, update, and delete operations with complex relationship handling and granular configuration control.
 
 ## 📚 Table of Contents
 
 - [Overview](#overview)
+- [Configuration System](#configuration-system)
 - [Nested Create Operations](#nested-create-operations)
 - [Nested Update Operations](#nested-update-operations)
 - [Nested Delete Operations](#nested-delete-operations)
 - [Relationship Handling](#relationship-handling)
+- [Enhanced Quote Handling](#enhanced-quote-handling)
 - [Validation and Error Handling](#validation-and-error-handling)
 - [Performance Optimization](#performance-optimization)
-- [Configuration](#configuration)
+- [Configuration Examples](#configuration-examples)
 - [Examples](#examples)
 
 ## 🔍 Overview
 
 The nested operations system provides:
 
+- **Configurable nested operations** with three levels of control (global, per-model, per-field)
 - **Deep nested creation** with automatic relationship handling
 - **Selective nested updates** with partial data support
 - **Cascading delete operations** with safety checks
+- **Enhanced input sanitization** for special characters and quotes
 - **Transaction management** for data consistency
 - **Validation at all levels** with detailed error reporting
 - **Performance optimization** through bulk operations
+
+## ⚙️ Configuration System
+
+### Three-Level Configuration Hierarchy
+
+The nested operations system supports granular configuration at three levels:
+
+#### 1. Global Configuration
+Controls nested operations for all models by default:
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': True,  # Enable globally
+    }
+}
+```
+
+#### 2. Per-Model Configuration
+Override global settings for specific models:
+
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': False,  # Global default: disabled
+        'nested_relations_config': {
+            'Post': True,     # Enable for Post model only
+            'Comment': True,  # Enable for Comment model only
+            'User': False,    # Explicitly disable for User model
+        }
+    }
+}
+```
+
+#### 3. Per-Field Configuration (Most Granular)
+Control specific relationship fields within models:
+
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'nested_field_config': {
+            'Post': {
+                'comments': False,      # Disable nested comments
+                'related_posts': True,  # Enable nested related_posts
+                'tags': True,          # Enable nested tags
+                'author': False,       # Disable nested author updates
+            },
+            'Comment': {
+                'replies': False,      # Disable nested replies
+                'post': True,         # Allow nested post updates
+            }
+        }
+    }
+}
+```
+
+### Configuration Priority Order
+
+The system evaluates configuration in this priority order:
+1. **Per-field configuration** (`nested_field_config`) - Highest priority
+2. **Per-model configuration** (`nested_relations_config`)
+3. **Global configuration** (`enable_nested_relations`)
+4. **Default behavior** (nested relations enabled) - Lowest priority
 
 ## 🎯 Nested Create Operations
 
@@ -875,6 +943,107 @@ mutation {
 ```
 
 ## 🔗 Relationship Handling
+
+### Automatic Relationship Detection
+
+The system automatically detects and handles various Django relationship types:
+
+- **ForeignKey**: One-to-one and many-to-one relationships
+- **OneToOneField**: Bidirectional one-to-one relationships  
+- **ManyToManyField**: Many-to-many relationships with through models
+- **Reverse relationships**: Automatically detected reverse foreign keys
+
+### Relationship Configuration
+
+Each relationship can be individually configured:
+
+```python
+# Per-field configuration example
+'nested_field_config': {
+    'Post': {
+        'comments': True,       # Enable nested comment operations
+        'tags': False,         # Disable nested tag operations
+        'author': True,        # Enable nested author operations
+        'related_posts': False # Disable nested related posts
+    }
+}
+```
+
+## 🛡️ Enhanced Quote Handling
+
+### Robust Input Sanitization
+
+The library includes comprehensive input sanitization for handling special characters and preventing injection attacks:
+
+#### Double Quote Processing
+```python
+class InputSanitizer:
+    """Handles input sanitization for nested operations."""
+    
+    @classmethod
+    def sanitize_input_data(cls, data):
+        """
+        Recursively sanitize input data to handle special characters.
+        
+        Features:
+        - Converts double quotes ("") to single quotes (")
+        - Handles nested dictionaries and lists
+        - Preserves JSON structure in string values
+        - Prevents injection through special characters
+        """
+        if isinstance(data, dict):
+            return {key: cls.sanitize_input_data(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [cls.sanitize_input_data(item) for item in data]
+        elif isinstance(data, str):
+            # Handle double quote conversion
+            return data.replace('""', '"')
+        else:
+            return data
+```
+
+#### Practical Examples
+
+```python
+# Input with special characters
+input_data = {
+    'title': 'Article with ""quoted"" content',
+    'content': 'JSON data: {"key": "value with ""nested quotes"""}',
+    'metadata': {
+        'tags': ['tag with ""quotes""', 'normal-tag'],
+        'description': 'Description with ""special"" formatting'
+    },
+    'comments': [
+        {
+            'text': 'Comment with ""quoted"" text',
+            'author': 'User ""Admin""'
+        }
+    ]
+}
+
+# After sanitization
+sanitized_data = {
+    'title': 'Article with "quoted" content',
+    'content': 'JSON data: {"key": "value with "nested quotes""}',
+    'metadata': {
+        'tags': ['tag with "quotes"', 'normal-tag'],
+        'description': 'Description with "special" formatting'
+    },
+    'comments': [
+        {
+            'text': 'Comment with "quoted" text',
+            'author': 'User "Admin"'
+        }
+    ]
+}
+```
+
+#### Security Features
+
+- **Injection Prevention**: Sanitizes input to prevent GraphQL injection
+- **Recursive Processing**: Handles deeply nested data structures
+- **Type Preservation**: Maintains original data types while sanitizing strings
+- **JSON Compatibility**: Preserves JSON structure in string values
 
 ### Advanced Relationship Management
 

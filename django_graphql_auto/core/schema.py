@@ -48,9 +48,9 @@ class SchemaBuilder:
             self.settings = settings or SchemaSettings()
             self.type_generator = TypeGenerator()
             self.query_generator = QueryGenerator(self.type_generator)
-            # Import MutationGeneratorSettings to pass proper configuration
-            from .settings import MutationGeneratorSettings
-            mutation_settings = MutationGeneratorSettings()
+            # Load mutation settings from Django configuration
+            from .config_loader import load_mutation_settings
+            mutation_settings = load_mutation_settings()
             self.mutation_generator = MutationGenerator(self.type_generator, mutation_settings)
             
             self._schema = None

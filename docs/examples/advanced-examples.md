@@ -1,9 +1,11 @@
 # Advanced Examples
 
-This guide provides comprehensive examples of advanced usage patterns and real-world scenarios for the Django GraphQL Auto-Generation Library.
+This guide provides comprehensive examples of advanced usage patterns and real-world scenarios for the Django GraphQL Auto-Generation Library, including configurable nested relationships and enhanced quote handling.
 
 ## 📚 Table of Contents
 
+- [Configurable Nested Relationships](#configurable-nested-relationships)
+- [Enhanced Quote Handling Examples](#enhanced-quote-handling-examples)
 - [Complex E-commerce Platform](#complex-e-commerce-platform)
 - [Multi-tenant SaaS Application](#multi-tenant-saas-application)
 - [Content Management System](#content-management-system)
@@ -14,6 +16,340 @@ This guide provides comprehensive examples of advanced usage patterns and real-w
 - [Performance Optimization Examples](#performance-optimization-examples)
 - [Custom Scalar Implementations](#custom-scalar-implementations)
 - [Complex Inheritance Patterns](#complex-inheritance-patterns)
+
+## ⚙️ Configurable Nested Relationships
+
+### Scenario 1: Blog Platform with Selective Nesting
+
+```python
+# models.py
+from django.db import models
+from django.contrib.auth.models import User
+
+class Author(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bio = models.TextField(blank=True)
+    website = models.URLField(blank=True)
+
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+
+class Tag(models.Model):
+    name = models.CharField(max_length=50)
+    color = models.CharField(max_length=7, default='#000000')
+
+class Post(models.Model):
+    title = models.CharField(max_length=200)
+    content = models.TextField()
+    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='posts')
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='posts')
+    tags = models.ManyToManyField(Tag, related_name='posts')
+    related_posts = models.ManyToManyField('self', blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Comment(models.Model):
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='comments')
+    content = models.TextField()
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+#### Configuration: Granular Control
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        # Global setting: enable nested relations by default
+        'enable_nested_relations': True,
+        
+        # Per-model overrides
+        'nested_relations_config': {
+            'Comment': False,  # Disable all nested relations for comments
+        },
+        
+        # Per-field granular control
+        'nested_field_config': {
+            'Post': {
+                'comments': False,      # Disable nested comment creation/updates
+                'related_posts': False, # Disable nested related posts
+                'tags': True,          # Enable nested tag operations
+                'category': True,      # Enable nested category operations
+                'author': False,       # Disable nested author updates
+            },
+            'Author': {
+                'posts': False,        # Disable nested post creation in author mutations
+            }
+        }
+    }
+}
+```
+
+#### GraphQL Mutations with Configuration
+
+```graphql
+# ✅ ALLOWED: Create post with nested tags and category
+mutation CreatePostWithNesting {
+  createPost(input: {
+    title: "Advanced GraphQL Tutorial"
+    content: "Learn about nested operations..."
+    category: {
+      name: "Technology"
+      description: "Tech-related articles"
+    }
+    tags: [
+      { name: "GraphQL", color: "#e10098" }
+      { name: "Django", color: "#092e20" }
+    ]
+  }) {
+    ok
+    post {
+      id
+      title
+      category { name }
+      tags { name color }
+    }
+    errors
+  }
+}
+
+# ❌ BLOCKED: Nested comments disabled by configuration
+mutation CreatePostWithComments {
+  createPost(input: {
+    title: "Post Title"
+    content: "Content..."
+    comments: [  # This will be ignored due to configuration
+      { content: "First comment", author: { bio: "Author bio" } }
+    ]
+  }) {
+    ok
+    post { id title }
+    errors
+  }
+}
+
+# ❌ BLOCKED: Nested relations disabled for Comment model
+mutation CreateCommentWithNesting {
+  createComment(input: {
+    content: "Comment content"
+    post: {  # This will be ignored due to per-model configuration
+      title: "New Post"
+      content: "Post content"
+    }
+  }) {
+    ok
+    comment { id content }
+    errors
+  }
+}
+```
+
+### Scenario 2: E-commerce with Security Constraints
+
+```python
+# Configuration for secure e-commerce operations
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': False,  # Secure default: disabled globally
+        
+        # Selectively enable for safe operations only
+        'nested_relations_config': {
+            'Product': True,   # Allow nested product operations
+            'Order': False,    # Disable nested order operations (security)
+            'User': False,     # Disable nested user operations (security)
+        },
+        
+        'nested_field_config': {
+            'Product': {
+                'reviews': True,        # Allow nested review creation
+                'variants': True,       # Allow nested product variants
+                'categories': True,     # Allow nested category assignment
+                'supplier': False,      # Disable nested supplier updates (security)
+            },
+            'Cart': {
+                'items': True,         # Allow nested cart item operations
+                'user': False,         # Disable nested user operations
+                'payment_method': False # Disable nested payment operations
+            }
+        }
+    }
+}
+```
+
+## 🛡️ Enhanced Quote Handling Examples
+
+### Scenario 1: Content Management with Rich Text
+
+```python
+# Input data with complex quoting
+input_data = {
+    'title': 'Article about "Advanced GraphQL"',
+    'content': '''
+        This article discusses "nested operations" and their benefits.
+        
+        Example JSON configuration:
+        {
+            "enable_nested_relations": true,
+            "nested_field_config": {
+                "Post": {
+                    "comments": false
+                }
+            }
+        }
+    ''',
+    'metadata': {
+        'seo_title': 'Learn about "GraphQL Nesting"',
+        'keywords': ['GraphQL', '"nested operations"', 'Django'],
+        'description': 'Comprehensive guide to "configurable nesting"'
+    },
+    'tags': [
+        { 'name': '"Advanced" GraphQL' },
+        { 'name': 'Django "ORM"' }
+    ]
+}
+
+# GraphQL mutation with quote handling
+mutation CreateArticleWithQuotes {
+  createPost(input: {
+    title: "Article about \"Advanced GraphQL\""
+    content: """
+      This article discusses "nested operations" and their benefits.
+      
+      Example JSON configuration:
+      {
+        "enable_nested_relations": true,
+        "nested_field_config": {
+          "Post": {
+            "comments": false
+          }
+        }
+      }
+    """
+    metadata: {
+      seoTitle: "Learn about \"GraphQL Nesting\""
+      keywords: ["GraphQL", "\"nested operations\"", "Django"]
+      description: "Comprehensive guide to \"configurable nesting\""
+    }
+    tags: [
+      { name: "\"Advanced\" GraphQL" }
+      { name: "Django \"ORM\"" }
+    ]
+  }) {
+    ok
+    post {
+      id
+      title
+      content
+      metadata
+      tags { name }
+    }
+    errors
+  }
+}
+```
+
+### Scenario 2: User-Generated Content with Special Characters
+
+```python
+# Handling user input with various quote patterns
+user_inputs = [
+    {
+        'comment': 'I love this "feature" - it\'s amazing!',
+        'rating': 5,
+        'metadata': {
+            'device': 'iPhone "Pro Max"',
+            'browser': 'Safari "16.0"'
+        }
+    },
+    {
+        'review': '''
+            The product description said "premium quality" and it delivered!
+            
+            Specifications:
+            - Material: "Stainless Steel"
+            - Warranty: "2 years"
+            - Rating: "5 stars"
+        ''',
+        'tags': ['"excellent"', '"premium"', '"recommended"']
+    }
+]
+
+# GraphQL mutations with automatic sanitization
+mutation CreateReviewWithQuotes {
+  createReview(input: {
+    comment: "I love this \"feature\" - it's amazing!"
+    rating: 5
+    metadata: {
+      device: "iPhone \"Pro Max\""
+      browser: "Safari \"16.0\""
+    }
+  }) {
+    ok
+    review {
+      id
+      comment
+      rating
+      metadata
+    }
+    errors
+  }
+}
+```
+
+### Scenario 3: API Integration with JSON Data
+
+```python
+# Handling API responses with embedded JSON
+api_response_data = {
+    'webhook_payload': '{"event": "order.created", "data": {"id": 123, "status": "pending"}}',
+    'configuration': {
+        'settings': '{"theme": "dark", "notifications": {"email": true, "sms": false}}',
+        'preferences': '{"language": "en", "timezone": "UTC"}'
+    },
+    'logs': [
+        {
+            'message': 'API call successful: {"status": 200, "response_time": "150ms"}',
+            'level': 'INFO'
+        },
+        {
+            'message': 'Error occurred: {"error": "timeout", "details": "Connection failed"}',
+            'level': 'ERROR'
+        }
+    ]
+}
+
+# The library automatically handles JSON preservation during sanitization
+mutation CreateWebhookLog {
+  createWebhookLog(input: {
+    webhookPayload: "{\"event\": \"order.created\", \"data\": {\"id\": 123, \"status\": \"pending\"}}"
+    configuration: {
+      settings: "{\"theme\": \"dark\", \"notifications\": {\"email\": true, \"sms\": false}}"
+      preferences: "{\"language\": \"en\", \"timezone\": \"UTC\"}"
+    }
+    logs: [
+      {
+        message: "API call successful: {\"status\": 200, \"response_time\": \"150ms\"}"
+        level: "INFO"
+      }
+      {
+        message: "Error occurred: {\"error\": \"timeout\", \"details\": \"Connection failed\"}"
+        level: "ERROR"
+      }
+    ]
+  }) {
+    ok
+    webhookLog {
+      id
+      webhookPayload
+      configuration
+      logs { message level }
+    }
+    errors
+  }
+}
+```
 
 ## 🛒 Complex E-commerce Platform
 

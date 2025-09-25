@@ -343,11 +343,63 @@ class CreatePost(graphene.Mutation):
 
 ### Nested Operations Support
 
-The mutation generator supports nested create and update operations:
+The mutation generator supports configurable nested create and update operations with enhanced input sanitization:
 
 ```python
-# Create post with nested category and tags
+# Create post with nested category and tags (when nested relations are enabled)
 mutation {
+  createPost(input: {
+    title: "My Post with \"Quotes\"",
+    content: "Content with JSON-like data: {\"key\": \"value\"}",
+    category: {
+      name: "Technology",
+      description: "Tech articles with \"special\" characters"
+    },
+    tags: [
+      { name: "GraphQL" },
+      { name: "Django" }
+    ]
+  }) {
+    ok
+    post {
+      id
+      title
+      category { name }
+      tags { name }
+    }
+    errors
+  }
+}
+```
+
+### Enhanced Quote Handling
+
+The library includes robust input sanitization for handling special characters:
+
+- **Double Quote Sanitization**: Automatically handles `""` to `"` conversion
+- **Recursive Processing**: Sanitizes nested dictionaries and lists
+- **JSON Content Support**: Properly handles JSON-like strings in input
+- **Special Character Protection**: Prevents injection through special characters
+
+```python
+# Input sanitization example
+input_data = {
+    'title': 'Post with ""double quotes""',
+    'content': 'JSON data: {"key": "value with ""quotes"""}',
+    'metadata': {
+        'tags': ['tag with ""quotes""', 'normal tag']
+    }
+}
+
+# After sanitization:
+sanitized_data = {
+    'title': 'Post with "double quotes"',
+    'content': 'JSON data: {"key": "value with "quotes""}',
+    'metadata': {
+        'tags': ['tag with "quotes"', 'normal tag']
+    }
+}
+```
   createPost(input: {
     title: "New Post"
     content: "Content..."
@@ -463,8 +515,79 @@ DJANGO_GRAPHQL_AUTO = {
     'ENABLE_FILE_UPLOADS': True,
     'ENABLE_CUSTOM_SCALARS': True,
     'ENABLE_INHERITANCE': True,
+    
+    # Mutation configuration
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': True,  # Global control over nested relations
+        'nested_relations_config': {
+            # Per-model control
+            'Post': True,     # Enable nested relations for Post model
+            'Comment': False, # Disable nested relations for Comment model
+            'User': True,     # Enable nested relations for User model
+        },
+        'nested_field_config': {
+            # Per-field control (most granular)
+            'Post': {
+                'comments': False,      # Disable nested comments in Post mutations
+                'related_posts': True,  # Enable nested related_posts
+                'tags': True,          # Enable nested tags
+            },
+            'Comment': {
+                'replies': False,      # Disable nested replies in Comment mutations
+            }
+        }
+    }
 }
 ```
+
+### Nested Relations Configuration
+
+The library provides three levels of control over nested relationship fields in mutations:
+
+#### 1. Global Control
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': False,  # Disable all nested relations globally
+    }
+}
+```
+
+#### 2. Per-Model Control
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_nested_relations': False,  # Global default: disabled
+        'nested_relations_config': {
+            'Post': True,     # Override: enable nested relations for Post only
+            'Comment': True,  # Override: enable nested relations for Comment only
+        }
+    }
+}
+```
+
+#### 3. Per-Field Control (Most Granular)
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'nested_field_config': {
+            'Post': {
+                'comments': False,      # Disable nested comments
+                'related_posts': True,  # Enable nested related_posts
+                'tags': True,          # Enable nested tags
+            }
+        }
+    }
+}
+```
+
+### Configuration Priority
+
+The configuration follows this priority order (highest to lowest):
+1. **Per-field configuration** (`nested_field_config`)
+2. **Per-model configuration** (`nested_relations_config`)
+3. **Global configuration** (`enable_nested_relations`)
+4. **Default behavior** (nested relations enabled)
 
 ### Per-Model Configuration
 

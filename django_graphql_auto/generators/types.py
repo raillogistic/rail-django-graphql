@@ -22,7 +22,7 @@ from graphene_django.utils import DJANGO_FILTER_INSTALLED
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
 
-from ..core.settings import TypeGeneratorSettings
+from ..core.settings import TypeGeneratorSettings, MutationGeneratorSettings
 from .introspector import ModelIntrospector, FieldInfo
 
 class TypeGenerator:
@@ -57,8 +57,9 @@ class TypeGenerator:
         models.UUIDField: graphene.UUID,
     }
 
-    def __init__(self, settings: Optional[TypeGeneratorSettings] = None):
+    def __init__(self, settings: Optional[TypeGeneratorSettings] = None, mutation_settings: Optional[MutationGeneratorSettings] = None):
         self.settings = settings or TypeGeneratorSettings()
+        self.mutation_settings = mutation_settings or MutationGeneratorSettings()
         self._type_registry: Dict[Type[models.Model], Type[DjangoObjectType]] = {}
         self._input_type_registry: Dict[Type[models.Model], Type[graphene.InputObjectType]] = {}
         self._filter_type_registry: Dict[Type[models.Model], Type] = {}
@@ -215,18 +216,19 @@ class TypeGenerator:
         return model_type
     
     def generate_input_type(self, model: Type[models.Model], partial: bool = False, 
-                           mutation_type: str = 'create') -> Type[graphene.InputObjectType]:
+                           mutation_type: str = 'create', include_reverse_relations: bool = True) -> Type[graphene.InputObjectType]:
         """
         Generates a GraphQL input type for mutations.
-        Handles nested inputs and validation.
+        Handles nested inputs, validation, and reverse relationships.
         
         Args:
             model: The Django model to generate input type for
             partial: Whether this is a partial input (for updates)
             mutation_type: Type of mutation ('create' or 'update') to determine field requirements
+            include_reverse_relations: Whether to include reverse relationship fields for nested creation
         """
         # Check if we already have this input type to prevent infinite recursion
-        cache_key = (model, partial, mutation_type)
+        cache_key = (model, partial, mutation_type, include_reverse_relations)
         if model in self._input_type_registry:
             return self._input_type_registry[model]
 
@@ -261,7 +263,7 @@ class TypeGenerator:
                 description=field_info.help_text
             )
 
-        # Add relationship fields (simplified to avoid recursion)
+        # Add forward relationship fields (ForeignKey, OneToOne, ManyToMany)
         for field_name, rel_info in relationships.items():
             if not self._should_include_field(model, field_name):
                 continue
@@ -289,14 +291,36 @@ class TypeGenerator:
             else:
                 is_required = self._should_field_be_required_for_create(rel_field_info, field_name) if mutation_type == 'create' else self._should_field_be_required_for_update(field_name, rel_field_info)
 
-            # Use ID references instead of nested input types to avoid recursion
+            # Support both ID references and nested object creation
             if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
-                input_fields[field_name] = graphene.ID(required=is_required)
-            elif rel_info.relationship_type == 'ManyToManyField':
+                # For ForeignKey/OneToOne, use ID field instead of Union to avoid GraphQL complexity
+                # Users can provide either the ID directly or use nested mutations separately
                 if is_required:
-                    input_fields[field_name] = graphene.NonNull(graphene.List(graphene.ID))
+                    input_fields[field_name] = graphene.NonNull(graphene.ID)
                 else:
-                    input_fields[field_name] = graphene.List(graphene.ID)
+                    input_fields[field_name] = graphene.ID()
+            elif rel_info.relationship_type == 'ManyToManyField':
+                # For ManyToMany, use List of IDs
+                list_type = graphene.List(graphene.ID)
+                if is_required:
+                    input_fields[field_name] = graphene.NonNull(list_type)
+                else:
+                    input_fields[field_name] = list_type
+
+        # Add reverse relationship fields for nested creation (e.g., comments for Post)
+        if include_reverse_relations and mutation_type == 'create' and self._should_include_nested_relations(model):
+            reverse_relations = self._get_reverse_relations(model)
+            for field_name, related_model in reverse_relations.items():
+                if not self._should_include_field(model, field_name):
+                    continue
+                
+                # Check if this specific field should be nested
+                if not self._should_include_nested_field(model, field_name):
+                    continue
+                
+                # Create nested input type for reverse relations
+                nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
+                input_fields[field_name] = graphene.List(nested_input_type)
 
         # Create the input type class
         class_name = f"{model.__name__}Input"
@@ -304,7 +328,7 @@ class TypeGenerator:
             class_name,
             (graphene.InputObjectType,),
             {
-                '__doc__': f"Input type for creating/updating {model.__name__} instances.",
+                '__doc__': f"Input type for creating/updating {model.__name__} instances with nested relationships.",
                 **input_fields
             }
         )
@@ -419,3 +443,165 @@ class TypeGenerator:
 
         # Default to String for unknown field types
         return graphene.String
+
+    def _get_reverse_relations(self, model: Type[models.Model]) -> Dict[str, Type[models.Model]]:
+        """
+        Get reverse relationships for a model (e.g., comments for Post).
+        
+        Returns:
+            Dict mapping field names to related models
+        """
+        reverse_relations = {}
+        
+        # For modern Django versions, use related_objects
+        if hasattr(model._meta, 'related_objects'):
+            for rel in model._meta.related_objects:
+                # Get the accessor name (e.g., 'comments' for Comment.post -> Post)
+                accessor_name = rel.get_accessor_name()
+                
+                # Skip if accessor name is in excluded fields
+                if not self._should_include_field(model, accessor_name):
+                    continue
+                    
+                reverse_relations[accessor_name] = rel.related_model
+        else:
+            # Fallback for older Django versions
+            try:
+                for rel in model._meta.get_all_related_objects():
+                    if hasattr(rel, 'get_accessor_name'):
+                        accessor_name = rel.get_accessor_name()
+                    else:
+                        accessor_name = rel.name
+                    
+                    if self._should_include_field(model, accessor_name):
+                        reverse_relations[accessor_name] = rel.related_model
+            except AttributeError:
+                # If get_all_related_objects doesn't exist, skip reverse relations
+                pass
+        
+        return reverse_relations
+
+    def _get_or_create_nested_input_type(
+        self, 
+        model: Type[models.Model], 
+        mutation_type: str = 'create',
+        exclude_parent_field: Optional[Type[models.Model]] = None
+    ) -> Type[graphene.InputObjectType]:
+        """
+        Get or create a nested input type for a model, avoiding circular references.
+        
+        Args:
+            model: The model to create input type for
+            mutation_type: Type of mutation ('create' or 'update')
+            exclude_parent_field: Parent model to exclude from nested input to prevent circular refs
+            
+        Returns:
+            GraphQL input type for the model
+        """
+        # Create a simplified input type to avoid infinite recursion
+        cache_key = f"{model.__name__}Nested{mutation_type.title()}Input"
+        
+        if cache_key in self._input_type_registry:
+            return self._input_type_registry[cache_key]
+        
+        introspector = ModelIntrospector(model)
+        fields = introspector.get_model_fields()
+        relationships = introspector.get_model_relationships()
+        
+        input_fields = {}
+        
+        # Add regular fields
+        for field_name, field_info in fields.items():
+            if not self._should_include_field(model, field_name):
+                continue
+                
+            # Skip id field for create mutations
+            if mutation_type == 'create' and field_name == 'id':
+                continue
+                
+            field_type = self._get_input_field_type(field_info.field_type)
+            if not field_type:
+                field_type = self.handle_custom_fields(field_info.field_type)
+            
+            # For nested inputs, make most fields optional to allow partial data
+            is_required = False
+            if mutation_type == 'create':
+                is_required = self._should_field_be_required_for_create(field_info, field_name)
+            
+            input_fields[field_name] = field_type(
+                required=is_required,
+                description=field_info.help_text
+            )
+        
+        # Add only essential relationship fields (avoid deep nesting)
+        for field_name, rel_info in relationships.items():
+            if not self._should_include_field(model, field_name):
+                continue
+                
+            # Skip the parent field to prevent circular references
+            if exclude_parent_field and rel_info.related_model == exclude_parent_field:
+                continue
+            
+            # For nested inputs, use only ID references for relationships
+            if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
+                input_fields[field_name] = graphene.ID(required=False)
+            elif rel_info.relationship_type == 'ManyToManyField':
+                input_fields[field_name] = graphene.List(graphene.ID)
+        
+        # Create the nested input type
+        nested_input_type = type(
+            cache_key,
+            (graphene.InputObjectType,),
+            {
+                '__doc__': f"Nested input type for {model.__name__} in {mutation_type} operations.",
+                **input_fields
+            }
+        )
+        
+        self._input_type_registry[cache_key] = nested_input_type
+        return nested_input_type
+
+    def _should_include_nested_relations(self, model: Type[models.Model]) -> bool:
+        """
+        Check if nested relations should be included for this model.
+        
+        Args:
+            model: The Django model to check
+            
+        Returns:
+            bool: True if nested relations should be included
+        """
+        model_name = model.__name__
+        
+        # Check global setting first
+        if not self.mutation_settings.enable_nested_relations:
+            return False
+        
+        # Check per-model configuration
+        if model_name in self.mutation_settings.nested_relations_config:
+            return self.mutation_settings.nested_relations_config[model_name]
+        
+        # Default to enabled if no specific configuration
+        return True
+
+    def _should_include_nested_field(self, model: Type[models.Model], field_name: str) -> bool:
+        """
+        Check if a specific nested field should be included for this model.
+        
+        Args:
+            model: The Django model
+            field_name: The field name to check
+            
+        Returns:
+            bool: True if the nested field should be included
+        """
+        model_name = model.__name__
+        
+        # Check per-field configuration
+        if model_name in self.mutation_settings.nested_field_config:
+            field_config = self.mutation_settings.nested_field_config[model_name]
+            if field_name in field_config:
+                return field_config[field_name]
+        
+        # Default to enabled if no specific configuration
+        return True
