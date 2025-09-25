@@ -261,9 +261,6 @@ class NestedOperationHandler:
                             objects_to_remove = field.related_model.objects.filter(pk__in=disconnect_ids)
                             m2m_manager.remove(*objects_to_remove)
 
-            # Handle reverse relationships (e.g., creating comments for a post)
-            self._handle_reverse_relationships(instance, input_data)
-
             return instance
 
         except Exception as e:
