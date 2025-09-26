@@ -1,0 +1,1 @@
+# Benchmarks package for Django GraphQL Auto performance testing

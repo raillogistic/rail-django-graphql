@@ -23,6 +23,14 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 - **[Security Configuration](setup/security-configuration.md)** - Complete security setup guide
 - **[Security Practical Examples](examples/security-practical-examples.md)** - Real-world security scenarios
 
+### ⚡ Performance Optimization (Phase 5)
+- **[Performance Optimization](performance-optimization.md)** - Comprehensive performance optimization guide
+- **[N+1 Query Prevention](performance-optimization.md#prévention-des-requêtes-n1)** - Automatic query optimization
+- **[Multi-Level Caching](performance-optimization.md#système-de-cache-multi-niveaux)** - Advanced caching strategies
+- **[Performance Monitoring](performance-optimization.md#surveillance-des-performances)** - Real-time performance tracking
+- **[Query Complexity Control](performance-optimization.md#contrôle-de-la-complexité)** - Resource usage management
+- **[Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)** - Performance testing and validation
+
 ### 📖 API Reference
 - **[GraphQL API Reference](api/graphql-api-reference.md)** - Complete API documentation
 - **[Core Classes](api/core-classes.md)** - Python class documentation
@@ -59,17 +67,20 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 2. Follow the [Installation](setup/installation.md) instructions
 3. Try the [Basic Examples](examples/basic-examples.md)
 4. Configure [Security](setup/security-configuration.md)
+5. Optimize [Performance](performance-optimization.md)
 
 ### For Developers
 1. Review the [API Reference](api/graphql-api-reference.md)
 2. Explore [Advanced Examples](examples/advanced-examples.md)
-3. Check [Performance](development/performance.md) guidelines
+3. Check [Performance Optimization](performance-optimization.md) guidelines
 4. Set up [Testing](development/testing.md)
+5. Use [Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)
 
 ### For DevOps/Deployment
 1. Follow the [Production Deployment](deployment/production-deployment.md) guide
 2. Configure [Security](setup/security-configuration.md)
-3. Set up monitoring and [Troubleshooting](troubleshooting/security-troubleshooting.md)
+3. Set up [Performance Monitoring](performance-optimization.md#surveillance-des-performances)
+4. Configure monitoring and [Troubleshooting](troubleshooting/security-troubleshooting.md)
 
 ### For Security-Focused Users
 1. Read the [Security Overview](features/security.md)
@@ -78,6 +89,14 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 4. Set up [Input Validation](examples/validation-examples.md)
 5. Review [Security Configuration](setup/security-configuration.md)
 6. Test with [Practical Examples](examples/security-practical-examples.md)
+
+### For Performance-Focused Users
+1. Read the [Performance Optimization Guide](performance-optimization.md)
+2. Configure [N+1 Query Prevention](performance-optimization.md#prévention-des-requêtes-n1)
+3. Set up [Multi-Level Caching](performance-optimization.md#système-de-cache-multi-niveaux)
+4. Enable [Performance Monitoring](performance-optimization.md#surveillance-des-performances)
+5. Run [Performance Benchmarks](performance-optimization.md#benchmarks-et-tests-de-performance)
+6. Optimize [Query Complexity](performance-optimization.md#contrôle-de-la-complexité)
 
 ## 🔐 Security Features Highlights
 
@@ -107,13 +126,47 @@ The Django GraphQL Auto-Generation System includes comprehensive security featur
 - **Alert System** - Automated security notifications
 - **Performance Tracking** - Security impact monitoring
 
+## ⚡ Performance Optimization Features Highlights
+
+The Django GraphQL Auto-Generation System includes advanced performance optimization:
+
+### N+1 Query Prevention
+- **Automatic Detection** - Smart analysis of GraphQL queries
+- **Select Related Optimization** - Automatic foreign key optimization
+- **Prefetch Related Optimization** - Intelligent many-to-many prefetching
+- **Query Analysis** - Deep query structure analysis
+- **Performance Warnings** - Real-time optimization suggestions
+
+### Multi-Level Caching
+- **Schema Caching** - In-memory schema optimization
+- **Query Result Caching** - Intelligent result caching with TTL
+- **Field-Level Caching** - Granular field computation caching
+- **Cache Invalidation** - Smart cache invalidation strategies
+- **Redis Integration** - Distributed caching support
+
+### Performance Monitoring
+- **Real-time Metrics** - Live performance tracking
+- **Query Performance Analysis** - Detailed execution metrics
+- **Resource Usage Monitoring** - CPU, memory, and database tracking
+- **Performance Alerts** - Configurable performance thresholds
+- **Benchmarking Tools** - Comprehensive performance testing
+
+### Query Optimization
+- **Complexity Limits** - Configurable query complexity scoring
+- **Timeout Handling** - Query execution timeout management
+- **Resource Limits** - Memory and CPU usage controls
+- **Pagination Enforcement** - Automatic result set limiting
+- **Query Hints** - Intelligent optimization suggestions
+
 ## 📊 Documentation Statistics
 
-- **Total Documents**: 25+ comprehensive guides
+- **Total Documents**: 30+ comprehensive guides
 - **Security Documentation**: 8 dedicated security documents
-- **Code Examples**: 100+ practical examples
+- **Performance Documentation**: 6 dedicated performance optimization documents
+- **Code Examples**: 150+ practical examples
 - **API Coverage**: Complete GraphQL API documentation
 - **Deployment Guides**: Production-ready deployment instructions
+- **Benchmarking Tools**: Comprehensive performance testing suite
 
 ## 🤝 Contributing to Documentation
 
@@ -138,14 +191,16 @@ If you need help or have questions:
 This documentation is actively maintained and updated. Key areas of focus:
 
 - **Security Documentation** - Continuously updated with new security features
+- **Performance Documentation** - Regularly updated with optimization techniques and benchmarks
 - **API Reference** - Kept in sync with code changes
 - **Examples** - Regularly updated with real-world use cases
 - **Deployment Guides** - Updated with latest best practices
+- **Benchmarking Tools** - Updated with new performance testing capabilities
 
 ---
 
 **Last Updated**: January 2024  
-**Documentation Version**: 1.0  
-**System Version**: Compatible with Django GraphQL Auto-Generation System v1.0+
+**Documentation Version**: 1.1  
+**System Version**: Compatible with Django GraphQL Auto-Generation System v1.1+ (includes Phase 5 Performance Optimization)
 
 For the most up-to-date information, please refer to the individual documentation files and the project repository.

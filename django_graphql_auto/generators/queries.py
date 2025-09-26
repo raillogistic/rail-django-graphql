@@ -16,6 +16,12 @@ from graphene_django.filter import DjangoFilterConnectionField
 from ..core.settings import QueryGeneratorSettings
 from .types import TypeGenerator
 from .filters import AdvancedFilterGenerator
+from ..extensions.optimization import (
+    get_optimizer, 
+    get_performance_monitor, 
+    optimize_query,
+    QueryOptimizationConfig
+)
 
 class QueryGenerator:
     """
@@ -28,6 +34,10 @@ class QueryGenerator:
         self.settings = settings or QueryGeneratorSettings()
         self.filter_generator = AdvancedFilterGenerator()
         self._query_fields: Dict[str, graphene.Field] = {}
+        
+        # Initialize performance optimization
+        self.optimizer = get_optimizer()
+        self.performance_monitor = get_performance_monitor()
 
     def generate_single_query(self, model: Type[models.Model]) -> graphene.Field:
         """
@@ -37,6 +47,7 @@ class QueryGenerator:
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
 
+        @optimize_query()
         def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> Optional[models.Model]:
             try:
                 # If no arguments provided, return None instead of trying to get all records
@@ -46,7 +57,12 @@ class QueryGenerator:
                 filters = Q()
                 for key, value in kwargs.items():
                     filters |= Q(**{key: value})
-                return model.objects.get(filters)
+                
+                # Get optimized queryset
+                queryset = model.objects.all()
+                queryset = self.optimizer.optimize_queryset(queryset, info, model)
+                
+                return queryset.get(filters)
             except model.DoesNotExist:
                 return None
 
@@ -86,8 +102,12 @@ class QueryGenerator:
                 description=f"Retrieve a list of {model_name} instances with pagination"
             )
         else:
+            @optimize_query()
             def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> List[models.Model]:
                 queryset = model.objects.all()
+                
+                # Apply query optimization first
+                queryset = self.optimizer.optimize_queryset(queryset, info, model)
 
                 # Apply advanced filtering
                 filters = kwargs.get('filters')
@@ -196,8 +216,12 @@ class QueryGenerator:
             'page_info': graphene.Field(PaginationInfo, description="Pagination metadata")
         })
 
+        @optimize_query()
         def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> PaginatedConnection:
             queryset = model.objects.all()
+            
+            # Apply query optimization first
+            queryset = self.optimizer.optimize_queryset(queryset, info, model)
             
             # Apply advanced filtering (same as list queries)
             filters = kwargs.get('filters')

@@ -42,6 +42,16 @@ DJANGO_GRAPHQL_AUTO = {
         'enable_bulk_operations': True,   # Enable bulk operations
         'bulk_batch_size': 100,          # Batch size for bulk operations
         'enable_nested_relations': True,  # Enable nested operations
+    },
+    # Performance Optimization Settings (Phase 5)
+    'PERFORMANCE': {
+        'ENABLE_QUERY_OPTIMIZATION': True,    # Enable automatic N+1 prevention
+        'ENABLE_CACHING': True,               # Enable multi-level caching
+        'ENABLE_PERFORMANCE_MONITORING': True, # Enable performance monitoring
+        'CACHE_BACKEND': 'redis',             # Cache backend (redis, memcached, database)
+        'CACHE_TTL': 300,                     # Default cache TTL in seconds
+        'MAX_QUERY_COMPLEXITY': 1000,        # Maximum query complexity
+        'ENABLE_QUERY_ANALYSIS': True,       # Enable query analysis
     }
 }
 
@@ -59,10 +69,16 @@ Add to your main `urls.py`:
 ```python
 from django.urls import path, include
 from graphene_django.views import GraphQLView
+from django_graphql_auto.middleware import setup_performance_monitoring
+
+# Setup performance monitoring (optional but recommended)
+setup_performance_monitoring()
 
 urlpatterns = [
     # ... your other URLs
     path('graphql/', GraphQLView.as_view(graphiql=True)),
+    # Performance monitoring endpoint (optional)
+    path('graphql/performance/', include('django_graphql_auto.urls')),
 ]
 ```
 
@@ -104,13 +120,33 @@ class Post(models.Model):
         self.published = False
         self.save()
         return self
+
+# Optional: Use performance optimization decorators for custom methods
+from django_graphql_auto import optimize_query, cache_query
+
+class Category(models.Model):
+    name = models.CharField(max_length=100, verbose_name="Nom de la catégorie")
+    description = models.TextField(blank=True, verbose_name="Description")
+    
+    @optimize_query  # Automatically optimize N+1 queries
+    def get_popular_posts(self):
+        """Obtenir les posts populaires de cette catégorie"""
+        return self.posts.filter(published=True).order_by('-created_at')[:10]
+    
+    @cache_query(ttl=300)  # Cache for 5 minutes
+    def get_post_count(self):
+        """Obtenir le nombre de posts dans cette catégorie"""
+        return self.posts.filter(published=True).count()
 ```
 
-## 5. Generate Schema
+## 5. Generate Schema & Run Performance Benchmarks
 
 ```bash
 python manage.py migrate
 python manage.py generate_graphql_schema
+
+# Optional: Run performance benchmarks to test optimization
+python manage.py run_performance_benchmarks --test-type all --output-dir benchmarks/
 ```
 
 ## 6. Test Your API
@@ -230,8 +266,9 @@ mutation {
   }
 }
 ```
-### Query with Filtering
+### Query with Filtering and Performance Optimization
 ```graphql
+# This query automatically benefits from N+1 prevention and caching
 query {
   posts(published: true, title_Icontains: "first") {
     edges {
@@ -240,10 +277,24 @@ query {
         content
         author {
           name
+          email  # No N+1 queries thanks to automatic optimization
         }
         createdAt
       }
     }
+  }
+}
+```
+
+### Performance Monitoring Query
+```graphql
+# Check query performance metrics
+query {
+  __performance {
+    queryCount
+    executionTime
+    cacheHits
+    cacheMisses
   }
 }
 ```
@@ -258,13 +309,19 @@ You now have a fully functional GraphQL API with:
 - ✅ Relationship handling
 - ✅ Filtering and pagination
 - ✅ GraphiQL interface for testing
+- ✅ **N+1 Query Prevention** - Automatic optimization of database queries
+- ✅ **Multi-Level Caching** - Schema, query, and field-level caching
+- ✅ **Performance Monitoring** - Real-time performance metrics and alerts
+- ✅ **Query Complexity Control** - Protection against expensive queries
+- ✅ **Benchmarking Tools** - Performance testing and optimization
 
 ## Next Steps
 
 1. **[📖 Read the Full Documentation](index.md)** - Learn about all features
-2. **[⚡ Explore Advanced Features](advanced/)** - Custom scalars, inheritance, nested operations
-3. **[💡 Check Out Examples](examples/)** - Real-world usage patterns
-4. **[🔧 Optimize Performance](development/performance.md)** - Best practices for production
+2. **[⚡ Explore Performance Optimization](performance-optimization.md)** - Deep dive into N+1 prevention, caching, and monitoring
+3. **[🔧 Advanced Features](advanced/)** - Custom scalars, inheritance, nested operations
+4. **[💡 Check Out Examples](examples/)** - Real-world usage patterns
+5. **[📊 Performance Benchmarking](development/performance.md)** - Best practices for production optimization
 
 ## Common Issues
 
@@ -280,6 +337,12 @@ You now have a fully functional GraphQL API with:
 ### GraphiQL Not Loading?
 - Ensure `graphiql=True` in your GraphQLView
 - Check that you're accessing the correct URL (`/graphql/`)
+
+### Performance Issues?
+- Check query complexity with `python manage.py run_performance_benchmarks`
+- Enable caching in `DJANGO_GRAPHQL_AUTO['PERFORMANCE']` settings
+- Monitor performance at `/graphql/performance/` endpoint
+- Review N+1 query prevention in the performance documentation
 
 ## Need Help?
 

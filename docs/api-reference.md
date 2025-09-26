@@ -9,6 +9,7 @@ This document provides a comprehensive reference for all GraphQL queries, mutati
 - [Mutation Operations](#mutation-operations)
 - [Method Mutations](#method-mutations)
 - [Bulk Operations](#bulk-operations)
+- [Performance Optimization APIs](#performance-optimization-apis)
 - [Input Types](#input-types)
 - [Output Types](#output-types)
 - [Filter Types](#filter-types)
@@ -542,6 +543,201 @@ input BulkUpdate<Model>Input {
 input BulkDelete<Model>Input {
   ids: [ID!]!
 }
+```
+
+## ⚡ Performance Optimization APIs
+
+The Django GraphQL Auto-Generation Library includes comprehensive performance optimization APIs for N+1 query prevention, caching, and performance monitoring.
+
+### Query Optimization Decorators
+
+#### @optimize_query
+
+Automatically optimizes database queries to prevent N+1 problems.
+
+```python
+from django_graphql_auto import optimize_query
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+    
+    @optimize_query
+    def get_recent_posts(self):
+        """Obtenir les posts récents (Get recent posts)"""
+        return self.posts.filter(created_at__gte=timezone.now() - timedelta(days=30))
+```
+
+#### @cache_query
+
+Caches query results for improved performance.
+
+```python
+from django_graphql_auto import cache_query
+
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    
+    @cache_query(ttl=300)  # Cache for 5 minutes
+    def get_post_count(self):
+        """Obtenir le nombre de posts (Get post count)"""
+        return self.posts.filter(published=True).count()
+```
+
+### Performance Monitoring Query
+
+Access real-time performance metrics through GraphQL.
+
+```graphql
+query PerformanceMetrics {
+  __performance {
+    queryCount          # Number of database queries executed
+    executionTime       # Total execution time in milliseconds
+    cacheHits          # Number of cache hits
+    cacheMisses        # Number of cache misses
+    optimizedQueries   # Number of automatically optimized queries
+    complexityScore    # Query complexity score
+  }
+}
+```
+
+### Cache Management APIs
+
+#### Schema-Level Caching
+
+```python
+from django_graphql_auto import GraphQLCacheManager
+
+cache_manager = GraphQLCacheManager()
+
+# Cache schema
+cache_manager.cache_schema('my_app', schema_data, ttl=3600)
+
+# Get cached schema
+cached_schema = cache_manager.get_cached_schema('my_app')
+
+# Invalidate schema cache
+cache_manager.invalidate_schema_cache('my_app')
+```
+
+#### Query-Level Caching
+
+```python
+# Cache query result
+cache_manager.cache_query_result(query_hash, result, ttl=300)
+
+# Get cached query result
+cached_result = cache_manager.get_cached_query_result(query_hash)
+
+# Invalidate query cache
+cache_manager.invalidate_query_cache(query_hash)
+```
+
+#### Field-Level Caching
+
+```python
+# Cache field result
+cache_manager.cache_field_result(field_key, result, ttl=600)
+
+# Get cached field result
+cached_field = cache_manager.get_cached_field_result(field_key)
+```
+
+### Performance Configuration
+
+Configure performance optimization in Django settings:
+
+```python
+DJANGO_GRAPHQL_AUTO = {
+    'PERFORMANCE': {
+        'ENABLE_QUERY_OPTIMIZATION': True,
+        'ENABLE_CACHING': True,
+        'ENABLE_PERFORMANCE_MONITORING': True,
+        'CACHE_BACKEND': 'redis',
+        'CACHE_TTL': 300,
+        'MAX_QUERY_COMPLEXITY': 1000,
+        'ENABLE_QUERY_ANALYSIS': True,
+        'OPTIMIZATION_LEVEL': 'aggressive',  # conservative, balanced, aggressive
+        'PREFETCH_RELATED_DEPTH': 3,
+        'SELECT_RELATED_DEPTH': 2,
+    }
+}
+```
+
+### Performance Middleware
+
+Enable performance monitoring middleware:
+
+```python
+# urls.py
+from django_graphql_auto.middleware import setup_performance_monitoring
+
+setup_performance_monitoring()
+
+urlpatterns = [
+    path('graphql/', GraphQLView.as_view(graphiql=True)),
+    path('graphql/performance/', include('django_graphql_auto.urls')),
+]
+```
+
+### Benchmarking Commands
+
+Run performance benchmarks via Django management commands:
+
+```bash
+# Run all performance tests
+python manage.py run_performance_benchmarks --test-type all
+
+# Run specific test types
+python manage.py run_performance_benchmarks --test-type n1 --data-size 1000
+
+# Run caching tests
+python manage.py run_performance_benchmarks --test-type caching --cache-scenarios all
+
+# Run load tests
+python manage.py run_performance_benchmarks --test-type load --concurrent-users 50
+
+# Generate detailed reports
+python manage.py run_performance_benchmarks --output-dir reports/ --format json,csv,html
+```
+
+### Performance Analysis APIs
+
+#### QueryOptimizer
+
+```python
+from django_graphql_auto.optimization import QueryOptimizer
+
+optimizer = QueryOptimizer()
+
+# Analyze query for optimization opportunities
+analysis = optimizer.analyze_query(query_string, variables)
+
+# Apply automatic optimizations
+optimized_query = optimizer.optimize_query(query_string, model_info)
+
+# Get optimization suggestions
+suggestions = optimizer.get_optimization_suggestions(query_analysis)
+```
+
+#### PerformanceMonitor
+
+```python
+from django_graphql_auto.performance import PerformanceMonitor
+
+monitor = PerformanceMonitor()
+
+# Start monitoring a query
+monitor.start_query_monitoring(query_id)
+
+# Record query metrics
+monitor.record_query_metrics(query_id, execution_time, db_queries)
+
+# Get performance summary
+summary = monitor.get_performance_summary(time_range='1h')
+
+# Set performance alerts
+monitor.set_alert_threshold('query_time', 1000)  # 1 second
+monitor.set_alert_threshold('db_queries', 10)
 ```
 
 ## 📤 Output Types
