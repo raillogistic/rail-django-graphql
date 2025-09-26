@@ -190,22 +190,467 @@ LOGGING = {
 }
 
 DJANGO_GRAPHQL_AUTO = {
+    # ========================================
+    # CONFIGURATION GÉNÉRALE DU SCHÉMA
+    # ========================================
+    
+    # Répertoire de sortie pour les schémas générés
+    'SCHEMA_OUTPUT_DIR': 'generated_schema/',
+    
+    # Génération automatique du schéma GraphQL
+    'AUTO_GENERATE_SCHEMA': True,
+    
+    # Convention de nommage pour les champs GraphQL (snake_case, camelCase)
+    'NAMING_CONVENTION': 'snake_case',
+    
+    # Activer l'introspection GraphQL (utile pour le développement)
+    'ENABLE_INTROSPECTION': True,
+    
+    # Activer l'interface GraphiQL/Playground
+    'ENABLE_PLAYGROUND': DEBUG,
+    
+    # Mode debug pour des messages d'erreur détaillés
+    'DEBUG_MODE': True,
+    
+    # Messages d'erreur verbeux
+    'VERBOSE_ERRORS': True,
+    
+    # ========================================
+    # INCLUSION/EXCLUSION DES MODÈLES
+    # ========================================
+    
+    # Applications à inclure (vide = toutes les applications)
+    'APPS_TO_INCLUDE': [],
+    
+    # Applications à exclure de la génération du schéma
+    'APPS_TO_EXCLUDE': ['admin', 'auth', 'contenttypes', 'sessions'],
+    
+    # Modèles spécifiques à exclure
+    'MODELS_TO_EXCLUDE': ['LogEntry', 'Session'],
+    
+    # ========================================
+    # FONCTIONNALITÉS PRINCIPALES
+    # ========================================
+    
+    # Activer les mutations GraphQL
+    'ENABLE_MUTATIONS': True,
+    
+    # Activer les abonnements GraphQL (subscriptions)
+    'ENABLE_SUBSCRIPTIONS': False,
+    
+    # Activer le système de filtrage avancé
+    'ENABLE_FILTERS': True,
+    
+    # Activer les opérations imbriquées (nested operations)
+    'ENABLE_NESTED_OPERATIONS': True,
+    
+    # Activer le téléchargement de fichiers
+    'ENABLE_FILE_UPLOADS': True,
+    
+    # Activer les scalaires personnalisés
+    'ENABLE_CUSTOM_SCALARS': True,
+    
+    # Activer la prise en charge de l'héritage de modèles
+    'ENABLE_INHERITANCE': True,
+    
+    # ========================================
+    # CONFIGURATION DES REQUÊTES
+    # ========================================
+    
     'QUERY_SETTINGS': {
-        'use_relay': False,  # Disable Relay connections for direct list access
-    },
-    'MUTATION_SETTINGS': {
-        'enable_method_mutations': True,  # Enable method-to-mutation conversion
-        'enable_bulk_operations': True,  # Enable bulk create, update, delete operations
-        'bulk_batch_size': 100,  # Maximum number of items in bulk operations
-        # Per-model nested relations configuration
-        'nested_relations_config': {
-            # Add model-specific nested relation settings here
+        # Utiliser les connexions Relay pour la pagination
+        'use_relay': False,
+        
+        # Activer la génération de filtres pour les requêtes
+        'generate_filters': True,
+        
+        # Activer le tri des résultats
+        'generate_ordering': True,
+        
+        # Activer la pagination
+        'generate_pagination': True,
+        'enable_pagination': True,
+        
+        # Activer le tri (alias pour generate_ordering)
+        'enable_ordering': True,
+        
+        # Taille de page par défaut pour la pagination
+        'default_page_size': 20,
+        
+        # Taille de page maximale autorisée
+        'max_page_size': 100,
+        
+        # Champs de recherche supplémentaires par modèle
+        'additional_lookup_fields': {
+            # 'Post': ['slug', 'uuid'],
+            # 'User': ['username', 'email'],
         },
-        # Per-field nested relations configuration  
+    },
+    
+    # ========================================
+    # CONFIGURATION DES MUTATIONS
+    # ========================================
+    
+    'MUTATION_SETTINGS': {
+        # Activer les mutations de création
+        'generate_create': True,
+        'enable_create': True,
+        
+        # Activer les mutations de mise à jour
+        'generate_update': True,
+        'enable_update': True,
+        
+        # Activer les mutations de suppression
+        'generate_delete': True,
+        'enable_delete': True,
+        
+        # Activer les opérations en lot (bulk operations)
+        'generate_bulk': True,
+        'enable_bulk_operations': True,
+        
+        # Activer les mutations de méthodes personnalisées
+        'enable_method_mutations': True,
+        
+        # Préfixe pour les noms de mutations de méthodes
+        'method_mutation_prefix': '',
+        
+        # Inclure les méthodes privées (commençant par _)
+        'include_private_methods': False,
+        
+        # Taille de lot maximale pour les opérations en lot
+        'bulk_batch_size': 100,
+        
+        # Nombre maximum d'objets par opération en lot
+        'bulk_max_objects': 1000,
+        
+        # Timeout des transactions en lot (en secondes)
+        'bulk_transaction_timeout': 30,
+        
+        # Limitation du taux pour les opérations en lot
+        'bulk_rate_limit': {
+            'max_operations_per_minute': 10,
+            'max_objects_per_hour': 10000,
+        },
+        
+        # Champs requis pour les opérations de mise à jour par modèle
+        'required_update_fields': {
+            # 'Post': ['title'],
+            # 'User': ['email'],
+        },
+        
+        # ========================================
+        # RELATIONS IMBRIQUÉES (NESTED RELATIONS)
+        # ========================================
+        
+        # Contrôle global des relations imbriquées
+        'enable_nested_relations': True,
+        
+        # Configuration par modèle des relations imbriquées
+        'nested_relations_config': {
+            # 'Post': True,     # Activer pour le modèle Post
+            # 'Comment': False, # Désactiver pour le modèle Comment
+            # 'User': True,     # Activer pour le modèle User
+        },
+        
+        # Configuration granulaire par champ des relations imbriquées
         'nested_field_config': {
-            "Post":{
-                "category":True,
-            }
-        }
-    }
+            "Post": {
+                "category": True,        # Activer les opérations imbriquées pour category
+                # "comments": False,     # Désactiver les commentaires imbriqués
+                # "related_posts": True, # Activer les posts liés imbriqués
+                # "tags": True,          # Activer les tags imbriqués
+                # "author": False,       # Désactiver les mises à jour d'auteur imbriquées
+            },
+            # "Comment": {
+            #     "replies": False,      # Désactiver les réponses imbriquées
+            # },
+        },
+    },
+    
+    # ========================================
+    # CONFIGURATION DES TYPES
+    # ========================================
+    
+    'TYPE_SETTINGS': {
+        # Champs à exclure par modèle
+        'exclude_fields': {
+            # 'User': ['password', 'last_login'],
+            # 'Post': ['internal_notes'],
+        },
+        
+        # Alias pour exclude_fields
+        'excluded_fields': {
+            # 'User': ['password_hash'],
+        },
+        
+        # Champs à inclure par modèle (si None, inclure tous les champs non exclus)
+        'include_fields': {
+            # 'User': ['id', 'username', 'email', 'first_name', 'last_name'],
+        },
+        
+        # Mappages de types de champs personnalisés
+        'custom_field_mappings': {
+            # 'JSONField': 'graphene.JSONString',
+        },
+        
+        # Activer la génération de filtres pour les types
+        'generate_filters': True,
+        'enable_filtering': True,
+        
+        # Activer la conversion automatique en camelCase
+        'auto_camelcase': False,
+        
+        # Activer les descriptions de champs
+        'generate_descriptions': True,
+    },
+    
+    # ========================================
+    # CONFIGURATION DU FILTRAGE
+    # ========================================
+    
+    'FILTERING': {
+        # Activer le système de filtrage
+        'ENABLE_FILTERS': True,
+        
+        # Opérateurs de filtre par défaut par type de champ
+        'DEFAULT_FILTER_OPERATORS': {
+            'CharField': ['exact', 'icontains', 'startswith', 'endswith', 'iexact', 'contains', 'istartswith', 'iendswith', 'regex', 'iregex', 'in', 'isnull'],
+            'TextField': ['exact', 'icontains', 'startswith', 'endswith', 'iexact', 'contains', 'istartswith', 'iendswith', 'regex', 'iregex', 'in', 'isnull'],
+            'IntegerField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'in', 'isnull'],
+            'FloatField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'in', 'isnull'],
+            'DecimalField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'in', 'isnull'],
+            'BooleanField': ['exact', 'isnull'],
+            'DateTimeField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'date', 'year', 'month', 'day', 'week', 'week_day', 'quarter', 'time', 'hour', 'minute', 'second', 'isnull'],
+            'DateField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'year', 'month', 'day', 'week', 'week_day', 'quarter', 'isnull'],
+            'TimeField': ['exact', 'gt', 'gte', 'lt', 'lte', 'range', 'hour', 'minute', 'second', 'isnull'],
+        },
+        
+        # Activer les opérateurs logiques (AND, OR, NOT)
+        'ENABLE_LOGICAL_OPERATORS': True,
+        
+        # Activer le filtrage sur les relations
+        'ENABLE_RELATIONSHIP_FILTERS': True,
+        
+        # Profondeur maximale pour le filtrage sur les relations
+        'MAX_FILTER_DEPTH': 3,
+        
+        # Activer les filtres personnalisés
+        'ENABLE_CUSTOM_FILTERS': True,
+        
+        # Filtres personnalisés par modèle
+        'CUSTOM_FILTERS': {
+            # 'Post': 'myapp.filters.PostFilterSet',
+        },
+        
+        # Activer la mise en cache des filtres
+        'ENABLE_FILTER_CACHING': True,
+        
+        # Timeout du cache des filtres (en secondes)
+        'FILTER_CACHE_TIMEOUT': 300,
+        
+        # Préfixe des clés de cache pour les filtres
+        'FILTER_CACHE_KEY_PREFIX': 'graphql_filter',
+    },
+    
+    # ========================================
+    # CONFIGURATION DE LA PAGINATION
+    # ========================================
+    
+    'PAGINATION': {
+        # Taille de page par défaut
+        'PAGINATION_SIZE': 20,
+        'DEFAULT_PAGE_SIZE': 20,
+        
+        # Taille de page maximale
+        'MAX_PAGE_SIZE': 100,
+        
+        # Activer la pagination Relay
+        'USE_RELAY_PAGINATION': False,
+        
+        # Activer la pagination par curseur
+        'ENABLE_CURSOR_PAGINATION': True,
+        
+        # Activer la pagination par offset
+        'ENABLE_OFFSET_PAGINATION': True,
+    },
+    
+    # ========================================
+    # SÉCURITÉ ET PERMISSIONS
+    # ========================================
+    
+    'SECURITY': {
+        # Profondeur maximale des requêtes (protection contre les attaques de profondeur)
+        'MAX_QUERY_DEPTH': 10,
+        
+        # Complexité maximale des requêtes
+        'MAX_QUERY_COMPLEXITY': 1000,
+        
+        # Activer l'analyse du coût des requêtes
+        'QUERY_COST_ANALYSIS': True,
+        
+        # Timeout des requêtes (en secondes)
+        'QUERY_TIMEOUT': 30,
+        
+        # Permissions pour les mutations
+        'MUTATION_PERMISSIONS': {
+            # 'create': 'django_graphql_auto.permissions.IsAuthenticated',
+            # 'update': 'django_graphql_auto.permissions.IsOwnerOrReadOnly',
+            # 'delete': 'django_graphql_auto.permissions.IsOwnerOrAdmin',
+        },
+        
+        # Champs sensibles à masquer
+        'SENSITIVE_FIELDS': {
+            # 'User': ['password', 'password_hash', 'secret_key'],
+        },
+        
+        # Permissions pour l'accès aux champs sensibles
+        'FIELD_PERMISSIONS': {
+            # 'sensitive_field': 'your_app.view_sensitive_data'
+        },
+    },
+    
+    # ========================================
+    # OPTIMISATION DES PERFORMANCES
+    # ========================================
+    
+    'PERFORMANCE': {
+        # Activer l'optimisation des requêtes
+        'ENABLE_QUERY_OPTIMIZATION': True,
+        
+        # Activer la mise en cache des schémas
+        'ENABLE_SCHEMA_CACHING': True,
+        
+        # Timeout du cache des schémas (en secondes)
+        'SCHEMA_CACHE_TIMEOUT': 3600,
+        
+        # Activer le monitoring des performances
+        'PERFORMANCE_MONITORING': True,
+        
+        # Seuil pour les requêtes lentes (en millisecondes)
+        'SLOW_QUERY_THRESHOLD': 1000,
+        
+        # Activer la compression des réponses
+        'ENABLE_RESPONSE_COMPRESSION': True,
+        
+        # Taille de lot pour les opérations en lot par modèle
+        'MODEL_SPECIFIC_BATCH_SIZES': {
+            # 'LargeModel': 50,   # Modèles volumineux
+            # 'SmallModel': 500,  # Modèles légers
+        },
+    },
+    
+    # ========================================
+    # SCALAIRES ET CONVERTISSEURS PERSONNALISÉS
+    # ========================================
+    
+    'CUSTOM_SCALARS': {
+        # Scalaires personnalisés pour les types de champs Django
+        # 'JSONField': 'django_graphql_auto.scalars.JSONScalar',
+        # 'UUIDField': 'django_graphql_auto.scalars.UUIDScalar',
+        # 'EmailField': 'django_graphql_auto.scalars.EmailScalar',
+        # 'URLField': 'django_graphql_auto.scalars.URLScalar',
+    },
+    
+    'FIELD_CONVERTERS': {
+        # Convertisseurs personnalisés pour les types de champs
+        # 'custom_field': 'your_app.converters.CustomFieldConverter',
+    },
+    
+    # ========================================
+    # HOOKS ET EXTENSIONS
+    # ========================================
+    
+    'SCHEMA_HOOKS': [
+        # Hooks personnalisés pour la génération de schéma
+        # 'your_app.hooks.pre_schema_generation',
+        # 'your_app.hooks.post_schema_generation',
+    ],
+    
+    'MIDDLEWARE': [
+        # Middleware GraphQL personnalisé
+        # 'your_app.middleware.CustomGraphQLMiddleware',
+    ],
+    
+    # ========================================
+    # OPÉRATIONS IMBRIQUÉES AVANCÉES
+    # ========================================
+    
+    'NESTED_OPERATIONS': {
+        # Activer les opérations imbriquées
+        'ENABLE_NESTED_CREATE': True,
+        'ENABLE_NESTED_UPDATE': True,
+        'ENABLE_NESTED_DELETE': True,
+        
+        # Paramètres de performance
+        'BULK_THRESHOLD': 10,
+        'MAX_NESTING_DEPTH': 5,
+        'ENABLE_QUERY_OPTIMIZATION': True,
+        
+        # Paramètres de sécurité
+        'ENABLE_DELETION_SAFETY_CHECKS': True,
+        'DEFAULT_DELETE_PROTECTION': True,
+        'REQUIRE_EXPLICIT_CASCADE': True,
+        
+        # Paramètres de validation
+        'ENABLE_NESTED_VALIDATION': True,
+        'VALIDATE_RELATIONSHIPS': True,
+        'STRICT_TYPE_CHECKING': True,
+        
+        # Paramètres de transaction
+        'USE_TRANSACTIONS': True,
+        'TRANSACTION_ISOLATION_LEVEL': 'READ_COMMITTED',
+    },
+    
+    'RELATIONSHIP_HANDLING': {
+        # Comportements par défaut pour les relations
+        'FOREIGN_KEY_ON_DELETE': 'protect',
+        'ONE_TO_MANY_ON_DELETE': 'cascade',
+        'MANY_TO_MANY_ON_DELETE': 'clear',
+        
+        # Comportements de mise à jour
+        'FOREIGN_KEY_ON_UPDATE': 'update',
+        'ONE_TO_MANY_ON_UPDATE': 'merge',
+        'MANY_TO_MANY_ON_UPDATE': 'replace',
+    },
+    
+    # ========================================
+    # CONFIGURATION DE DÉVELOPPEMENT/TEST
+    # ========================================
+    
+    'DEVELOPMENT': {
+        # Mode test (désactive certaines fonctionnalités coûteuses)
+        'TESTING': False,
+        
+        # Désactiver la mise en cache en développement
+        'CACHE_ENABLED': True,
+        
+        # Taille de page réduite pour les tests
+        'TEST_PAGE_SIZE': 5,
+        
+        # Activer les logs détaillés
+        'VERBOSE_LOGGING': True,
+        
+        # Activer le rechargement automatique du schéma
+        'AUTO_RELOAD_SCHEMA': True,
+    },
+    
+    # ========================================
+    # INTERNATIONALISATION
+    # ========================================
+    
+    'I18N': {
+        # Activer la prise en charge multilingue
+        'ENABLE_I18N': False,
+        
+        # Langues supportées
+        'SUPPORTED_LANGUAGES': ['fr', 'en'],
+        
+        # Langue par défaut
+        'DEFAULT_LANGUAGE': 'fr',
+        
+        # Champs traduisibles par modèle
+        'TRANSLATABLE_FIELDS': {
+            # 'Post': ['title', 'content', 'description'],
+        },
+    },
 }
