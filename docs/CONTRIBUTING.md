@@ -1,6 +1,6 @@
-# Contributing to Django GraphQL Auto-Generation Library
+# Contributing to Django GraphQL Auto-Generation System
 
-Thank you for your interest in contributing to the Django GraphQL Auto-Generation Library! This guide will help you get started with contributing to both the codebase and documentation.
+Thank you for your interest in contributing to the Django GraphQL Auto-Generation System! This guide will help you get started with contributing to the codebase, documentation, and security features.
 
 ## 🤝 How to Contribute
 
