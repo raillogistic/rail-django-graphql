@@ -11,6 +11,7 @@ mutation_settings = MutationGeneratorSettings(
     generate_update=True,
     generate_delete=True,
     enable_nested_relations=True,  # Enable automatic dual field generation
+    enable_method_mutations=True,  # Enable method-to-mutation conversion
 )
 
 schema_settings = SchemaSettings(

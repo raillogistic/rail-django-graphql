@@ -13,11 +13,13 @@ The Django GraphQL Auto-Generation Library is a powerful system that automatical
 
 - **🔄 Automatic Schema Generation**: Zero-configuration GraphQL schema generation from Django models
 - **🔍 Advanced Filtering**: Complex filter combinations with AND, OR, NOT operations
-- **🔗 Configurable Nested Operations**: Full control over nested create/update operations with granular configuration
+- **🔗 Nested Operations**: Full control over nested create/update operations with granular configuration
 - **🎯 Smart Field Requirements**: Intelligent field requirement detection based on Django constraints
 - **🏗️ Inheritance Support**: Complete support for Django model inheritance patterns
 - **📊 Custom Scalars**: Built-in support for JSON, DateTime, Decimal, UUID, and Duration types
-- **🛡️ Enhanced Quote Handling**: Robust sanitization and escaping of special characters in mutations
+- **⚙️ Method Mutations**: Automatic conversion of Django model methods to GraphQL mutations
+- **📦 Bulk Operations**: High-performance bulk create, update, and delete operations
+- **🛡️ Django Built-in Filtering**: Intelligent filtering of Django framework methods from mutations
 - **⚙️ Flexible Configuration**: Global, per-model, and per-field control over schema generation
 - **🔒 Security Ready**: Built-in authentication and permission systems (Phase 4)
 - **⚡ Performance Optimized**: N+1 query prevention and intelligent caching (Phase 5)
@@ -86,10 +88,13 @@ INSTALLED_APPS = [
     # ... your apps
 ]
 
-# Configure nested relationships (optional)
+# Configure Django settings
 DJANGO_GRAPHQL_AUTO = {
     'MUTATION_SETTINGS': {
         'enable_nested_relations': True,  # Global control
+        'enable_method_mutations': True,  # Enable method mutations
+        'enable_bulk_operations': True,   # Enable bulk operations
+        'bulk_batch_size': 100,          # Batch size for bulk operations
         'nested_relations_config': {
             'Post': True,     # Enable nested relations for Post model
             'Comment': False  # Disable nested relations for Comment model
@@ -116,6 +121,7 @@ python manage.py generate_graphql_schema
 - **Phase 1**: Foundation & Setup
 - **Phase 2**: Auto-Generation Engine
 - **Phase 3**: Advanced Features (Filtering, Nested Operations, Custom Scalars, Inheritance)
+- **Phase 3.5**: Method Mutations & Bulk Operations
 
 ### 🔄 In Progress
 - **Phase 4**: Security Implementation (Authentication, Permissions)

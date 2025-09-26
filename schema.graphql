@@ -419,11 +419,14 @@ type Query {
     """Filter by logentry"""
     logentry: String
 
-    """Filter by posts"""
-    posts: String
+    """Filter by post"""
+    post: String
 
-    """Filter by comments"""
-    comments: String
+    """Filter by comment"""
+    comment: String
+
+    """Filter by profile"""
+    profile: String
 
     """Filter by id"""
     id: Float
@@ -930,8 +933,8 @@ type Query {
     """Advanced filtering with AND, OR, NOT operations"""
     filters: CategoryComplexFilter
 
-    """Filter by posts"""
-    posts: String
+    """Filter by post"""
+    post: String
 
     """Filter by id"""
     id: Float
@@ -960,18 +963,6 @@ type Query {
     """Filter by name__endswith"""
     name__endswith: String
 
-    """Filter by slug"""
-    slug: String
-
-    """Filter by slug__icontains"""
-    slug__icontains: String
-
-    """Filter by slug__startswith"""
-    slug__startswith: String
-
-    """Filter by slug__endswith"""
-    slug__endswith: String
-
     """Filter by description"""
     description: String
 
@@ -983,6 +974,9 @@ type Query {
 
     """Filter by description__endswith"""
     description__endswith: String
+
+    """Filter by is_active"""
+    is_active: Boolean
 
     """Filter by created_at"""
     created_at: Date
@@ -1002,24 +996,6 @@ type Query {
     """Filter by created_at__lt"""
     created_at__lt: Date
 
-    """Filter by is_active"""
-    is_active: Boolean
-
-    """Filter by order"""
-    order: Float
-
-    """Filter by order__gt"""
-    order__gt: Float
-
-    """Filter by order__gte"""
-    order__gte: Float
-
-    """Filter by order__lt"""
-    order__lt: Float
-
-    """Filter by order__lte"""
-    order__lte: Float
-
     """Filter by id__range"""
     id__range: String
 
@@ -1029,12 +1005,6 @@ type Query {
     """Filter by name__exact"""
     name__exact: String
 
-    """Filter by slug__contains"""
-    slug__contains: String
-
-    """Filter by slug__exact"""
-    slug__exact: String
-
     """Filter by description__contains"""
     description__contains: String
 
@@ -1043,9 +1013,6 @@ type Query {
 
     """Filter by created_at__range"""
     created_at__range: Date
-
-    """Filter by order__range"""
-    order__range: String
 
     """Number of records to skip"""
     offset: Int
@@ -1081,15 +1048,6 @@ type Query {
     name__istartswith: String
     name__endswith: String
     name__iendswith: String
-    slug: String
-    slug__in: String
-    slug__isnull: String
-    slug__contains: String
-    slug__icontains: String
-    slug__startswith: String
-    slug__istartswith: String
-    slug__endswith: String
-    slug__iendswith: String
     description: String
     description__in: String
     description__isnull: String
@@ -1099,6 +1057,9 @@ type Query {
     description__istartswith: String
     description__endswith: String
     description__iendswith: String
+    is_active: String
+    is_active__in: String
+    is_active__isnull: String
     created_at: String
     created_at__in: String
     created_at__isnull: String
@@ -1110,17 +1071,6 @@ type Query {
     created_at__year: String
     created_at__month: String
     created_at__day: String
-    is_active: String
-    is_active__in: String
-    is_active__isnull: String
-    order: String
-    order__in: String
-    order__isnull: String
-    order__gt: String
-    order__gte: String
-    order__lt: String
-    order__lte: String
-    order__range: String
   ): PaginatedConnection
 
   """Retrieve a single tag instance"""
@@ -1161,17 +1111,35 @@ type Query {
     """Filter by name__endswith"""
     name__endswith: String
 
-    """Filter by slug"""
-    slug: String
+    """Filter by color"""
+    color: String
 
-    """Filter by slug__icontains"""
-    slug__icontains: String
+    """Filter by color__icontains"""
+    color__icontains: String
 
-    """Filter by slug__startswith"""
-    slug__startswith: String
+    """Filter by color__startswith"""
+    color__startswith: String
 
-    """Filter by slug__endswith"""
-    slug__endswith: String
+    """Filter by color__endswith"""
+    color__endswith: String
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
 
     """Filter by id__range"""
     id__range: String
@@ -1182,11 +1150,14 @@ type Query {
     """Filter by name__exact"""
     name__exact: String
 
-    """Filter by slug__contains"""
-    slug__contains: String
+    """Filter by color__contains"""
+    color__contains: String
 
-    """Filter by slug__exact"""
-    slug__exact: String
+    """Filter by color__exact"""
+    color__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
 
     """Number of records to skip"""
     offset: Int
@@ -1222,15 +1193,26 @@ type Query {
     name__istartswith: String
     name__endswith: String
     name__iendswith: String
-    slug: String
-    slug__in: String
-    slug__isnull: String
-    slug__contains: String
-    slug__icontains: String
-    slug__startswith: String
-    slug__istartswith: String
-    slug__endswith: String
-    slug__iendswith: String
+    color: String
+    color__in: String
+    color__isnull: String
+    color__contains: String
+    color__icontains: String
+    color__startswith: String
+    color__istartswith: String
+    color__endswith: String
+    color__iendswith: String
+    created_at: String
+    created_at__in: String
+    created_at__isnull: String
+    created_at__gt: String
+    created_at__gte: String
+    created_at__lt: String
+    created_at__lte: String
+    created_at__range: String
+    created_at__year: String
+    created_at__month: String
+    created_at__day: String
   ): PaginatedConnection
 
   """Retrieve a single post instance"""
@@ -1274,18 +1256,6 @@ type Query {
     """Filter by title__endswith"""
     title__endswith: String
 
-    """Filter by slug"""
-    slug: String
-
-    """Filter by slug__icontains"""
-    slug__icontains: String
-
-    """Filter by slug__startswith"""
-    slug__startswith: String
-
-    """Filter by slug__endswith"""
-    slug__endswith: String
-
     """Filter by content"""
     content: String
 
@@ -1298,47 +1268,29 @@ type Query {
     """Filter by content__endswith"""
     content__endswith: String
 
-    """Filter by excerpt"""
-    excerpt: String
+    """Filter by status"""
+    status: String
 
-    """Filter by excerpt__icontains"""
-    excerpt__icontains: String
+    """Filter by status__icontains"""
+    status__icontains: String
 
-    """Filter by excerpt__startswith"""
-    excerpt__startswith: String
+    """Filter by status__startswith"""
+    status__startswith: String
 
-    """Filter by excerpt__endswith"""
-    excerpt__endswith: String
+    """Filter by status__endswith"""
+    status__endswith: String
 
-    """Filter by view_count"""
-    view_count: Float
+    """Filter by author"""
+    author: Float
 
-    """Filter by view_count__gt"""
-    view_count__gt: Float
+    """Filter by author__in"""
+    author__in: String
 
-    """Filter by view_count__gte"""
-    view_count__gte: Float
+    """Filter by category"""
+    category: Float
 
-    """Filter by view_count__lt"""
-    view_count__lt: Float
-
-    """Filter by view_count__lte"""
-    view_count__lte: Float
-
-    """Filter by rating"""
-    rating: Float
-
-    """Filter by rating__gt"""
-    rating__gt: Float
-
-    """Filter by rating__gte"""
-    rating__gte: Float
-
-    """Filter by rating__lt"""
-    rating__lt: Float
-
-    """Filter by rating__lte"""
-    rating__lte: Float
+    """Filter by category__in"""
+    category__in: String
 
     """Filter by created_at"""
     created_at: Date
@@ -1394,45 +1346,6 @@ type Query {
     """Filter by published_at__lt"""
     published_at__lt: Date
 
-    """Filter by is_featured"""
-    is_featured: Boolean
-
-    """Filter by status"""
-    status: String
-
-    """Filter by status__icontains"""
-    status__icontains: String
-
-    """Filter by status__startswith"""
-    status__startswith: String
-
-    """Filter by status__endswith"""
-    status__endswith: String
-
-    """Filter by featured_image"""
-    featured_image: String
-
-    """Filter by featured_image__isnull"""
-    featured_image__isnull: Boolean
-
-    """Filter by attachment"""
-    attachment: String
-
-    """Filter by attachment__isnull"""
-    attachment__isnull: Boolean
-
-    """Filter by author"""
-    author: Float
-
-    """Filter by author__in"""
-    author__in: String
-
-    """Filter by category"""
-    category: Float
-
-    """Filter by category__in"""
-    category__in: String
-
     """Filter by id__range"""
     id__range: String
 
@@ -1442,29 +1355,17 @@ type Query {
     """Filter by title__exact"""
     title__exact: String
 
-    """Filter by slug__contains"""
-    slug__contains: String
-
-    """Filter by slug__exact"""
-    slug__exact: String
-
     """Filter by content__contains"""
     content__contains: String
 
     """Filter by content__exact"""
     content__exact: String
 
-    """Filter by excerpt__contains"""
-    excerpt__contains: String
+    """Filter by status__contains"""
+    status__contains: String
 
-    """Filter by excerpt__exact"""
-    excerpt__exact: String
-
-    """Filter by view_count__range"""
-    view_count__range: String
-
-    """Filter by rating__range"""
-    rating__range: String
+    """Filter by status__exact"""
+    status__exact: String
 
     """Filter by created_at__range"""
     created_at__range: Date
@@ -1474,18 +1375,6 @@ type Query {
 
     """Filter by published_at__range"""
     published_at__range: Date
-
-    """Filter by status__contains"""
-    status__contains: String
-
-    """Filter by status__exact"""
-    status__exact: String
-
-    """Filter by featured_image__exact"""
-    featured_image__exact: String
-
-    """Filter by attachment__exact"""
-    attachment__exact: String
 
     """Number of records to skip"""
     offset: Int
@@ -1521,15 +1410,6 @@ type Query {
     title__istartswith: String
     title__endswith: String
     title__iendswith: String
-    slug: String
-    slug__in: String
-    slug__isnull: String
-    slug__contains: String
-    slug__icontains: String
-    slug__startswith: String
-    slug__istartswith: String
-    slug__endswith: String
-    slug__iendswith: String
     content: String
     content__in: String
     content__isnull: String
@@ -1539,31 +1419,15 @@ type Query {
     content__istartswith: String
     content__endswith: String
     content__iendswith: String
-    excerpt: String
-    excerpt__in: String
-    excerpt__isnull: String
-    excerpt__contains: String
-    excerpt__icontains: String
-    excerpt__startswith: String
-    excerpt__istartswith: String
-    excerpt__endswith: String
-    excerpt__iendswith: String
-    view_count: String
-    view_count__in: String
-    view_count__isnull: String
-    view_count__gt: String
-    view_count__gte: String
-    view_count__lt: String
-    view_count__lte: String
-    view_count__range: String
-    rating: String
-    rating__in: String
-    rating__isnull: String
-    rating__gt: String
-    rating__gte: String
-    rating__lt: String
-    rating__lte: String
-    rating__range: String
+    status: String
+    status__in: String
+    status__isnull: String
+    status__contains: String
+    status__icontains: String
+    status__startswith: String
+    status__istartswith: String
+    status__endswith: String
+    status__iendswith: String
     created_at: String
     created_at__in: String
     created_at__isnull: String
@@ -1597,24 +1461,6 @@ type Query {
     published_at__year: String
     published_at__month: String
     published_at__day: String
-    is_featured: String
-    is_featured__in: String
-    is_featured__isnull: String
-    status: String
-    status__in: String
-    status__isnull: String
-    status__contains: String
-    status__icontains: String
-    status__startswith: String
-    status__istartswith: String
-    status__endswith: String
-    status__iendswith: String
-    featured_image: String
-    featured_image__in: String
-    featured_image__isnull: String
-    attachment: String
-    attachment__in: String
-    attachment__isnull: String
   ): PaginatedConnection
 
   """Retrieve a single comment instance"""
@@ -1627,9 +1473,6 @@ type Query {
   comments(
     """Advanced filtering with AND, OR, NOT operations"""
     filters: CommentComplexFilter
-
-    """Filter by replies"""
-    replies: String
 
     """Filter by id"""
     id: Float
@@ -1658,12 +1501,6 @@ type Query {
     """Filter by author__in"""
     author__in: String
 
-    """Filter by parent"""
-    parent: Float
-
-    """Filter by parent__in"""
-    parent__in: String
-
     """Filter by content"""
     content: String
 
@@ -1675,6 +1512,9 @@ type Query {
 
     """Filter by content__endswith"""
     content__endswith: String
+
+    """Filter by is_approved"""
+    is_approved: Boolean
 
     """Filter by created_at"""
     created_at: Date
@@ -1694,27 +1534,6 @@ type Query {
     """Filter by created_at__lt"""
     created_at__lt: Date
 
-    """Filter by updated_at"""
-    updated_at: Date
-
-    """Filter by updated_at__year"""
-    updated_at__year: Float
-
-    """Filter by updated_at__month"""
-    updated_at__month: Float
-
-    """Filter by updated_at__day"""
-    updated_at__day: Float
-
-    """Filter by updated_at__gt"""
-    updated_at__gt: Date
-
-    """Filter by updated_at__lt"""
-    updated_at__lt: Date
-
-    """Filter by is_approved"""
-    is_approved: Boolean
-
     """Filter by id__range"""
     id__range: String
 
@@ -1726,9 +1545,6 @@ type Query {
 
     """Filter by created_at__range"""
     created_at__range: Date
-
-    """Filter by updated_at__range"""
-    updated_at__range: Date
 
     """Number of records to skip"""
     offset: Int
@@ -1764,6 +1580,9 @@ type Query {
     content__istartswith: String
     content__endswith: String
     content__iendswith: String
+    is_approved: String
+    is_approved__in: String
+    is_approved__isnull: String
     created_at: String
     created_at__in: String
     created_at__isnull: String
@@ -1775,32 +1594,18 @@ type Query {
     created_at__year: String
     created_at__month: String
     created_at__day: String
-    updated_at: String
-    updated_at__in: String
-    updated_at__isnull: String
-    updated_at__gt: String
-    updated_at__gte: String
-    updated_at__lt: String
-    updated_at__lte: String
-    updated_at__range: String
-    updated_at__year: String
-    updated_at__month: String
-    updated_at__day: String
-    is_approved: String
-    is_approved__in: String
-    is_approved__isnull: String
   ): PaginatedConnection
 
-  """Retrieve a single bill instance"""
-  bill(
-    """The ID of the bill to retrieve"""
+  """Retrieve a single profile instance"""
+  profile(
+    """The ID of the profile to retrieve"""
     id: ID
-  ): BillType
+  ): ProfileType
 
-  """Retrieve a list of bill instances"""
-  bills(
+  """Retrieve a list of profile instances"""
+  profiles(
     """Advanced filtering with AND, OR, NOT operations"""
-    filters: BillComplexFilter
+    filters: ProfileComplexFilter
 
     """Filter by id"""
     id: Float
@@ -1817,32 +1622,92 @@ type Query {
     """Filter by id__lte"""
     id__lte: Float
 
-    """Filter by ref"""
-    ref: String
+    """Filter by user"""
+    user: Float
 
-    """Filter by ref__icontains"""
-    ref__icontains: String
+    """Filter by user__in"""
+    user__in: String
 
-    """Filter by ref__startswith"""
-    ref__startswith: String
+    """Filter by bio"""
+    bio: String
 
-    """Filter by ref__endswith"""
-    ref__endswith: String
+    """Filter by bio__icontains"""
+    bio__icontains: String
 
-    """Filter by client"""
-    client: Float
+    """Filter by bio__startswith"""
+    bio__startswith: String
 
-    """Filter by client__in"""
-    client__in: String
+    """Filter by bio__endswith"""
+    bio__endswith: String
+
+    """Filter by avatar"""
+    avatar: String
+
+    """Filter by avatar__icontains"""
+    avatar__icontains: String
+
+    """Filter by avatar__startswith"""
+    avatar__startswith: String
+
+    """Filter by avatar__endswith"""
+    avatar__endswith: String
+
+    """Filter by website"""
+    website: String
+
+    """Filter by website__icontains"""
+    website__icontains: String
+
+    """Filter by website__startswith"""
+    website__startswith: String
+
+    """Filter by website__endswith"""
+    website__endswith: String
+
+    """Filter by is_verified"""
+    is_verified: Boolean
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
 
     """Filter by id__range"""
     id__range: String
 
-    """Filter by ref__contains"""
-    ref__contains: String
+    """Filter by bio__contains"""
+    bio__contains: String
 
-    """Filter by ref__exact"""
-    ref__exact: String
+    """Filter by bio__exact"""
+    bio__exact: String
+
+    """Filter by avatar__contains"""
+    avatar__contains: String
+
+    """Filter by avatar__exact"""
+    avatar__exact: String
+
+    """Filter by website__contains"""
+    website__contains: String
+
+    """Filter by website__exact"""
+    website__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
 
     """Number of records to skip"""
     offset: Int
@@ -1852,10 +1717,10 @@ type Query {
 
     """Fields to order by (prefix with - for descending)"""
     order_by: [String]
-  ): [BillType]
+  ): [ProfileType]
 
-  """Retrieve a paginated list of bill instances"""
-  bill_pages(
+  """Retrieve a paginated list of profile instances"""
+  profile_pages(
     """Page number (1-based)"""
     page: Int = 1
 
@@ -1869,101 +1734,47 @@ type Query {
     id__lt: String
     id__lte: String
     id__range: String
-    ref: String
-    ref__in: String
-    ref__isnull: String
-    ref__contains: String
-    ref__icontains: String
-    ref__startswith: String
-    ref__istartswith: String
-    ref__endswith: String
-    ref__iendswith: String
-  ): PaginatedConnection
-
-  """Retrieve a single client instance"""
-  client(
-    """The ID of the client to retrieve"""
-    id: ID
-  ): ClientType
-
-  """Retrieve a list of client instances"""
-  clients(
-    """Advanced filtering with AND, OR, NOT operations"""
-    filters: ClientComplexFilter
-
-    """Filter by bills"""
-    bills: String
-
-    """Filter by id"""
-    id: Float
-
-    """Filter by id__gt"""
-    id__gt: Float
-
-    """Filter by id__gte"""
-    id__gte: Float
-
-    """Filter by id__lt"""
-    id__lt: Float
-
-    """Filter by id__lte"""
-    id__lte: Float
-
-    """Filter by charfield"""
-    charfield: String
-
-    """Filter by charfield__icontains"""
-    charfield__icontains: String
-
-    """Filter by charfield__startswith"""
-    charfield__startswith: String
-
-    """Filter by charfield__endswith"""
-    charfield__endswith: String
-
-    """Filter by id__range"""
-    id__range: String
-
-    """Filter by charfield__contains"""
-    charfield__contains: String
-
-    """Filter by charfield__exact"""
-    charfield__exact: String
-
-    """Number of records to skip"""
-    offset: Int
-
-    """Number of records to return"""
-    limit: Int
-
-    """Fields to order by (prefix with - for descending)"""
-    order_by: [String]
-  ): [ClientType]
-
-  """Retrieve a paginated list of client instances"""
-  client_pages(
-    """Page number (1-based)"""
-    page: Int = 1
-
-    """Number of records per page"""
-    per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
-    charfield: String
-    charfield__in: String
-    charfield__isnull: String
-    charfield__contains: String
-    charfield__icontains: String
-    charfield__startswith: String
-    charfield__istartswith: String
-    charfield__endswith: String
-    charfield__iendswith: String
+    bio: String
+    bio__in: String
+    bio__isnull: String
+    bio__contains: String
+    bio__icontains: String
+    bio__startswith: String
+    bio__istartswith: String
+    bio__endswith: String
+    bio__iendswith: String
+    avatar: String
+    avatar__in: String
+    avatar__isnull: String
+    avatar__contains: String
+    avatar__icontains: String
+    avatar__startswith: String
+    avatar__istartswith: String
+    avatar__endswith: String
+    avatar__iendswith: String
+    website: String
+    website__in: String
+    website__isnull: String
+    website__contains: String
+    website__icontains: String
+    website__startswith: String
+    website__istartswith: String
+    website__endswith: String
+    website__iendswith: String
+    is_verified: String
+    is_verified__in: String
+    is_verified__isnull: String
+    created_at: String
+    created_at__in: String
+    created_at__isnull: String
+    created_at__gt: String
+    created_at__gte: String
+    created_at__lt: String
+    created_at__lte: String
+    created_at__range: String
+    created_at__year: String
+    created_at__month: String
+    created_at__day: String
   ): PaginatedConnection
   _debug: DjangoDebug
 }
@@ -2030,12 +1841,9 @@ type UserType implements Node {
   is_active: Boolean!
   date_joined: DateTime!
   logentry_set(offset: Int, before: String, after: String, first: Int, last: Int): LogEntryTypeConnection!
-
-  """Related Post objects"""
-  posts: [PostType]
-
-  """Related Comment objects"""
-  comments: [CommentType]
+  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
+  comment_set(offset: Int, before: String, after: String, first: Int, last: Int): CommentTypeConnection!
+  profile: ProfileType
 
   """Primary key of the model"""
   pk: ID
@@ -2154,34 +1962,38 @@ type GroupTypeEdge {
   cursor: String!
 }
 
+type PostTypeConnection {
+  """Pagination data for this connection."""
+  pageInfo: PageInfo!
+
+  """Contains the nodes in this connection."""
+  edges: [PostTypeEdge]!
+}
+
+"""A Relay edge containing a `PostType` and its cursor."""
+type PostTypeEdge {
+  """The item at the end of the edge"""
+  node: PostType
+
+  """A cursor for use in pagination"""
+  cursor: String!
+}
+
 """GraphQL type for the Post model."""
 type PostType implements Node {
   """The ID of the object"""
   id: ID!
   title: String!
-  slug: String!
   content: String!
-  excerpt: String!
-  view_count: Int!
-  rating: Decimal
-  created_at: DateTime!
-  updated_at: DateTime!
-  published_at: DateTime
-  is_featured: Boolean!
   status: TestAppPostStatusChoices!
-  featured_image: String
-  attachment: String
   author: UserType!
   category: CategoryType!
 
   """Related Tag objects"""
   tags: [TagType]
-
-  """Related Post objects"""
-  related_posts: [PostType]
-
-  """Related Post objects"""
-  related_to: [PostType]
+  created_at: DateTime!
+  updated_at: DateTime!
+  published_at: DateTime
 
   """Related Comment objects"""
   comments: [CommentType]
@@ -2190,18 +2002,15 @@ type PostType implements Node {
   pk: ID
 }
 
-"""The `Decimal` scalar type represents a python Decimal."""
-scalar Decimal
-
 """An enumeration."""
 enum TestAppPostStatusChoices {
-  """Draft"""
+  """Brouillon"""
   DRAFT
 
-  """Published"""
+  """Publié"""
   PUBLISHED
 
-  """Archived"""
+  """Archivé"""
   ARCHIVED
 }
 
@@ -2210,14 +2019,10 @@ type CategoryType implements Node {
   """The ID of the object"""
   id: ID!
   name: String!
-  slug: String!
   description: String!
-  created_at: DateTime!
   is_active: Boolean!
-  order: Int!
-
-  """Related Post objects"""
-  posts: [PostType]
+  created_at: DateTime!
+  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
 
   """Primary key of the model"""
   pk: ID
@@ -2228,16 +2033,30 @@ type TagType implements Node {
   """The ID of the object"""
   id: ID!
   name: String!
-  slug: String!
-
-  """Related Post objects"""
-  posts: [PostType]
-
-  """Related Comment objects"""
-  comments: [CommentType]
+  color: String!
+  created_at: DateTime!
+  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
+  comment_set(offset: Int, before: String, after: String, first: Int, last: Int): CommentTypeConnection!
 
   """Primary key of the model"""
   pk: ID
+}
+
+type CommentTypeConnection {
+  """Pagination data for this connection."""
+  pageInfo: PageInfo!
+
+  """Contains the nodes in this connection."""
+  edges: [CommentTypeEdge]!
+}
+
+"""A Relay edge containing a `CommentType` and its cursor."""
+type CommentTypeEdge {
+  """The item at the end of the edge"""
+  node: CommentType
+
+  """A cursor for use in pagination"""
+  cursor: String!
 }
 
 """GraphQL type for the Comment model."""
@@ -2246,17 +2065,27 @@ type CommentType implements Node {
   id: ID!
   post: PostType!
   author: UserType!
-  parent: CommentType
   content: String!
-  created_at: DateTime!
-  updated_at: DateTime!
   is_approved: Boolean!
+  created_at: DateTime!
 
   """Related Tag objects"""
   tags: [TagType]
 
-  """Related Comment objects"""
-  replies: [CommentType]
+  """Primary key of the model"""
+  pk: ID
+}
+
+"""GraphQL type for the Profile model."""
+type ProfileType implements Node {
+  """The ID of the object"""
+  id: ID!
+  user: UserType!
+  bio: String!
+  avatar: String!
+  website: String!
+  is_verified: Boolean!
+  created_at: DateTime!
 
   """Primary key of the model"""
   pk: ID
@@ -2393,6 +2222,7 @@ input GroupComplexFilter {
 }
 
 input UserComplexFilter {
+  profile: String
   id: Float
   id__gt: Float
   id__gte: Float
@@ -2518,29 +2348,18 @@ input CategoryComplexFilter {
   name__icontains: String
   name__startswith: String
   name__endswith: String
-  slug: String
-  slug__icontains: String
-  slug__startswith: String
-  slug__endswith: String
   description: String
   description__icontains: String
   description__startswith: String
   description__endswith: String
+  is_active: Boolean
   created_at__year: Float
   created_at__month: Float
   created_at__day: Float
   created_at__gt: Date
   created_at__lt: Date
-  is_active: Boolean
-  order: Float
-  order__gt: Float
-  order__gte: Float
-  order__lt: Float
-  order__lte: Float
   name__contains: String
   name__exact: String
-  slug__contains: String
-  slug__exact: String
   description__contains: String
   description__exact: String
   created_at__range: String
@@ -2559,14 +2378,20 @@ input TagComplexFilter {
   name__icontains: String
   name__startswith: String
   name__endswith: String
-  slug: String
-  slug__icontains: String
-  slug__startswith: String
-  slug__endswith: String
+  color: String
+  color__icontains: String
+  color__startswith: String
+  color__endswith: String
+  created_at__year: Float
+  created_at__month: Float
+  created_at__day: Float
+  created_at__gt: Date
+  created_at__lt: Date
   name__contains: String
   name__exact: String
-  slug__contains: String
-  slug__exact: String
+  color__contains: String
+  color__exact: String
+  created_at__range: String
   AND: [TagComplexFilter]
   OR: [TagComplexFilter]
   NOT: TagComplexFilter = null
@@ -2582,28 +2407,16 @@ input PostComplexFilter {
   title__icontains: String
   title__startswith: String
   title__endswith: String
-  slug: String
-  slug__icontains: String
-  slug__startswith: String
-  slug__endswith: String
   content: String
   content__icontains: String
   content__startswith: String
   content__endswith: String
-  excerpt: String
-  excerpt__icontains: String
-  excerpt__startswith: String
-  excerpt__endswith: String
-  view_count: Float
-  view_count__gt: Float
-  view_count__gte: Float
-  view_count__lt: Float
-  view_count__lte: Float
-  rating: Float
-  rating__gt: Float
-  rating__gte: Float
-  rating__lt: Float
-  rating__lte: Float
+  status: String
+  status__icontains: String
+  status__startswith: String
+  status__endswith: String
+  author: Float
+  category: Float
   created_at__year: Float
   created_at__month: Float
   created_at__day: Float
@@ -2619,32 +2432,15 @@ input PostComplexFilter {
   published_at__day: Float
   published_at__gt: Date
   published_at__lt: Date
-  is_featured: Boolean
-  status: String
-  status__icontains: String
-  status__startswith: String
-  status__endswith: String
-  featured_image: String
-  featured_image__isnull: Boolean
-  attachment: String
-  attachment__isnull: Boolean
-  author: Float
-  category: Float
   title__contains: String
   title__exact: String
-  slug__contains: String
-  slug__exact: String
   content__contains: String
   content__exact: String
-  excerpt__contains: String
-  excerpt__exact: String
+  status__contains: String
+  status__exact: String
   created_at__range: String
   updated_at__range: String
   published_at__range: String
-  status__contains: String
-  status__exact: String
-  featured_image__exact: String
-  attachment__exact: String
   AND: [PostComplexFilter]
   OR: [PostComplexFilter]
   NOT: PostComplexFilter = null
@@ -2658,88 +2454,59 @@ input CommentComplexFilter {
   id__lte: Float
   post: Float
   author: Float
-  parent: Float
   content: String
   content__icontains: String
   content__startswith: String
   content__endswith: String
+  is_approved: Boolean
   created_at__year: Float
   created_at__month: Float
   created_at__day: Float
   created_at__gt: Date
   created_at__lt: Date
-  updated_at__year: Float
-  updated_at__month: Float
-  updated_at__day: Float
-  updated_at__gt: Date
-  updated_at__lt: Date
-  is_approved: Boolean
   content__contains: String
   content__exact: String
   created_at__range: String
-  updated_at__range: String
   AND: [CommentComplexFilter]
   OR: [CommentComplexFilter]
   NOT: CommentComplexFilter = null
 }
 
-"""GraphQL type for the Bill model."""
-type BillType implements Node {
-  """The ID of the object"""
-  id: ID!
-  ref: String!
-  client: ClientType!
-
-  """Primary key of the model"""
-  pk: ID
-}
-
-"""GraphQL type for the Client model."""
-type ClientType implements Node {
-  """The ID of the object"""
-  id: ID!
-  charfield: String!
-
-  """Related Bill objects"""
-  bills: [BillType]
-
-  """Primary key of the model"""
-  pk: ID
-}
-
-input BillComplexFilter {
+input ProfileComplexFilter {
   id: Float
   id__gt: Float
   id__gte: Float
   id__lt: Float
   id__lte: Float
-  ref: String
-  ref__icontains: String
-  ref__startswith: String
-  ref__endswith: String
-  client: Float
-  ref__contains: String
-  ref__exact: String
-  AND: [BillComplexFilter]
-  OR: [BillComplexFilter]
-  NOT: BillComplexFilter = null
-}
-
-input ClientComplexFilter {
-  id: Float
-  id__gt: Float
-  id__gte: Float
-  id__lt: Float
-  id__lte: Float
-  charfield: String
-  charfield__icontains: String
-  charfield__startswith: String
-  charfield__endswith: String
-  charfield__contains: String
-  charfield__exact: String
-  AND: [ClientComplexFilter]
-  OR: [ClientComplexFilter]
-  NOT: ClientComplexFilter = null
+  user: Float
+  bio: String
+  bio__icontains: String
+  bio__startswith: String
+  bio__endswith: String
+  avatar: String
+  avatar__icontains: String
+  avatar__startswith: String
+  avatar__endswith: String
+  website: String
+  website__icontains: String
+  website__startswith: String
+  website__endswith: String
+  is_verified: Boolean
+  created_at__year: Float
+  created_at__month: Float
+  created_at__day: Float
+  created_at__gt: Date
+  created_at__lt: Date
+  bio__contains: String
+  bio__exact: String
+  avatar__contains: String
+  avatar__exact: String
+  website__contains: String
+  website__exact: String
+  created_at__range: String
+  AND: [ProfileComplexFilter]
+  OR: [ProfileComplexFilter]
+  NOT: ProfileComplexFilter = null
 }
 
 """Debugging information for the current query."""
@@ -2818,6 +2585,24 @@ type Mutation {
   """Delete a LogEntry instance"""
   delete_logentry(id: ID!): DeleteLogEntry
 
+  """Create multiple LogEntry instances"""
+  bulk_create_logentry(inputs: [LogEntryInput]!): BulkCreateLogEntry
+
+  """Update multiple LogEntry instances"""
+  bulk_update_logentry(inputs: [BulkUpdateInput]!): BulkUpdateLogEntry
+
+  """Delete multiple LogEntry instances"""
+  bulk_delete_logentry(ids: [ID]!): BulkDeleteLogEntry
+
+  """
+  If self.change_message is a JSON structure, interpret it as a change
+  string, properly translated.
+  """
+  logentry_get_change_message(id: ID!): LogEntryGet_Change_Message
+
+  """Execute is_addition on LogEntry"""
+  logentry_is_addition(id: ID!): LogEntryIs_Addition
+
   """Create a new Permission instance"""
   create_permission(input: PermissionInput!): CreatePermission
 
@@ -2826,6 +2611,15 @@ type Mutation {
 
   """Delete a Permission instance"""
   delete_permission(id: ID!): DeletePermission
+
+  """Create multiple Permission instances"""
+  bulk_create_permission(inputs: [PermissionInput]!): BulkCreatePermission
+
+  """Update multiple Permission instances"""
+  bulk_update_permission(inputs: [BulkUpdateInput]!): BulkUpdatePermission
+
+  """Delete multiple Permission instances"""
+  bulk_delete_permission(ids: [ID]!): BulkDeletePermission
 
   """Create a new Group instance"""
   create_group(input: GroupInput!): CreateGroup
@@ -2836,6 +2630,15 @@ type Mutation {
   """Delete a Group instance"""
   delete_group(id: ID!): DeleteGroup
 
+  """Create multiple Group instances"""
+  bulk_create_group(inputs: [GroupInput]!): BulkCreateGroup
+
+  """Update multiple Group instances"""
+  bulk_update_group(inputs: [BulkUpdateInput]!): BulkUpdateGroup
+
+  """Delete multiple Group instances"""
+  bulk_delete_group(ids: [ID]!): BulkDeleteGroup
+
   """Create a new User instance"""
   create_user(input: UserInput!): CreateUser
 
@@ -2844,6 +2647,21 @@ type Mutation {
 
   """Delete a User instance"""
   delete_user(id: ID!): DeleteUser
+
+  """Create multiple User instances"""
+  bulk_create_user(inputs: [UserInput]!): BulkCreateUser
+
+  """Update multiple User instances"""
+  bulk_update_user(inputs: [BulkUpdateInput]!): BulkUpdateUser
+
+  """Delete multiple User instances"""
+  bulk_delete_user(ids: [ID]!): BulkDeleteUser
+
+  """Execute set_password on User"""
+  user_set_password(id: ID!, input: UserSet_PasswordInput!): UserSet_Password
+
+  """Execute set_unusable_password on User"""
+  user_set_unusable_password(id: ID!): UserSet_Unusable_Password
 
   """Create a new ContentType instance"""
   create_contenttype(input: ContentTypeInput!): CreateContentType
@@ -2854,6 +2672,15 @@ type Mutation {
   """Delete a ContentType instance"""
   delete_contenttype(id: ID!): DeleteContentType
 
+  """Create multiple ContentType instances"""
+  bulk_create_contenttype(inputs: [ContentTypeInput]!): BulkCreateContentType
+
+  """Update multiple ContentType instances"""
+  bulk_update_contenttype(inputs: [BulkUpdateInput]!): BulkUpdateContentType
+
+  """Delete multiple ContentType instances"""
+  bulk_delete_contenttype(ids: [ID]!): BulkDeleteContentType
+
   """Create a new Session instance"""
   create_session(input: SessionInput!): CreateSession
 
@@ -2862,6 +2689,15 @@ type Mutation {
 
   """Delete a Session instance"""
   delete_session(id: ID!): DeleteSession
+
+  """Create multiple Session instances"""
+  bulk_create_session(inputs: [SessionInput]!): BulkCreateSession
+
+  """Update multiple Session instances"""
+  bulk_update_session(inputs: [BulkUpdateInput]!): BulkUpdateSession
+
+  """Delete multiple Session instances"""
+  bulk_delete_session(ids: [ID]!): BulkDeleteSession
 
   """Create a new Category instance"""
   create_category(input: CategoryInput!): CreateCategory
@@ -2872,6 +2708,21 @@ type Mutation {
   """Delete a Category instance"""
   delete_category(id: ID!): DeleteCategory
 
+  """Create multiple Category instances"""
+  bulk_create_category(inputs: [CategoryInput]!): BulkCreateCategory
+
+  """Update multiple Category instances"""
+  bulk_update_category(inputs: [BulkUpdateInput]!): BulkUpdateCategory
+
+  """Delete multiple Category instances"""
+  bulk_delete_category(ids: [ID]!): BulkDeleteCategory
+
+  """Activate category"""
+  category_activate_category(id: ID!): CategoryActivate_Category
+
+  """Deactivate category"""
+  category_deactivate_category(id: ID!, input: CategoryDeactivate_CategoryInput!): CategoryDeactivate_Category
+
   """Create a new Tag instance"""
   create_tag(input: TagInput!): CreateTag
 
@@ -2880,6 +2731,18 @@ type Mutation {
 
   """Delete a Tag instance"""
   delete_tag(id: ID!): DeleteTag
+
+  """Create multiple Tag instances"""
+  bulk_create_tag(inputs: [TagInput]!): BulkCreateTag
+
+  """Update multiple Tag instances"""
+  bulk_update_tag(inputs: [BulkUpdateInput]!): BulkUpdateTag
+
+  """Delete multiple Tag instances"""
+  bulk_delete_tag(ids: [ID]!): BulkDeleteTag
+
+  """Update tag color."""
+  tag_update_color(id: ID!, input: TagUpdate_ColorInput!): TagUpdate_Color
 
   """Create a new Post instance"""
   create_post(input: PostInput!): CreatePost
@@ -2890,6 +2753,27 @@ type Mutation {
   """Delete a Post instance"""
   delete_post(id: ID!): DeletePost
 
+  """Create multiple Post instances"""
+  bulk_create_post(inputs: [PostInput]!): BulkCreatePost
+
+  """Update multiple Post instances"""
+  bulk_update_post(inputs: [BulkUpdateInput]!): BulkUpdatePost
+
+  """Delete multiple Post instances"""
+  bulk_delete_post(ids: [ID]!): BulkDeletePost
+
+  """Add a tag to this post."""
+  post_add_tag(id: ID!, input: PostAdd_TagInput!): addTagToPost
+
+  """Archive this post."""
+  post_archive_post(id: ID!, input: PostArchive_PostInput!): PostArchive_Post
+
+  """Calculate estimated reading time in minutes."""
+  post_calculate_reading_time(id: ID!): PostCalculate_Reading_Time
+
+  """Publish this post."""
+  post_publish_post(id: ID!, input: PostPublish_PostInput!): PostPublish_Post
+
   """Create a new Comment instance"""
   create_comment(input: CommentInput!): CreateComment
 
@@ -2899,23 +2783,44 @@ type Mutation {
   """Delete a Comment instance"""
   delete_comment(id: ID!): DeleteComment
 
-  """Create a new Bill instance"""
-  create_bill(input: BillInput!): CreateBill
+  """Create multiple Comment instances"""
+  bulk_create_comment(inputs: [CommentInput]!): BulkCreateComment
 
-  """Update an existing Bill instance"""
-  update_bill(id: ID!, input: BillInput!): UpdateBill
+  """Update multiple Comment instances"""
+  bulk_update_comment(inputs: [BulkUpdateInput]!): BulkUpdateComment
 
-  """Delete a Bill instance"""
-  delete_bill(id: ID!): DeleteBill
+  """Delete multiple Comment instances"""
+  bulk_delete_comment(ids: [ID]!): BulkDeleteComment
 
-  """Create a new Client instance"""
-  create_client(input: ClientInput!): CreateClient
+  """Approve this comment."""
+  comment_approve_comment(id: ID!, input: CommentApprove_CommentInput!): CommentApprove_Comment
 
-  """Update an existing Client instance"""
-  update_client(id: ID!, input: ClientInput!): UpdateClient
+  """Reject this comment by deleting it."""
+  comment_reject_comment(id: ID!, input: CommentReject_CommentInput!): CommentReject_Comment
 
-  """Delete a Client instance"""
-  delete_client(id: ID!): DeleteClient
+  """Create a new Profile instance"""
+  create_profile(input: ProfileInput!): CreateProfile
+
+  """Update an existing Profile instance"""
+  update_profile(id: ID!, input: ProfileInput!): UpdateProfile
+
+  """Delete a Profile instance"""
+  delete_profile(id: ID!): DeleteProfile
+
+  """Create multiple Profile instances"""
+  bulk_create_profile(inputs: [ProfileInput]!): BulkCreateProfile
+
+  """Update multiple Profile instances"""
+  bulk_update_profile(inputs: [BulkUpdateInput]!): BulkUpdateProfile
+
+  """Delete multiple Profile instances"""
+  bulk_delete_profile(ids: [ID]!): BulkDeleteProfile
+
+  """Update user bio."""
+  profile_update_bio(id: ID!, input: ProfileUpdate_BioInput!): ProfileUpdate_Bio
+
+  """Verify this user profile."""
+  profile_verify_profile(id: ID!, input: ProfileVerify_ProfileInput!): ProfileVerify_Profile
 }
 
 """Create a new LogEntry instance"""
@@ -2958,6 +2863,49 @@ type UpdateLogEntry {
 type DeleteLogEntry {
   ok: Boolean
   object: LogEntryType
+  errors: [String]
+}
+
+"""Create multiple LogEntry instances"""
+type BulkCreateLogEntry {
+  ok: Boolean
+  objects: [LogEntryType]
+  errors: [String]
+}
+
+"""Update multiple LogEntry instances"""
+type BulkUpdateLogEntry {
+  ok: Boolean
+  objects: [LogEntryType]
+  errors: [String]
+}
+
+input BulkUpdateInput {
+  id: ID!
+  data: LogEntryInput!
+}
+
+"""Delete multiple LogEntry instances"""
+type BulkDeleteLogEntry {
+  ok: Boolean
+  objects: [LogEntryType]
+  errors: [String]
+}
+
+"""
+If self.change_message is a JSON structure, interpret it as a change
+string, properly translated.
+"""
+type LogEntryGet_Change_Message {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+"""Execute is_addition on LogEntry"""
+type LogEntryIs_Addition {
+  ok: Boolean
+  result: Boolean
   errors: [String]
 }
 
@@ -3042,6 +2990,27 @@ type DeletePermission {
   errors: [String]
 }
 
+"""Create multiple Permission instances"""
+type BulkCreatePermission {
+  ok: Boolean
+  objects: [PermissionType]
+  errors: [String]
+}
+
+"""Update multiple Permission instances"""
+type BulkUpdatePermission {
+  ok: Boolean
+  objects: [PermissionType]
+  errors: [String]
+}
+
+"""Delete multiple Permission instances"""
+type BulkDeletePermission {
+  ok: Boolean
+  objects: [PermissionType]
+  errors: [String]
+}
+
 """Create a new Group instance"""
 type CreateGroup {
   ok: Boolean
@@ -3123,6 +3092,27 @@ type DeleteGroup {
   errors: [String]
 }
 
+"""Create multiple Group instances"""
+type BulkCreateGroup {
+  ok: Boolean
+  objects: [GroupType]
+  errors: [String]
+}
+
+"""Update multiple Group instances"""
+type BulkUpdateGroup {
+  ok: Boolean
+  objects: [GroupType]
+  errors: [String]
+}
+
+"""Delete multiple Group instances"""
+type BulkDeleteGroup {
+  ok: Boolean
+  objects: [GroupType]
+  errors: [String]
+}
+
 """Create a new User instance"""
 type CreateUser {
   ok: Boolean
@@ -3173,10 +3163,12 @@ input UserInput {
   nested_user_permissions: [PermissionNestedCreateInput_exclude_User]
   logentry_set: [ID]
   nested_logentry_set: [LogEntryNestedCreateInput_exclude_User]
-  posts: [ID]
-  nested_posts: [PostNestedCreateInput_exclude_User]
-  comments: [ID]
-  nested_comments: [CommentNestedCreateInput_exclude_User]
+  post_set: [ID]
+  nested_post_set: [PostNestedCreateInput_exclude_User]
+  comment_set: [ID]
+  nested_comment_set: [CommentNestedCreateInput_exclude_User]
+  profile: [ID]
+  nested_profile: [ProfileNestedCreateInput_exclude_User]
 }
 
 """Nested input type for Group in create operations."""
@@ -3221,19 +3213,10 @@ input PostNestedCreateInput_exclude_User {
   title: String!
 
   """"""
-  slug: String!
-
-  """"""
   content: String!
 
   """"""
-  excerpt: String
-
-  """"""
-  view_count: Int
-
-  """"""
-  rating: Decimal
+  status: String
 
   """"""
   created_at: DateTime
@@ -3243,21 +3226,8 @@ input PostNestedCreateInput_exclude_User {
 
   """"""
   published_at: DateTime
-
-  """"""
-  is_featured: Boolean
-
-  """"""
-  status: String
-
-  """"""
-  featured_image: String
-
-  """"""
-  attachment: String
   category: ID
   tags: [ID]
-  related_posts: [ID]
 }
 
 """Nested input type for Comment in create operations."""
@@ -3266,16 +3236,30 @@ input CommentNestedCreateInput_exclude_User {
   content: String!
 
   """"""
-  created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
   is_approved: Boolean
+
+  """"""
+  created_at: DateTime
   post: ID
-  parent: ID
   tags: [ID]
+}
+
+"""Nested input type for Profile in create operations."""
+input ProfileNestedCreateInput_exclude_User {
+  """"""
+  bio: String
+
+  """"""
+  avatar: String
+
+  """"""
+  website: String
+
+  """"""
+  is_verified: Boolean
+
+  """"""
+  created_at: DateTime
 }
 
 """Update an existing User instance"""
@@ -3289,6 +3273,45 @@ type UpdateUser {
 type DeleteUser {
   ok: Boolean
   object: UserType
+  errors: [String]
+}
+
+"""Create multiple User instances"""
+type BulkCreateUser {
+  ok: Boolean
+  objects: [UserType]
+  errors: [String]
+}
+
+"""Update multiple User instances"""
+type BulkUpdateUser {
+  ok: Boolean
+  objects: [UserType]
+  errors: [String]
+}
+
+"""Delete multiple User instances"""
+type BulkDeleteUser {
+  ok: Boolean
+  objects: [UserType]
+  errors: [String]
+}
+
+"""Execute set_password on User"""
+type UserSet_Password {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input UserSet_PasswordInput {
+  raw_password: String!
+}
+
+"""Execute set_unusable_password on User"""
+type UserSet_Unusable_Password {
+  ok: Boolean
+  result: Boolean
   errors: [String]
 }
 
@@ -3356,6 +3379,27 @@ type DeleteContentType {
   errors: [String]
 }
 
+"""Create multiple ContentType instances"""
+type BulkCreateContentType {
+  ok: Boolean
+  objects: [ContentTypeType]
+  errors: [String]
+}
+
+"""Update multiple ContentType instances"""
+type BulkUpdateContentType {
+  ok: Boolean
+  objects: [ContentTypeType]
+  errors: [String]
+}
+
+"""Delete multiple ContentType instances"""
+type BulkDeleteContentType {
+  ok: Boolean
+  objects: [ContentTypeType]
+  errors: [String]
+}
+
 """Create a new Session instance"""
 type CreateSession {
   ok: Boolean
@@ -3391,6 +3435,27 @@ type DeleteSession {
   errors: [String]
 }
 
+"""Create multiple Session instances"""
+type BulkCreateSession {
+  ok: Boolean
+  objects: [SessionType]
+  errors: [String]
+}
+
+"""Update multiple Session instances"""
+type BulkUpdateSession {
+  ok: Boolean
+  objects: [SessionType]
+  errors: [String]
+}
+
+"""Delete multiple Session instances"""
+type BulkDeleteSession {
+  ok: Boolean
+  objects: [SessionType]
+  errors: [String]
+}
+
 """Create a new Category instance"""
 type CreateCategory {
   ok: Boolean
@@ -3406,21 +3471,15 @@ input CategoryInput {
   name: String!
 
   """"""
-  slug: String!
-
-  """"""
   description: String
-
-  """"""
-  created_at: DateTime
 
   """"""
   is_active: Boolean
 
   """"""
-  order: Int
-  posts: [ID]
-  nested_posts: [PostNestedCreateInput_exclude_Category]
+  created_at: DateTime
+  post_set: [ID]
+  nested_post_set: [PostNestedCreateInput_exclude_Category]
 }
 
 """Nested input type for Post in create operations."""
@@ -3429,19 +3488,10 @@ input PostNestedCreateInput_exclude_Category {
   title: String!
 
   """"""
-  slug: String!
-
-  """"""
   content: String!
 
   """"""
-  excerpt: String
-
-  """"""
-  view_count: Int
-
-  """"""
-  rating: Decimal
+  status: String
 
   """"""
   created_at: DateTime
@@ -3451,21 +3501,8 @@ input PostNestedCreateInput_exclude_Category {
 
   """"""
   published_at: DateTime
-
-  """"""
-  is_featured: Boolean
-
-  """"""
-  status: String
-
-  """"""
-  featured_image: String
-
-  """"""
-  attachment: String
   author: ID
   tags: [ID]
-  related_posts: [ID]
 }
 
 """Update an existing Category instance"""
@@ -3480,6 +3517,45 @@ type DeleteCategory {
   ok: Boolean
   object: CategoryType
   errors: [String]
+}
+
+"""Create multiple Category instances"""
+type BulkCreateCategory {
+  ok: Boolean
+  objects: [CategoryType]
+  errors: [String]
+}
+
+"""Update multiple Category instances"""
+type BulkUpdateCategory {
+  ok: Boolean
+  objects: [CategoryType]
+  errors: [String]
+}
+
+"""Delete multiple Category instances"""
+type BulkDeleteCategory {
+  ok: Boolean
+  objects: [CategoryType]
+  errors: [String]
+}
+
+"""Activate category"""
+type CategoryActivate_Category {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+"""Deactivate category"""
+type CategoryDeactivate_Category {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input CategoryDeactivate_CategoryInput {
+  reason: String = "Manual deactivation"
 }
 
 """Create a new Tag instance"""
@@ -3497,11 +3573,14 @@ input TagInput {
   name: String!
 
   """"""
-  slug: String!
-  posts: [ID]
-  nested_posts: [PostNestedCreateInput_exclude_Tag]
-  comments: [ID]
-  nested_comments: [CommentNestedCreateInput_exclude_Tag]
+  color: String
+
+  """"""
+  created_at: DateTime
+  post_set: [ID]
+  nested_post_set: [PostNestedCreateInput_exclude_Tag]
+  comment_set: [ID]
+  nested_comment_set: [CommentNestedCreateInput_exclude_Tag]
 }
 
 """Nested input type for Post in create operations."""
@@ -3510,19 +3589,10 @@ input PostNestedCreateInput_exclude_Tag {
   title: String!
 
   """"""
-  slug: String!
-
-  """"""
   content: String!
 
   """"""
-  excerpt: String
-
-  """"""
-  view_count: Int
-
-  """"""
-  rating: Decimal
+  status: String
 
   """"""
   created_at: DateTime
@@ -3532,21 +3602,8 @@ input PostNestedCreateInput_exclude_Tag {
 
   """"""
   published_at: DateTime
-
-  """"""
-  is_featured: Boolean
-
-  """"""
-  status: String
-
-  """"""
-  featured_image: String
-
-  """"""
-  attachment: String
   author: ID
   category: ID
-  related_posts: [ID]
 }
 
 """Nested input type for Comment in create operations."""
@@ -3555,16 +3612,12 @@ input CommentNestedCreateInput_exclude_Tag {
   content: String!
 
   """"""
-  created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
   is_approved: Boolean
+
+  """"""
+  created_at: DateTime
   post: ID
   author: ID
-  parent: ID
 }
 
 """Update an existing Tag instance"""
@@ -3579,6 +3632,38 @@ type DeleteTag {
   ok: Boolean
   object: TagType
   errors: [String]
+}
+
+"""Create multiple Tag instances"""
+type BulkCreateTag {
+  ok: Boolean
+  objects: [TagType]
+  errors: [String]
+}
+
+"""Update multiple Tag instances"""
+type BulkUpdateTag {
+  ok: Boolean
+  objects: [TagType]
+  errors: [String]
+}
+
+"""Delete multiple Tag instances"""
+type BulkDeleteTag {
+  ok: Boolean
+  objects: [TagType]
+  errors: [String]
+}
+
+"""Update tag color."""
+type TagUpdate_Color {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input TagUpdate_ColorInput {
+  new_color: String!
 }
 
 """Create a new Post instance"""
@@ -3596,19 +3681,10 @@ input PostInput {
   title: String!
 
   """"""
-  slug: String!
-
-  """"""
   content: String!
 
   """"""
-  excerpt: String
-
-  """"""
-  view_count: Int
-
-  """"""
-  rating: Decimal
+  status: String
 
   """"""
   created_at: DateTime
@@ -3618,26 +3694,10 @@ input PostInput {
 
   """"""
   published_at: DateTime
-
-  """"""
-  is_featured: Boolean
-
-  """"""
-  status: String
-
-  """"""
-  featured_image: String
-
-  """"""
-  attachment: String
   author: ID!
   category: ID!
   tags: [ID]
   nested_tags: [TagNestedCreateInput_exclude_Post]
-  related_posts: [ID]
-  nested_related_posts: [PostNestedCreateInput_exclude_Post]
-  related_to: [ID]
-  nested_related_to: [PostNestedCreateInput_exclude_Post]
   comments: [ID]
   nested_comments: [CommentNestedCreateInput_exclude_Post]
 }
@@ -3648,52 +3708,10 @@ input TagNestedCreateInput_exclude_Post {
   name: String!
 
   """"""
-  slug: String!
-}
-
-"""Nested input type for Post in create operations."""
-input PostNestedCreateInput_exclude_Post {
-  """"""
-  title: String!
-
-  """"""
-  slug: String!
-
-  """"""
-  content: String!
-
-  """"""
-  excerpt: String
-
-  """"""
-  view_count: Int
-
-  """"""
-  rating: Decimal
+  color: String
 
   """"""
   created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
-  published_at: DateTime
-
-  """"""
-  is_featured: Boolean
-
-  """"""
-  status: String
-
-  """"""
-  featured_image: String
-
-  """"""
-  attachment: String
-  author: ID
-  category: ID
-  tags: [ID]
 }
 
 """Nested input type for Comment in create operations."""
@@ -3702,15 +3720,11 @@ input CommentNestedCreateInput_exclude_Post {
   content: String!
 
   """"""
-  created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
   is_approved: Boolean
+
+  """"""
+  created_at: DateTime
   author: ID
-  parent: ID
   tags: [ID]
 }
 
@@ -3728,6 +3742,67 @@ type DeletePost {
   errors: [String]
 }
 
+"""Create multiple Post instances"""
+type BulkCreatePost {
+  ok: Boolean
+  objects: [PostType]
+  errors: [String]
+}
+
+"""Update multiple Post instances"""
+type BulkUpdatePost {
+  ok: Boolean
+  objects: [PostType]
+  errors: [String]
+}
+
+"""Delete multiple Post instances"""
+type BulkDeletePost {
+  ok: Boolean
+  objects: [PostType]
+  errors: [String]
+}
+
+"""Add a tag to this post."""
+type addTagToPost {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input PostAdd_TagInput {
+  tag_id: Int!
+}
+
+"""Archive this post."""
+type PostArchive_Post {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input PostArchive_PostInput {
+  archive_reason: String = "Manual archival"
+}
+
+"""Calculate estimated reading time in minutes."""
+type PostCalculate_Reading_Time {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+"""Publish this post."""
+type PostPublish_Post {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input PostPublish_PostInput {
+  publish_notes: String = ""
+}
+
 """Create a new Comment instance"""
 type CreateComment {
   ok: Boolean
@@ -3743,20 +3818,14 @@ input CommentInput {
   content: String!
 
   """"""
-  created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
   is_approved: Boolean
+
+  """"""
+  created_at: DateTime
   post: ID!
   author: ID!
-  parent: ID
   tags: [ID]
   nested_tags: [TagNestedCreateInput_exclude_Comment]
-  replies: [ID]
-  nested_replies: [CommentNestedCreateInput_exclude_Comment]
 }
 
 """Nested input type for Tag in create operations."""
@@ -3765,25 +3834,10 @@ input TagNestedCreateInput_exclude_Comment {
   name: String!
 
   """"""
-  slug: String!
-}
-
-"""Nested input type for Comment in create operations."""
-input CommentNestedCreateInput_exclude_Comment {
-  """"""
-  content: String!
+  color: String
 
   """"""
   created_at: DateTime
-
-  """"""
-  updated_at: DateTime
-
-  """"""
-  is_approved: Boolean
-  post: ID
-  author: ID
-  tags: [ID]
 }
 
 """Update an existing Comment instance"""
@@ -3800,69 +3854,132 @@ type DeleteComment {
   errors: [String]
 }
 
-"""Create a new Bill instance"""
-type CreateBill {
+"""Create multiple Comment instances"""
+type BulkCreateComment {
   ok: Boolean
-  object: BillType
+  objects: [CommentType]
+  errors: [String]
+}
+
+"""Update multiple Comment instances"""
+type BulkUpdateComment {
+  ok: Boolean
+  objects: [CommentType]
+  errors: [String]
+}
+
+"""Delete multiple Comment instances"""
+type BulkDeleteComment {
+  ok: Boolean
+  objects: [CommentType]
+  errors: [String]
+}
+
+"""Approve this comment."""
+type CommentApprove_Comment {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input CommentApprove_CommentInput {
+  approved_by: String!
+  moderation_notes: String = ""
+}
+
+"""Reject this comment by deleting it."""
+type CommentReject_Comment {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input CommentReject_CommentInput {
+  rejection_reason: String!
+}
+
+"""Create a new Profile instance"""
+type CreateProfile {
+  ok: Boolean
+  object: ProfileType
   errors: [String]
 }
 
 """
-Input type for creating/updating Bill instances with nested relationships.
+Input type for creating/updating Profile instances with nested relationships.
 """
-input BillInput {
+input ProfileInput {
   """"""
-  ref: String!
-  client: ID!
-}
+  bio: String
 
-"""Update an existing Bill instance"""
-type UpdateBill {
-  ok: Boolean
-  object: BillType
-  errors: [String]
-}
-
-"""Delete a Bill instance"""
-type DeleteBill {
-  ok: Boolean
-  object: BillType
-  errors: [String]
-}
-
-"""Create a new Client instance"""
-type CreateClient {
-  ok: Boolean
-  object: ClientType
-  errors: [String]
-}
-
-"""
-Input type for creating/updating Client instances with nested relationships.
-"""
-input ClientInput {
   """"""
-  charfield: String!
-  bills: [ID]
-  nested_bills: [BillNestedCreateInput_exclude_Client]
-}
+  avatar: String
 
-"""Nested input type for Bill in create operations."""
-input BillNestedCreateInput_exclude_Client {
   """"""
-  ref: String!
+  website: String
+
+  """"""
+  is_verified: Boolean
+
+  """"""
+  created_at: DateTime
+  user: ID!
 }
 
-"""Update an existing Client instance"""
-type UpdateClient {
+"""Update an existing Profile instance"""
+type UpdateProfile {
   ok: Boolean
-  object: ClientType
+  object: ProfileType
   errors: [String]
 }
 
-"""Delete a Client instance"""
-type DeleteClient {
+"""Delete a Profile instance"""
+type DeleteProfile {
   ok: Boolean
-  object: ClientType
+  object: ProfileType
   errors: [String]
+}
+
+"""Create multiple Profile instances"""
+type BulkCreateProfile {
+  ok: Boolean
+  objects: [ProfileType]
+  errors: [String]
+}
+
+"""Update multiple Profile instances"""
+type BulkUpdateProfile {
+  ok: Boolean
+  objects: [ProfileType]
+  errors: [String]
+}
+
+"""Delete multiple Profile instances"""
+type BulkDeleteProfile {
+  ok: Boolean
+  objects: [ProfileType]
+  errors: [String]
+}
+
+"""Update user bio."""
+type ProfileUpdate_Bio {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input ProfileUpdate_BioInput {
+  new_bio: String!
+}
+
+"""Verify this user profile."""
+type ProfileVerify_Profile {
+  ok: Boolean
+  result: Boolean
+  errors: [String]
+}
+
+input ProfileVerify_ProfileInput {
+  verified_by: String!
+  verification_notes: String = ""
 }

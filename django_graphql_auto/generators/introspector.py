@@ -38,11 +38,17 @@ class RelationshipInfo:
         self.from_field = from_field
 
 class MethodInfo:
-    """Stores metadata about a model method."""
-    def __init__(self, arguments: Dict[str, Any], return_type: Any, is_async: bool):
+    """Information about a model method."""
+    
+    def __init__(self, name: str, arguments: Dict[str, Any], return_type: Any, is_async: bool, 
+                 is_mutation: bool = False, is_private: bool = False, method: callable = None):
+        self.name = name
         self.arguments = arguments
         self.return_type = return_type
         self.is_async = is_async
+        self.is_mutation = is_mutation
+        self.is_private = is_private
+        self.method = method
 
 class PropertyInfo:
     """Stores metadata about a model property."""
@@ -121,22 +127,149 @@ class ModelIntrospector:
 
     @cached_property
     def methods(self) -> Dict[str, MethodInfo]:
-        """Discovers model methods, their arguments, and return types."""
+        """Discovers model methods and their signatures."""
         method_info = {}
+        
+        # Use inspect.isfunction for class methods, not inspect.ismethod
         for name, member in inspect.getmembers(self.model, predicate=inspect.isfunction):
+            # Skip Django model built-in methods and PolymorphicModel methods
+            if self._is_django_builtin_method(name, member):
+                continue
+                
+            # Skip private methods (starting with _)
             if name.startswith('_'):
                 continue
-
-            sig = inspect.signature(member)
-            arguments = {p.name: p.annotation for p in sig.parameters.values() if p.name != 'self'}
-            return_type = sig.return_annotation
+            
+            # Get method signature
+            try:
+                sig = inspect.signature(member)
+                arguments = {}
+                for param_name, param in sig.parameters.items():
+                    if param_name != 'self':  # Skip 'self' parameter
+                        arguments[param_name] = {
+                            'type': param.annotation if param.annotation != inspect.Parameter.empty else Any,
+                            'default': param.default if param.default != inspect.Parameter.empty else None,
+                            'required': param.default == inspect.Parameter.empty
+                        }
+                
+                return_type = sig.return_annotation if sig.return_annotation != inspect.Signature.empty else Any
+            except (ValueError, TypeError):
+                # Skip methods with problematic signatures
+                continue
+            
+            # Determine if method is a mutation (modifies state)
+            is_mutation = self._is_mutation_method(name, member)
+            is_private = name.startswith('_') or hasattr(member, '_private')
 
             method_info[name] = MethodInfo(
+                name=name,
                 arguments=arguments,
                 return_type=return_type,
-                is_async=inspect.iscoroutinefunction(member)
+                is_async=inspect.iscoroutinefunction(member),
+                is_mutation=is_mutation,
+                is_private=is_private,
+                method=member
             )
         return method_info
+
+    def _is_django_builtin_method(self, method_name: str, method: callable) -> bool:
+        """
+        Determines if a method is a Django model built-in method or PolymorphicModel method.
+        
+        Args:
+            method_name: Name of the method
+            method: The method object
+            
+        Returns:
+            bool: True if the method should be ignored
+        """
+        # Django Model built-in methods to ignore
+        django_builtin_methods = {
+            'clean', 'clean_fields', 'full_clean', 'validate_unique', 'validate_constraints',
+            'save', 'save_base', 'delete', 'adelete', 'refresh_from_db', 'arefresh_from_db',
+            'get_absolute_url', 'get_deferred_fields', 'serializable_value',
+            'prepare_database_save', 'unique_error_message', 'date_error_message',
+            'get_constraints', 'asave'
+        }
+        
+        # PolymorphicModel methods to ignore
+        polymorphic_methods = {
+            'get_real_instance', 'get_real_instance_class', 'get_real_concrete_instance_class',
+            'get_polymorphic_value', 'polymorphic_super'
+        }
+        
+        # Django auto-generated methods (get_next_by_*, get_previous_by_*, get_*_display)
+        auto_generated_patterns = [
+            'get_next_by_', 'get_previous_by_', 'get_', '_display'
+        ]
+        
+        # Check exact matches
+        if method_name in django_builtin_methods or method_name in polymorphic_methods:
+            return True
+            
+        # Check patterns for auto-generated methods
+        for pattern in auto_generated_patterns:
+            if pattern in method_name:
+                # Additional check for get_*_display methods
+                if method_name.endswith('_display'):
+                    return True
+                # Check for get_next_by_* and get_previous_by_* methods
+                if method_name.startswith(('get_next_by_', 'get_previous_by_')):
+                    return True
+        
+        # Check if method is defined in Django's Model class or its parents
+        try:
+            # Get the method resolution order
+            for cls in self.model.__mro__:
+                if cls.__name__ in ['Model', 'PolymorphicModel'] and hasattr(cls, method_name):
+                    return True
+        except AttributeError:
+            pass
+            
+        return False
+
+    def _is_mutation_method(self, method_name: str, method: callable) -> bool:
+        """
+        Determines if a method is a mutation (modifies state).
+        
+        Args:
+            method_name: Name of the method
+            method: The method object
+            
+        Returns:
+            bool: True if the method is considered a mutation
+        """
+        # Check for explicit mutation decorator or attribute
+        if hasattr(method, '_is_mutation'):
+            return method._is_mutation
+        
+        # Check for business logic decorator
+        if hasattr(method, '_is_business_logic'):
+            return method._is_business_logic
+        
+        # Check method name patterns that suggest mutations
+        mutation_patterns = [
+            'create', 'update', 'delete', 'remove', 'add', 'set', 'clear',
+            'activate', 'deactivate', 'enable', 'disable', 'toggle',
+            'approve', 'reject', 'publish', 'unpublish', 'archive',
+            'process', 'execute', 'perform', 'handle', 'trigger',
+            'send', 'notify', 'calculate', 'generate', 'sync'
+        ]
+        
+        method_lower = method_name.lower()
+        for pattern in mutation_patterns:
+            if pattern in method_lower:
+                return True
+        
+        # Check docstring for mutation indicators
+        if method.__doc__:
+            doc_lower = method.__doc__.lower()
+            mutation_keywords = ['modify', 'change', 'update', 'create', 'delete', 'save', 'process', 'execute']
+            for keyword in mutation_keywords:
+                if keyword in doc_lower:
+                    return True
+        
+        return False
 
     @cached_property
     def properties(self) -> Dict[str, PropertyInfo]:

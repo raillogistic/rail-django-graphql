@@ -535,6 +535,172 @@ class MutationGenerator:
             {'__doc__': f'Delete multiple {model_name} instances'}
         )
 
+    def convert_method_to_mutation(
+        self,
+        model: Type[models.Model],
+        method_name: str,
+        custom_input_type: Optional[Type[graphene.InputObjectType]] = None,
+        custom_output_type: Optional[Type[graphene.ObjectType]] = None
+    ) -> Optional[Type[graphene.Mutation]]:
+        """
+        Converts a model method to a GraphQL mutation with enhanced capabilities.
+        
+        Args:
+            model: The Django model class
+            method_name: Name of the method to convert
+            custom_input_type: Optional custom input type
+            custom_output_type: Optional custom output type
+            
+        Returns:
+            GraphQL mutation class or None if method not found
+        """
+        if not hasattr(model, method_name):
+            return None
+            
+        method = getattr(model, method_name)
+        if not callable(method):
+            return None
+            
+        signature = inspect.signature(method)
+        model_name = model.__name__
+        
+        # Create input type
+        if custom_input_type:
+            input_type = custom_input_type
+        else:
+            input_fields = {}
+            for param_name, param in signature.parameters.items():
+                if param_name == 'self':
+                    continue
+                
+                param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+                graphql_type = self._convert_python_type_to_graphql(param_type)
+                
+                if param.default == inspect.Parameter.empty:
+                    input_fields[param_name] = graphql_type(required=True)
+                else:
+                    input_fields[param_name] = graphql_type(default_value=param.default)
+            
+            input_type = type(
+                f'{model_name}{method_name.title()}Input',
+                (graphene.InputObjectType,),
+                input_fields
+            ) if input_fields else None
+        
+        # Determine output type
+        if custom_output_type:
+            output_type = custom_output_type
+        else:
+            return_type = signature.return_annotation
+            if return_type == inspect.Parameter.empty:
+                output_type = graphene.Boolean
+            else:
+                output_type = self._convert_python_type_to_graphql(return_type)
+        
+        class ConvertedMethodMutation(graphene.Mutation):
+            class Arguments:
+                id = graphene.ID(required=True)
+            
+            # Standardized return format
+            ok = graphene.Boolean()
+            result = output_type()
+            errors = graphene.List(graphene.String)
+            
+            @classmethod
+            @transaction.atomic
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, **kwargs):
+                try:
+                    # Check permissions if required
+                    if hasattr(method, '_requires_permission'):
+                        permission = method._requires_permission
+                        if hasattr(info, 'context') and hasattr(info.context, 'user'):
+                            if not info.context.user.has_perm(permission):
+                                return cls(ok=False, result=None, errors=["Permission denied"])
+                        else:
+                            return cls(ok=False, result=None, errors=["Authentication required"])
+                    
+                    instance = model.objects.get(pk=id)
+                    method_func = getattr(instance, method_name)
+                    
+                    # Filter kwargs to only include method parameters
+                    method_params = set(signature.parameters.keys()) - {'self'}
+                    filtered_kwargs = {k: v for k, v in kwargs.items() if k in method_params}
+                    
+                    # Execute method with filtered arguments
+                    result = method_func(**filtered_kwargs)
+                    
+                    # Handle model instance results
+                    if isinstance(result, models.Model):
+                        result.save()
+                    
+                    return cls(ok=True, result=result, errors=[])
+                    
+                except model.DoesNotExist:
+                    return cls(ok=False, result=None, errors=[f"{model_name} with id {id} does not exist"])
+                except Exception as e:
+                    transaction.set_rollback(True)
+                    return cls(ok=False, result=None, errors=[f"Failed to execute {method_name}: {str(e)}"])
+        
+        # Add method parameters as individual arguments
+        for param_name, param in signature.parameters.items():
+            if param_name == 'self':
+                continue
+                
+            param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+            graphql_type = self._convert_python_type_to_graphql(param_type)
+            
+            if param.default == inspect.Parameter.empty:
+                setattr(ConvertedMethodMutation.Arguments, param_name, graphql_type(required=True))
+            else:
+                setattr(ConvertedMethodMutation.Arguments, param_name, graphql_type(default_value=param.default))
+        
+        # Preserve decorator metadata
+        mutation_attrs = {'__doc__': method.__doc__ or f'Execute {method_name} on {model_name}'}
+        
+        # Check for business_logic decorator metadata
+        if hasattr(method, '_business_logic_category'):
+            mutation_attrs['_business_logic_category'] = method._business_logic_category
+        if hasattr(method, '_requires_permission'):
+            mutation_attrs['_requires_permission'] = method._requires_permission
+        if hasattr(method, '_custom_mutation_name'):
+            mutation_attrs['_custom_mutation_name'] = method._custom_mutation_name
+        
+        return type(
+            f'{model_name}{method_name.title()}Mutation',
+            (ConvertedMethodMutation,),
+            mutation_attrs
+        )
+
+    def _convert_python_type_to_graphql(self, python_type: Any) -> Type[graphene.Scalar]:
+        """
+        Converts Python types to GraphQL types with enhanced mapping.
+        
+        Args:
+            python_type: Python type annotation
+            
+        Returns:
+            Corresponding GraphQL type
+        """
+        type_mapping = {
+            str: graphene.String,
+            int: graphene.Int,
+            float: graphene.Float,
+            bool: graphene.Boolean,
+            Any: graphene.String,
+            type(None): graphene.String,
+        }
+        
+        # Handle Union types (e.g., Optional[str])
+        if hasattr(python_type, '__origin__'):
+            if python_type.__origin__ is Union:
+                # For Optional types, use the non-None type
+                args = python_type.__args__
+                non_none_types = [arg for arg in args if arg is not type(None)]
+                if non_none_types:
+                    return self._convert_python_type_to_graphql(non_none_types[0])
+        
+        return type_mapping.get(python_type, graphene.String)
+
     def generate_method_mutation(
         self,
         model: Type[models.Model],
@@ -543,6 +709,7 @@ class MutationGenerator:
         """
         Generates a mutation from a model method.
         Analyzes method signature and return type to create appropriate mutation.
+        Supports custom business logic and decorator-enhanced methods.
         """
         if not self.settings.enable_method_mutations:
             return None
@@ -552,70 +719,119 @@ class MutationGenerator:
         signature = inspect.signature(method)
         model_name = model.__name__
 
-        # Create input type for method arguments
-        input_fields = {}
-        for param_name, param in signature.parameters.items():
-            if param_name == 'self':
-                continue
-            
-            param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
-            graphql_type = self.type_generator.FIELD_TYPE_MAP.get(param_type, graphene.String)
-            
-            if param.default == inspect.Parameter.empty:
-                input_fields[param_name] = graphql_type(required=True)
-            else:
-                input_fields[param_name] = graphql_type(default_value=param.default)
+        # Check for custom input/output types from decorators
+        custom_input_type = getattr(method, '_mutation_input_type', None)
+        custom_output_type = getattr(method, '_mutation_output_type', None)
+        custom_name = getattr(method, '_custom_mutation_name', None)
+        description = getattr(method, '_mutation_description', method.__doc__)
+        is_business_logic = getattr(method, '_is_business_logic', False)
+        requires_permission = getattr(method, '_requires_permission', None)
+        atomic = getattr(method, '_atomic', True)
 
-        input_type = type(
-            f'{model_name}{method_name.title()}Input',
-            (graphene.InputObjectType,),
-            input_fields
-        )
+        # Create input type for method arguments
+        if custom_input_type:
+            input_type = custom_input_type
+        else:
+            input_fields = {}
+            for param_name, param in signature.parameters.items():
+                if param_name == 'self':
+                    continue
+                
+                param_type = param.annotation if param.annotation != inspect.Parameter.empty else Any
+                graphql_type = self._convert_python_type_to_graphql(param_type)
+                
+                if param.default == inspect.Parameter.empty:
+                    input_fields[param_name] = graphql_type(required=True)
+                else:
+                    input_fields[param_name] = graphql_type(default_value=param.default)
+
+            input_type = type(
+                f'{model_name}{method_name.title()}Input',
+                (graphene.InputObjectType,),
+                input_fields
+            ) if input_fields else None
 
         # Determine return type
-        return_type = signature.return_annotation
-        if return_type == inspect.Parameter.empty:
-            output_type = graphene.Boolean
+        if custom_output_type:
+            output_type = custom_output_type
         else:
-            output_type = self.type_generator.FIELD_TYPE_MAP.get(return_type, graphene.String)
+            return_type = signature.return_annotation
+            if return_type == inspect.Parameter.empty:
+                output_type = graphene.Boolean
+            else:
+                output_type = self._convert_python_type_to_graphql(return_type)
 
         class MethodMutation(graphene.Mutation):
             class Arguments:
                 id = graphene.ID(required=True)
-                input = input_type(required=bool(input_fields))
+                if input_type:
+                    input = input_type(required=True)
 
-            Output = output_type
+            # Standardized return format
+            ok = graphene.Boolean()
+            result = output_type()
+            errors = graphene.List(graphene.String)
+
+            @classmethod
+            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any] = None):
+                # Permission check if required
+                if requires_permission and hasattr(info.context, 'user'):
+                    if not info.context.user.has_perm(requires_permission):
+                        return cls(ok=False, result=None, errors=["Permission denied"])
+
+                # Wrap in transaction if atomic is True
+                if atomic:
+                    return cls._atomic_mutate(model, method_name, id, input)
+                else:
+                    return cls._non_atomic_mutate(model, method_name, id, input)
 
             @classmethod
             @transaction.atomic
-            def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any] = None) -> Any:
+            def _atomic_mutate(cls, model, method_name, id, input):
+                return cls._execute_method(model, method_name, id, input)
+
+            @classmethod
+            def _non_atomic_mutate(cls, model, method_name, id, input):
+                return cls._execute_method(model, method_name, id, input)
+
+            @classmethod
+            def _execute_method(cls, model, method_name, id, input):
                 try:
                     instance = model.objects.get(pk=id)
-                    method = getattr(instance, method_name)
+                    method_func = getattr(instance, method_name)
                     
                     if input:
-                        result = method(**input)
+                        result = method_func(**input)
                     else:
-                        result = method()
+                        result = method_func()
 
                     if isinstance(result, models.Model):
                         result.save()
 
-                    return result
+                    return cls(ok=True, result=result, errors=[])
 
                 except model.DoesNotExist:
-                    raise graphene.GraphQLError(f"{model_name} with id {id} does not exist")
+                    return cls(ok=False, result=None, errors=[f"{model.__name__} with id {id} does not exist"])
                 except Exception as e:
-                    transaction.set_rollback(True)
-                    raise graphene.GraphQLError(
-                        f"Failed to execute {method_name} on {model_name}: {str(e)}"
-                    )
+                    if atomic:
+                        transaction.set_rollback(True)
+                    return cls(ok=False, result=None, errors=[f"Failed to execute {method_name}: {str(e)}"])
 
-        return type(
-            f'{model_name}{method_name.title()}',
+        # Use custom name if provided
+        mutation_name = custom_name or f'{model_name}{method_name.title()}'
+        
+        mutation_class = type(
+            mutation_name,
             (MethodMutation,),
-            {'__doc__': method.__doc__ or f'Execute {method_name} on {model_name}'}
+            {'__doc__': description or f'Execute {method_name} on {model_name}'}
         )
+
+        # Add business logic metadata
+        if is_business_logic:
+            mutation_class._is_business_logic = True
+            mutation_class._business_logic_category = getattr(method, '_business_logic_category', 'general')
+
+        return mutation_class
 
     def generate_all_mutations(self, model: Type[models.Model]) -> Dict[str, graphene.Field]:
         """
@@ -651,10 +867,10 @@ class MutationGenerator:
         # Generate method mutations if enabled
         if self.settings.enable_method_mutations:
             introspector = ModelIntrospector(model)
-            for method_info in introspector.get_methods():
+            for method_name, method_info in introspector.get_model_methods().items():
                 if method_info.is_mutation and not method_info.is_private:
                     mutation = self.generate_method_mutation(model, method_info)
                     if mutation:
-                        mutations[f'{model_name}_{method_info.name}'] = mutation.Field()
+                        mutations[f'{model_name}_{method_name}'] = mutation.Field()
 
         return mutations

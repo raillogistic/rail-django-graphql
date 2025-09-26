@@ -1,191 +1,175 @@
-"""
-Test models for GraphQL schema generation testing.
-These models represent a simple blog system with various field types and relationships.
-"""
-
-from tabnanny import verbose
 from django.db import models
+from django.utils import timezone
 from django.contrib.auth.models import User
-from django.core.validators import MinLengthValidator, MaxLengthValidator, MinValueValidator
+from django_graphql_auto.decorators import mutation, business_logic, custom_mutation_name
 
 
 class Category(models.Model):
-    """Blog post category with basic fields."""
-    name = models.CharField(max_length=100, unique=True)
-    slug = models.SlugField(unique=True)
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_active = models.BooleanField(default=True)
-    order = models.PositiveIntegerField(default=0)
+    name = models.CharField("Nom de la catégorie", max_length=100)
+    description = models.TextField("Description", blank=True)
+    is_active = models.BooleanField("Actif", default=True)
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
 
     class Meta:
-        verbose_name_plural = "Categories"
-        ordering = ["order", "name"]
+        verbose_name = "Catégorie"
+        verbose_name_plural = "Catégories"
 
     def __str__(self):
         return self.name
 
-    def get_post_count(self):
-        """Get the number of posts in this category."""
-        return self.posts.count()
+    @mutation(description="Activate category")
+    def activate_category(self):
+        """Activate this category."""
+        self.is_active = True
+        self.save()
+        return True
+
+    @mutation(description="Deactivate category")
+    def deactivate_category(self, reason: str = "Manual deactivation"):
+        """Deactivate this category with optional reason."""
+        self.is_active = False
+        self.save()
+        return {"status": "deactivated", "reason": reason}
 
 
 class Tag(models.Model):
-    """Tags for blog posts with minimal fields."""
-    name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(unique=True)
+    name = models.CharField("Nom du tag", max_length=50, unique=True)
+    color = models.CharField("Couleur", max_length=7, default="#000000")
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Tag"
+        verbose_name_plural = "Tags"
 
     def __str__(self):
         return self.name
 
+    def update_color(self, new_color: str):
+        """Update tag color."""
+        self.color = new_color
+        self.save()
+        return self.color
+
 
 class Post(models.Model):
-    """
-    Blog post model with various field types and relationships.
-    Tests different field types, validators, and relationship types.
-    """
     STATUS_CHOICES = [
-        ("draft", "Draft"),
-        ("published", "Published"),
-        ("archived", "Archived"),
+        ('draft', 'Brouillon'),
+        ('published', 'Publié'),
+        ('archived', 'Archivé'),
     ]
 
-    # Basic fields
-    title = models.CharField(
-        max_length=200,
-        validators=[MinLengthValidator(5), MaxLengthValidator(200)]
-    )
-    slug = models.SlugField( max_length=200)
-    content = models.TextField()
-    excerpt = models.CharField(max_length=500, blank=True)
-    
-    # Numeric fields
-    view_count = models.PositiveIntegerField(
-        default=0,
-        validators=[MinValueValidator(0)]
-    )
-    rating = models.DecimalField(
-        max_digits=3,
-        decimal_places=1,
-        null=True,
-        blank=True
-    )
-    
-    # Date fields
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    published_at = models.DateTimeField(null=True, blank=True)
-    
-    # Boolean and choice fields
-    is_featured = models.BooleanField(default=False)
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="draft"
-    )
-    
-    # File fields
-    featured_image = models.ImageField(
-        upload_to="blog/posts/",
-        null=True,
-        blank=True
-    )
-    attachment = models.FileField(
-        upload_to="blog/attachments/",
-        null=True,
-        blank=True
-    )
-    
-    # Relationships
-    author = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="posts"
-    )
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.PROTECT,
-        related_name="posts"
-    )
-    tags = models.ManyToManyField(Tag, related_name="posts", blank=True)
-    related_posts = models.ManyToManyField(
-        "self",
-        blank=True,
-        symmetrical=False,
-        related_name="related_to"
-    )
+    title = models.CharField("Titre", max_length=200)
+    content = models.TextField("Contenu")
+    status = models.CharField("Statut", max_length=20, choices=STATUS_CHOICES, default='draft')
+    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
+    tags = models.ManyToManyField(Tag, blank=True, verbose_name="Tags")
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+    updated_at = models.DateTimeField("Modifié le", auto_now=True)
+    published_at = models.DateTimeField("Publié le", null=True, blank=True)
 
     class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["-created_at"]),
-            models.Index(fields=["status", "-created_at"]),
-        ]
+        verbose_name = "Article"
+        verbose_name_plural = "Articles"
 
     def __str__(self):
         return self.title
 
-    def get_absolute_url(self):
-        """Get the absolute URL for the post."""
-        return f"/blog/{self.slug}/"
+    @business_logic(category="publishing", requires_permission="can_publish_posts")
+    def publish_post(self, publish_notes: str = ""):
+        """Publish this post."""
+        self.status = 'published'
+        self.published_at = timezone.now()
+        self.save()
+        return {"status": "published", "published_at": self.published_at, "notes": publish_notes}
 
-    @property
-    def reading_time(self):
-        """Estimate reading time in minutes."""
-        words_per_minute = 200
+    @business_logic(category="workflow")
+    def archive_post(self, archive_reason: str = "Manual archival"):
+        """Archive this post."""
+        self.status = 'archived'
+        self.save()
+        return {"status": "archived", "reason": archive_reason}
+
+    @custom_mutation_name("addTagToPost")
+    def add_tag(self, tag_id: int):
+        """Add a tag to this post."""
+        try:
+            tag = Tag.objects.get(id=tag_id)
+            self.tags.add(tag)
+            return {"success": True, "tag_name": tag.name}
+        except Tag.DoesNotExist:
+            return {"success": False, "error": "Tag not found"}
+
+    def calculate_reading_time(self):
+        """Calculate estimated reading time in minutes."""
         word_count = len(self.content.split())
-        return max(1, round(word_count / words_per_minute))
+        reading_time = max(1, word_count // 200)  # Assume 200 words per minute
+        return reading_time
 
 
 class Comment(models.Model):
-    """
-    Blog comment model with a recursive relationship.
-    Tests recursive relationships and timestamp fields.
-    """
-    post = models.ForeignKey(
-        Post,
-        on_delete=models.CASCADE,
-        related_name="comments",
-    )
-    author = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        related_name="comments"
-    )
-    parent = models.ForeignKey(
-        "self",
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name="replies"
-    )
-    content = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_approved = models.BooleanField(default=False)
-    tags = models.ManyToManyField(
-        Tag,
-        related_name="comments",
-        blank=True,
-        verbose_name="Étiquettes"
-    )
-    
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments', verbose_name="Article")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
+    content = models.TextField("Contenu")
+    is_approved = models.BooleanField("Approuvé", default=False)
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+    tags = models.ManyToManyField(Tag, blank=True, verbose_name="Tags")
+
     class Meta:
-        ordering = ["created_at"]
+        verbose_name = "Commentaire"
+        verbose_name_plural = "Commentaires"
 
     def __str__(self):
         return f"Comment by {self.author.username} on {self.post.title}"
 
-    @property
-    def reply_count(self):
-        """Get the number of replies to this comment."""
-        return self.replies.count()
+    @business_logic(category="moderation", requires_permission="can_moderate_comments")
+    def approve_comment(self, approved_by: str, moderation_notes: str = ""):
+        """Approve this comment."""
+        self.is_approved = True
+        self.save()
+        return {
+            "status": "approved",
+            "approved_by": approved_by,
+            "notes": moderation_notes,
+            "approved_at": timezone.now()
+        }
+
+    def reject_comment(self, rejection_reason: str):
+        """Reject this comment by deleting it."""
+        self.delete()
+        return {"status": "rejected", "reason": rejection_reason}
 
 
-class Bill(models.Model):
-    ref = models.CharField(max_length=100)
-    client = models.ForeignKey("Client", on_delete=models.CASCADE, related_name="bills")
-    
-class Client(models.Model):
-    charfield = models.CharField(max_length=100)
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name="Utilisateur")
+    bio = models.TextField("Biographie", blank=True)
+    avatar = models.URLField("Avatar", blank=True)
+    website = models.URLField("Site web", blank=True)
+    is_verified = models.BooleanField("Vérifié", default=False)
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Profil"
+        verbose_name_plural = "Profils"
+
+    def __str__(self):
+        return f"Profile of {self.user.username}"
+
+    @business_logic(category="verification", requires_permission="can_verify_profiles")
+    def verify_profile(self, verified_by: str, verification_notes: str = ""):
+        """Verify this user profile."""
+        self.is_verified = True
+        self.save()
+        return {
+            "status": "verified",
+            "verified_by": verified_by,
+            "notes": verification_notes,
+            "verified_at": timezone.now()
+        }
+
+    def update_bio(self, new_bio: str):
+        """Update user bio."""
+        self.bio = new_bio
+        self.save()
+        return self.bio
 

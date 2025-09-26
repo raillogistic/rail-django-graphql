@@ -1,21 +1,196 @@
 # Advanced Examples
 
-This guide provides comprehensive examples of advanced usage patterns and real-world scenarios for the Django GraphQL Auto-Generation Library, including configurable nested relationships and enhanced quote handling.
+This guide provides comprehensive examples of advanced usage patterns and real-world scenarios for the Django GraphQL Auto-Generation Library, including method mutations, bulk operations, configurable nested relationships, and advanced filtering capabilities.
 
 ## 📚 Table of Contents
 
+- [Method Mutations Examples](#method-mutations-examples)
+- [Bulk Operations Examples](#bulk-operations-examples)
 - [Configurable Nested Relationships](#configurable-nested-relationships)
-- [Enhanced Quote Handling Examples](#enhanced-quote-handling-examples)
+- [Advanced Filtering Scenarios](#advanced-filtering-scenarios)
 - [Complex E-commerce Platform](#complex-e-commerce-platform)
 - [Multi-tenant SaaS Application](#multi-tenant-saas-application)
 - [Content Management System](#content-management-system)
 - [Social Media Platform](#social-media-platform)
 - [Real-time Analytics Dashboard](#real-time-analytics-dashboard)
 - [File Management System](#file-management-system)
-- [Advanced Filtering Scenarios](#advanced-filtering-scenarios)
 - [Performance Optimization Examples](#performance-optimization-examples)
 - [Custom Scalar Implementations](#custom-scalar-implementations)
 - [Complex Inheritance Patterns](#complex-inheritance-patterns)
+
+## 🔧 Method Mutations Examples
+
+### E-commerce Order Processing
+
+```python
+# models.py
+class Order(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    order_number = models.CharField(max_length=20, unique=True, verbose_name="Numéro de commande")
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Client")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Statut de la commande")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Montant total")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    
+    def confirm_order(self):
+        """Confirmer la commande (Confirm the order)"""
+        if self.status == 'pending':
+            self.status = 'confirmed'
+            self.save()
+            # Send confirmation email logic here
+        return self
+    
+    def ship_order(self, tracking_number=None):
+        """Expédier la commande (Ship the order)"""
+        if self.status == 'confirmed':
+            self.status = 'shipped'
+            if tracking_number:
+                self.tracking_number = tracking_number
+            self.save()
+        return self
+    
+    def cancel_order(self, reason=None):
+        """Annuler la commande (Cancel the order)"""
+        if self.status in ['pending', 'confirmed']:
+            self.status = 'cancelled'
+            self.cancellation_reason = reason
+            self.save()
+        return self
+```
+
+#### Method Mutation Usage
+
+```graphql
+# Confirm an order
+mutation ConfirmOrder($orderId: ID!) {
+  orderConfirmOrder(input: { id: $orderId }) {
+    ok
+    order {
+      id
+      orderNumber
+      status
+    }
+    errors
+  }
+}
+
+# Ship an order with tracking
+mutation ShipOrder($orderId: ID!, $trackingNumber: String) {
+  orderShipOrder(input: { 
+    id: $orderId
+    trackingNumber: $trackingNumber 
+  }) {
+    ok
+    order {
+      id
+      status
+      trackingNumber
+    }
+    errors
+  }
+}
+```
+
+## 📦 Bulk Operations Examples
+
+### Content Management Bulk Operations
+
+```python
+# models.py
+class Article(models.Model):
+    title = models.CharField(max_length=200, verbose_name="Titre de l'article")
+    content = models.TextField(verbose_name="Contenu de l'article")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
+    published = models.BooleanField(default=False, verbose_name="Publié")
+    featured = models.BooleanField(default=False, verbose_name="Mis en avant")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+```
+
+#### Bulk Content Operations
+
+```graphql
+# Bulk create articles
+mutation BulkCreateArticles($input: BulkCreateArticleInput!) {
+  bulkCreateArticle(input: $input) {
+    ok
+    objects {
+      id
+      title
+      author {
+        username
+      }
+    }
+    errors
+  }
+}
+
+# Variables:
+{
+  "input": {
+    "objects": [
+      {
+        "title": "Getting Started with GraphQL",
+        "content": "GraphQL is a query language...",
+        "authorId": 1,
+        "published": false
+      },
+      {
+        "title": "Advanced Django Patterns",
+        "content": "In this article we explore...",
+        "authorId": 2,
+        "published": true
+      }
+    ]
+  }
+}
+
+# Bulk update articles to featured
+mutation BulkFeatureArticles($input: BulkUpdateArticleInput!) {
+  bulkUpdateArticle(input: $input) {
+    ok
+    objects {
+      id
+      title
+      featured
+    }
+    errors
+  }
+}
+
+# Variables:
+{
+  "input": {
+    "objects": [
+      { "id": "1", "featured": true },
+      { "id": "2", "featured": true },
+      { "id": "3", "featured": true }
+    ]
+  }
+}
+
+# Bulk delete articles
+mutation BulkDeleteArticles($input: BulkDeleteArticleInput!) {
+  bulkDeleteArticle(input: $input) {
+    ok
+    deletedIds
+    errors
+  }
+}
+
+# Variables:
+{
+  "input": {
+    "ids": ["10", "11", "12"]
+  }
+}
+```
 
 ## ⚙️ Configurable Nested Relationships
 

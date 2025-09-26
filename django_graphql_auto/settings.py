@@ -194,15 +194,14 @@ DJANGO_GRAPHQL_AUTO = {
         'use_relay': False,  # Disable Relay connections for direct list access
     },
     'MUTATION_SETTINGS': {
-        # Global setting: disable nested relations by default, use [ID] for unmentioned fields
-        # 'enable_nested_relations': False,
-        
-        # Per-model overrides
+        'enable_method_mutations': True,  # Enable method-to-mutation conversion
+        'enable_bulk_operations': True,  # Enable bulk create, update, delete operations
+        'bulk_batch_size': 100,  # Maximum number of items in bulk operations
+        # Per-model nested relations configuration
         'nested_relations_config': {
-            # 'Comment': False,  # Disable all nested relations for comments
+            # Add model-specific nested relation settings here
         },
-        
-        # Per-field granular control
+        # Per-field nested relations configuration  
         'nested_field_config': {
             "Post":{
                 "category":True,

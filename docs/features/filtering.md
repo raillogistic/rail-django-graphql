@@ -32,12 +32,12 @@ For each model, the system generates a corresponding filter input type:
 ```python
 # Django Model
 class Post(models.Model):
-    title = models.CharField(max_length=200)
-    content = models.TextField()
-    published = models.BooleanField(default=False)
-    view_count = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    title = models.CharField(max_length=200, verbose_name="Titre du post")
+    content = models.TextField(verbose_name="Contenu du post")
+    published = models.BooleanField(default=False, verbose_name="Publié")
+    view_count = models.IntegerField(default=0, verbose_name="Nombre de vues")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
 
 # Auto-Generated Filter Input
 class PostFilterInput(graphene.InputObjectType):

@@ -51,19 +51,19 @@ class Post(models.Model):
         ('archived', 'Archived'),
     ]
     
-    title = models.CharField(max_length=200)
-    slug = models.SlugField(max_length=200, unique=True, blank=True)
-    content = models.TextField()
-    excerpt = models.TextField(max_length=300, blank=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='posts')
-    tags = models.ManyToManyField(Tag, blank=True, related_name='posts')
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
-    featured_image = models.ImageField(upload_to='posts/', blank=True, null=True)
-    view_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    published_at = models.DateTimeField(blank=True, null=True)
+    title = models.CharField(max_length=200, verbose_name="Titre du post")
+    slug = models.SlugField(max_length=200, unique=True, blank=True, verbose_name="Slug du post")
+    content = models.TextField(verbose_name="Contenu du post")
+    excerpt = models.TextField(max_length=300, blank=True, verbose_name="Extrait du post")
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts', verbose_name="Auteur du post")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='posts', verbose_name="Catégorie du post")
+    tags = models.ManyToManyField(Tag, blank=True, related_name='posts', verbose_name="Tags du post")
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft', verbose_name="Statut du post")
+    featured_image = models.ImageField(upload_to='posts/', blank=True, null=True, verbose_name="Image mise en avant")
+    view_count = models.PositiveIntegerField(default=0, verbose_name="Nombre de vues")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Date de mise à jour")
+    published_at = models.DateTimeField(blank=True, null=True, verbose_name="Date de publication")
     
     class Meta:
         ordering = ['-created_at']
@@ -75,6 +75,27 @@ class Post(models.Model):
     
     def __str__(self):
         return self.title
+    
+    # Custom methods that will become GraphQL mutations
+    def publish_post(self):
+        """Publier le post (Publish the post)"""
+        from django.utils import timezone
+        self.status = 'published'
+        self.published_at = timezone.now()
+        self.save()
+        return self
+    
+    def archive_post(self):
+        """Archiver le post (Archive the post)"""
+        self.status = 'archived'
+        self.save()
+        return self
+    
+    def increment_view_count(self):
+        """Incrémenter le compteur de vues (Increment view count)"""
+        self.view_count += 1
+        self.save()
+        return self
 
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
@@ -252,7 +273,129 @@ mutation CreatePost($input: CreatePostInput!) {
 }
 ```
 
-#### Publish a Post
+#### Publish a Post Using Method Mutation
+
+```graphql
+mutation PublishPost($id: ID!) {
+  postPublishPost(input: { id: $id }) {
+    ok
+    post {
+      id
+      title
+      status
+      publishedAt
+    }
+    errors
+  }
+}
+```
+
+#### Archive a Post Using Method Mutation
+
+```graphql
+mutation ArchivePost($id: ID!) {
+  postArchivePost(input: { id: $id }) {
+    ok
+    post {
+      id
+      title
+      status
+    }
+    errors
+  }
+}
+```
+
+#### Increment View Count Using Method Mutation
+
+```graphql
+mutation IncrementViewCount($id: ID!) {
+  postIncrementViewCount(input: { id: $id }) {
+    ok
+    post {
+      id
+      title
+      viewCount
+    }
+    errors
+  }
+}
+```
+
+#### Bulk Create Posts
+
+```graphql
+mutation BulkCreatePosts($input: BulkCreatePostInput!) {
+  bulkCreatePost(input: $input) {
+    ok
+    objects {
+      id
+      title
+      status
+      author {
+        username
+      }
+    }
+    errors
+  }
+}
+
+# Variables:
+{
+  "input": {
+    "objects": [
+      {
+        "title": "First Bulk Post",
+        "content": "Content for first post...",
+        "authorId": 1,
+        "categoryId": 1,
+        "status": "draft"
+      },
+      {
+        "title": "Second Bulk Post", 
+        "content": "Content for second post...",
+        "authorId": 1,
+        "categoryId": 2,
+        "status": "draft"
+      }
+    ]
+  }
+}
+```
+
+#### Bulk Update Posts
+
+```graphql
+mutation BulkUpdatePosts($input: BulkUpdatePostInput!) {
+  bulkUpdatePost(input: $input) {
+    ok
+    objects {
+      id
+      title
+      status
+    }
+    errors
+  }
+}
+
+# Variables:
+{
+  "input": {
+    "objects": [
+      {
+        "id": "1",
+        "status": "published"
+      },
+      {
+        "id": "2", 
+        "status": "published"
+      }
+    ]
+  }
+}
+```
+
+#### Original Update Post Mutation
 
 ```graphql
 mutation PublishPost($id: ID!) {

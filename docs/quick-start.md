@@ -37,6 +37,12 @@ DJANGO_GRAPHQL_AUTO = {
     'AUTO_GENERATE': True,
     'ENABLE_FILTERING': True,
     'ENABLE_PAGINATION': True,
+    'MUTATION_SETTINGS': {
+        'enable_method_mutations': True,  # Enable method mutations
+        'enable_bulk_operations': True,   # Enable bulk operations
+        'bulk_batch_size': 100,          # Batch size for bulk operations
+        'enable_nested_relations': True,  # Enable nested operations
+    }
 }
 
 # CORS (for frontend integration)
@@ -85,6 +91,19 @@ class Post(models.Model):
 
     def __str__(self):
         return self.title
+    
+    # Custom methods that will become GraphQL mutations
+    def publish_post(self):
+        """Publier le post (Publish the post)"""
+        self.published = True
+        self.save()
+        return self
+    
+    def archive_post(self):
+        """Archiver le post (Archive the post)"""
+        self.published = False
+        self.save()
+        return self
 ```
 
 ## 5. Generate Schema
@@ -168,6 +187,49 @@ mutation {
 }
 ```
 
+### Use Method Mutations
+```graphql
+mutation {
+  postPublishPost(input: {
+    id: "1"  # ID of the post to publish
+  }) {
+    ok
+    post {
+      id
+      title
+      published
+    }
+    errors
+  }
+}
+```
+
+### Bulk Create Posts
+```graphql
+mutation {
+  bulkCreatePost(input: {
+    objects: [
+      {
+        title: "Post 1"
+        content: "Content for post 1"
+        authorId: "1"
+      },
+      {
+        title: "Post 2"
+        content: "Content for post 2"
+        authorId: "1"
+      }
+    ]
+  }) {
+    ok
+    objects {
+      id
+      title
+    }
+    errors
+  }
+}
+```
 ### Query with Filtering
 ```graphql
 query {
@@ -191,6 +253,8 @@ query {
 You now have a fully functional GraphQL API with:
 - ✅ Automatic schema generation
 - ✅ CRUD operations for all models
+- ✅ Method mutations for custom model methods
+- ✅ Bulk operations for efficient data handling
 - ✅ Relationship handling
 - ✅ Filtering and pagination
 - ✅ GraphiQL interface for testing

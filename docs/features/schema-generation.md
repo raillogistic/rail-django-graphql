@@ -9,6 +9,8 @@ This document explains how the Django GraphQL Auto-Generation Library automatica
 - [Type Generation](#type-generation)
 - [Query Generation](#query-generation)
 - [Mutation Generation](#mutation-generation)
+- [Method Mutations](#method-mutations)
+- [Bulk Operations](#bulk-operations)
 - [Schema Assembly](#schema-assembly)
 - [Configuration Options](#configuration-options)
 - [Advanced Features](#advanced-features)
@@ -425,6 +427,189 @@ sanitized_data = {
         name
       }
     }
+    errors
+  }
+}
+```
+
+## 🎯 Method Mutations
+
+### Method Mutation Generation
+
+The system automatically generates GraphQL mutations for Django model methods decorated with `@graphql_mutation`:
+
+```python
+from django_graphql_auto.decorators import graphql_mutation
+
+class Order(models.Model):
+    status = models.CharField(max_length=20, default='pending', verbose_name="Statut de la commande")
+    total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Total de la commande")
+    customer = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Client")
+    
+    @graphql_mutation
+    def confirm_order(self):
+        """Confirmer la commande et mettre à jour le statut."""
+        if self.status == 'pending':
+            self.status = 'confirmed'
+            self.save()
+            return True
+        return False
+    
+    @graphql_mutation
+    def cancel_order(self, reason: str = "No reason provided"):
+        """Annuler la commande avec une raison."""
+        if self.status in ['pending', 'confirmed']:
+            self.status = 'cancelled'
+            self.cancellation_reason = reason
+            self.save()
+            return True
+        return False
+```
+
+### Generated Method Mutations
+
+```graphql
+type Mutation {
+  # Method mutations for Order model
+  orderConfirmOrder(id: ID!): OrderConfirmOrderPayload
+  orderCancelOrder(id: ID!, reason: String): OrderCancelOrderPayload
+}
+
+type OrderConfirmOrderPayload {
+  ok: Boolean!
+  order: OrderType
+  result: Boolean  # Method return value
+  errors: [String]
+}
+
+type OrderCancelOrderPayload {
+  ok: Boolean!
+  order: OrderType
+  result: Boolean  # Method return value
+  errors: [String]
+}
+```
+
+### Method Mutation Usage
+
+```graphql
+mutation ConfirmOrder($orderId: ID!) {
+  orderConfirmOrder(id: $orderId) {
+    ok
+    order {
+      id
+      status
+    }
+    result
+    errors
+  }
+}
+
+mutation CancelOrder($orderId: ID!, $reason: String!) {
+  orderCancelOrder(id: $orderId, reason: $reason) {
+    ok
+    order {
+      id
+      status
+      cancellationReason
+    }
+    result
+    errors
+  }
+}
+```
+
+## 📦 Bulk Operations
+
+### Bulk Operation Generation
+
+The system automatically generates bulk operations for efficient batch processing:
+
+```python
+# Configuration for bulk operations
+DJANGO_GRAPHQL_AUTO = {
+    'MUTATION_SETTINGS': {
+        'enable_bulk_operations': True,
+        'bulk_batch_size': 100,
+        'bulk_max_objects': 1000,
+    }
+}
+```
+
+### Generated Bulk Mutations
+
+```graphql
+type Mutation {
+  # Bulk operations for Post model
+  bulkCreatePost(input: BulkCreatePostInput!): BulkCreatePostPayload
+  bulkUpdatePost(input: BulkUpdatePostInput!): BulkUpdatePostPayload
+  bulkDeletePost(input: BulkDeletePostInput!): BulkDeletePostPayload
+}
+
+input BulkCreatePostInput {
+  objects: [CreatePostInput!]!
+}
+
+input BulkUpdatePostInput {
+  objects: [UpdatePostInput!]!
+}
+
+input BulkDeletePostInput {
+  ids: [ID!]!
+}
+
+type BulkCreatePostPayload {
+  ok: Boolean!
+  objects: [PostType]
+  errors: [String]
+}
+
+type BulkUpdatePostPayload {
+  ok: Boolean!
+  objects: [PostType]
+  errors: [String]
+}
+
+type BulkDeletePostPayload {
+  ok: Boolean!
+  deletedIds: [ID]
+  errors: [String]
+}
+```
+
+### Bulk Operation Usage
+
+```graphql
+mutation BulkCreatePosts($input: BulkCreatePostInput!) {
+  bulkCreatePost(input: $input) {
+    ok
+    objects {
+      id
+      title
+      author {
+        username
+      }
+    }
+    errors
+  }
+}
+
+mutation BulkUpdatePosts($input: BulkUpdatePostInput!) {
+  bulkUpdatePost(input: $input) {
+    ok
+    objects {
+      id
+      title
+      published
+    }
+    errors
+  }
+}
+
+mutation BulkDeletePosts($input: BulkDeletePostInput!) {
+  bulkDeletePost(input: $input) {
+    ok
+    deletedIds
     errors
   }
 }
