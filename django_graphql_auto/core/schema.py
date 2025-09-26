@@ -186,20 +186,55 @@ class SchemaBuilder:
                 
                 logger.info(f"After generation - Query fields: {len(self._query_fields)}, Mutation fields: {len(self._mutation_fields)}")
 
-                # Create Query type
+                # Create Query type with security extensions
                 query_attrs = {
                     'debug': graphene.Field(DjangoDebug, name='_debug')
                 }
                 query_attrs.update(self._query_fields)
+                
+                # Add security-related queries
+                try:
+                    from ..extensions.auth import MeQuery
+                    from ..extensions.permissions import PermissionQuery
+                    from ..extensions.validation import ValidationQuery
+                    from ..extensions.rate_limiting import SecurityQuery
+                    
+                    # Merge security queries
+                    for query_class in [MeQuery, PermissionQuery, ValidationQuery, SecurityQuery]:
+                        for field_name, field in query_class._meta.fields.items():
+                            query_attrs[field_name] = field
+                    
+                    logger.info("Security extensions integrated into schema")
+                except ImportError as e:
+                    logger.warning(f"Could not import security extensions: {e}")
+                
                 query_type = type('Query', (graphene.ObjectType,), query_attrs)
 
                 # Create Mutation type if there are mutations
                 mutation_type = None
                 logger.info(f"Checking mutation fields: {len(self._mutation_fields)} mutations found")
-                if self._mutation_fields:
-                    logger.info(f"Creating Mutation type with fields: {list(self._mutation_fields.keys())}")
-                    mutation_attrs = self._mutation_fields.copy()
-                    mutation_type = type('Mutation', (graphene.ObjectType,), mutation_attrs)
+                
+                # Add security-related mutations
+                security_mutations = {}
+                try:
+                    from ..extensions.auth import LoginMutation, RegisterMutation, RefreshTokenMutation, LogoutMutation
+                    
+                    security_mutations.update({
+                        'login': LoginMutation.Field(),
+                        'register': RegisterMutation.Field(),
+                        'refresh_token': RefreshTokenMutation.Field(),
+                        'logout': LogoutMutation.Field(),
+                    })
+                    logger.info("Security mutations integrated into schema")
+                except ImportError as e:
+                    logger.warning(f"Could not import security mutations: {e}")
+                
+                # Combine all mutations
+                all_mutations = {**self._mutation_fields, **security_mutations}
+                
+                if all_mutations:
+                    logger.info(f"Creating Mutation type with fields: {list(all_mutations.keys())}")
+                    mutation_type = type('Mutation', (graphene.ObjectType,), all_mutations)
                 else:
                     logger.info("No mutations found, creating dummy mutation")
                     # Create dummy mutation to avoid GraphQL error
@@ -217,12 +252,25 @@ class SchemaBuilder:
                     }
                     mutation_type = type('Mutation', (graphene.ObjectType,), mutation_attrs)
 
-                # Create Schema
+                # Create Schema with security middleware
+                middleware = []
+                try:
+                    from ..extensions.rate_limiting import GraphQLSecurityMiddleware
+                    middleware.append(GraphQLSecurityMiddleware())
+                    logger.info("Security middleware integrated into schema")
+                except ImportError as e:
+                    logger.warning(f"Could not import security middleware: {e}")
+                
+                # Note: Graphene Schema doesn't support middleware parameter directly
+                # Middleware should be applied at the GraphQL execution level
                 self._schema = graphene.Schema(
                     query=query_type,
                     mutation=mutation_type,
                     auto_camelcase=self.settings.auto_camelcase
                 )
+                
+                # Store middleware for later use in execution
+                self._middleware = middleware
 
                 # Increment schema version
                 self._schema_version += 1

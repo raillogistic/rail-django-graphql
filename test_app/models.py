@@ -173,3 +173,10 @@ class Profile(models.Model):
         self.save()
         return self.bio
 
+
+class Client(models.Model):
+    raison = models.CharField("Nom", max_length=255)
+    @mutation
+    
+    def ppppp(self):
+        return self.raison
