@@ -95,9 +95,9 @@ class QueryGenerator:
                     queryset = self.filter_generator.apply_complex_filters(queryset, filters)
 
                 # Apply basic filtering
-                basic_filters = {k: v for k, v in kwargs.items() if k not in ['filters', 'order_by', 'offset', 'limit']}
+                basic_filters = {k: v for k, v in kwargs.items() if k not in ['filters', 'order_by', 'page', 'per_page']}
                 if basic_filters and filter_class:
-                    filterset = filter_class(basic_filters, queryset=queryset)
+                    filterset = filter_class(basic_filters, queryset)
                     queryset = filterset.qs
 
                 # Apply ordering
@@ -137,6 +137,14 @@ class QueryGenerator:
                             field_type = graphene.Boolean
                         elif 'Date' in field.__class__.__name__:
                             field_type = graphene.Date
+                    
+                    # Handle ModelMultipleChoiceFilter for __in filters
+                    if 'ModelMultipleChoiceFilter' in field.__class__.__name__ or name.endswith('__in'):
+                        # For __in filters, use List of appropriate type
+                        if 'Number' in field.__class__.__name__ or 'Integer' in field.__class__.__name__:
+                            field_type = graphene.List(graphene.Float)
+                        else:
+                            field_type = graphene.List(graphene.String)
                     
                     arguments[name] = graphene.Argument(
                         field_type,
@@ -181,19 +189,50 @@ class QueryGenerator:
             has_next_page = graphene.Boolean(description="Whether there is a next page")
             has_previous_page = graphene.Boolean(description="Whether there is a previous page")
 
-        # Create a connection type for the paginated results
-        class PaginatedConnection(graphene.ObjectType):
-            items = graphene.List(model_type, description=f"List of {model_name} instances")
-            page_info = graphene.Field(PaginationInfo, description="Pagination metadata")
+        # Create a model-specific connection type for the paginated results
+        connection_name = f"{model.__name__}PaginatedConnection"
+        PaginatedConnection = type(connection_name, (graphene.ObjectType,), {
+            'items': graphene.List(model_type, description=f"List of {model_name} instances"),
+            'page_info': graphene.Field(PaginationInfo, description="Pagination metadata")
+        })
 
         def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> PaginatedConnection:
             queryset = model.objects.all()
             
-            # Apply filtering
-            filter_class = self.type_generator.generate_filter_type(model)
-            if filter_class and kwargs:
-                filterset = filter_class(kwargs, queryset=queryset)
-                queryset = filterset.qs
+            # Apply advanced filtering (same as list queries)
+            filters = kwargs.get('filters')
+            if filters:
+                queryset = self.filter_generator.apply_complex_filters(queryset, filters)
+
+            # Apply basic filtering (same as list queries)
+            basic_filters = {k: v for k, v in kwargs.items() if k not in ['filters', 'order_by', 'page', 'per_page']}
+            filter_class = self.filter_generator.generate_filter_set(model)
+            if basic_filters and filter_class:
+                filterset = filter_class(basic_filters, queryset)
+                if filterset.is_valid():
+                    queryset = filterset.qs
+                else:
+                    # If filterset is invalid, return empty result
+                    class EmptyPaginationInfo:
+                        def __init__(self):
+                            self.total_count = 0
+                            self.page_count = 0
+                            self.current_page = 1
+                            self.per_page = per_page
+                            self.has_next_page = False
+                            self.has_previous_page = False
+                    
+                    class EmptyPaginatedResult:
+                        def __init__(self):
+                            self.items = []
+                            self.page_info = EmptyPaginationInfo()
+                    
+                    return EmptyPaginatedResult()
+
+            # Apply ordering (same as list queries)
+            order_by = kwargs.get('order_by')
+            if order_by:
+                queryset = queryset.order_by(*order_by)
 
             # Calculate pagination values
             page = kwargs.get('page', 1)
@@ -219,7 +258,13 @@ class QueryGenerator:
                 has_previous_page=page > 1
             )
 
-            return PaginatedConnection(items=items, page_info=page_info)
+            # Return a simple object with the required attributes
+            class PaginatedResult:
+                def __init__(self, items, page_info):
+                    self.items = items
+                    self.page_info = page_info
+            
+            return PaginatedResult(items=items, page_info=page_info)
 
         # Define arguments for the query
         arguments = {
@@ -230,13 +275,48 @@ class QueryGenerator:
             )
         }
 
-        # Add filter arguments if available
-        filter_class = self.type_generator.generate_filter_type(model)
+        # Add complex filtering argument (same as list queries)
+        filter_class = self.filter_generator.generate_filter_set(model)
+        complex_filter_input = self.filter_generator.generate_complex_filter_input(model)
+        
+        arguments['filters'] = graphene.Argument(
+            complex_filter_input,
+            description="Advanced filtering with AND, OR, NOT operations"
+        )
+
+        # Add basic filtering arguments if filter class is available (same as list queries)
         if filter_class:
             for name, field in filter_class.base_filters.items():
+                field_type = graphene.String  # Default to String
+                
+                # Map filter types to GraphQL types (same logic as list queries)
+                if hasattr(field, 'field_class'):
+                    if 'Number' in field.__class__.__name__ or 'Integer' in field.__class__.__name__:
+                        field_type = graphene.Float
+                    elif 'Boolean' in field.__class__.__name__:
+                        field_type = graphene.Boolean
+                    elif 'Date' in field.__class__.__name__:
+                        field_type = graphene.Date
+                
+                # Handle ModelMultipleChoiceFilter for __in filters
+                if 'ModelMultipleChoiceFilter' in field.__class__.__name__ or name.endswith('__in'):
+                    # For __in filters, use List of appropriate type
+                    if 'Number' in field.__class__.__name__ or 'Integer' in field.__class__.__name__:
+                        field_type = graphene.List(graphene.Float)
+                    else:
+                        field_type = graphene.List(graphene.String)
+                
                 arguments[name] = graphene.Argument(
-                    self.type_generator.FIELD_TYPE_MAP.get(type(field), graphene.String)
+                    field_type,
+                    description=getattr(field, 'help_text', f'Filter by {name}')
                 )
+
+        # Add ordering arguments (same as list queries)
+        if self.settings.enable_ordering:
+            arguments['order_by'] = graphene.List(
+                graphene.String,
+                description="Fields to order by (prefix with - for descending)"
+            )
 
         return graphene.Field(
             PaginatedConnection,
@@ -264,7 +344,7 @@ class QueryGenerator:
         def filtered_resolver(root: Any, info: graphene.ResolveInfo, **kwargs):
             result = original_resolver(root, info, **kwargs)
             if isinstance(result, models.QuerySet):
-                filterset = filter_class(kwargs, queryset=result)
+                filterset = filter_class(kwargs, result)
                 return filterset.qs
             return result
 

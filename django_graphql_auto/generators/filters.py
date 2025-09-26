@@ -108,7 +108,7 @@ class AdvancedFilterGenerator:
         elif hasattr(field, 'choices') and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
-            filters.update(self._generate_foreign_key_filters(field_name))
+            filters.update(self._generate_foreign_key_filters(field_name, field.related_model))
 
         return filters
 
@@ -243,19 +243,25 @@ class AdvancedFilterGenerator:
             ),
         }
 
-    def _generate_foreign_key_filters(self, field_name: str) -> Dict[str, NumberFilter]:
+    def _generate_foreign_key_filters(self, field_name: str, related_model: Type[models.Model] = None) -> Dict[str, NumberFilter]:
         """Generate foreign key filters: exact, in."""
-        return {
+        filters = {
             f'{field_name}': NumberFilter(
                 field_name=field_name,
                 help_text=f'Filter by {field_name} ID'
             ),
-            f'{field_name}__in': django_filters.ModelMultipleChoiceFilter(
+        }
+        
+        # Only add ModelMultipleChoiceFilter if we have the related model
+        if related_model:
+            filters[f'{field_name}__in'] = django_filters.ModelMultipleChoiceFilter(
                 field_name=field_name,
+                queryset=related_model.objects.all(),
                 to_field_name='pk',
                 help_text=f'Filter by multiple {field_name} IDs'
-            ),
-        }
+            )
+        
+        return filters
 
     def _get_basic_filter_lookups(self, field: models.Field) -> List[str]:
         """

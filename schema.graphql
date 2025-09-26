@@ -47,13 +47,13 @@ type Query {
     user: Float
 
     """Filter by user__in"""
-    user__in: String
+    user__in: [String]
 
     """Filter by content_type"""
     content_type: Float
 
     """Filter by content_type__in"""
-    content_type__in: String
+    content_type__in: [String]
 
     """Filter by object_id"""
     object_id: String
@@ -150,61 +150,136 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
-    action_time: String
-    action_time__in: String
-    action_time__isnull: String
-    action_time__gt: String
-    action_time__gte: String
-    action_time__lt: String
-    action_time__lte: String
-    action_time__range: String
-    action_time__year: String
-    action_time__month: String
-    action_time__day: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: LogEntryComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by action_time"""
+    action_time: Date
+
+    """Filter by action_time__year"""
+    action_time__year: Float
+
+    """Filter by action_time__month"""
+    action_time__month: Float
+
+    """Filter by action_time__day"""
+    action_time__day: Float
+
+    """Filter by action_time__gt"""
+    action_time__gt: Date
+
+    """Filter by action_time__lt"""
+    action_time__lt: Date
+
+    """Filter by user"""
+    user: Float
+
+    """Filter by user__in"""
+    user__in: [String]
+
+    """Filter by content_type"""
+    content_type: Float
+
+    """Filter by content_type__in"""
+    content_type__in: [String]
+
+    """Filter by object_id"""
     object_id: String
-    object_id__in: String
-    object_id__isnull: String
-    object_id__contains: String
+
+    """Filter by object_id__icontains"""
     object_id__icontains: String
+
+    """Filter by object_id__startswith"""
     object_id__startswith: String
-    object_id__istartswith: String
+
+    """Filter by object_id__endswith"""
     object_id__endswith: String
-    object_id__iendswith: String
+
+    """Filter by object_repr"""
     object_repr: String
-    object_repr__in: String
-    object_repr__isnull: String
-    object_repr__contains: String
+
+    """Filter by object_repr__icontains"""
     object_repr__icontains: String
+
+    """Filter by object_repr__startswith"""
     object_repr__startswith: String
-    object_repr__istartswith: String
+
+    """Filter by object_repr__endswith"""
     object_repr__endswith: String
-    object_repr__iendswith: String
+
+    """Filter by action_flag"""
     action_flag: String
-    action_flag__in: String
-    action_flag__isnull: String
-    action_flag__gt: String
-    action_flag__gte: String
-    action_flag__lt: String
-    action_flag__lte: String
-    action_flag__range: String
+
+    """Filter by action_flag__gt"""
+    action_flag__gt: Float
+
+    """Filter by action_flag__gte"""
+    action_flag__gte: Float
+
+    """Filter by action_flag__lt"""
+    action_flag__lt: Float
+
+    """Filter by action_flag__lte"""
+    action_flag__lte: Float
+
+    """Filter by change_message"""
     change_message: String
-    change_message__in: String
-    change_message__isnull: String
-    change_message__contains: String
+
+    """Filter by change_message__icontains"""
     change_message__icontains: String
+
+    """Filter by change_message__startswith"""
     change_message__startswith: String
-    change_message__istartswith: String
+
+    """Filter by change_message__endswith"""
     change_message__endswith: String
-    change_message__iendswith: String
-  ): PaginatedConnection
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by action_time__range"""
+    action_time__range: Date
+
+    """Filter by object_id__contains"""
+    object_id__contains: String
+
+    """Filter by object_id__exact"""
+    object_id__exact: String
+
+    """Filter by object_repr__contains"""
+    object_repr__contains: String
+
+    """Filter by object_repr__exact"""
+    object_repr__exact: String
+
+    """Filter by action_flag__range"""
+    action_flag__range: String
+
+    """Filter by change_message__contains"""
+    change_message__contains: String
+
+    """Filter by change_message__exact"""
+    change_message__exact: String
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): LogEntryPaginatedConnection
 
   """Retrieve a single permission instance"""
   permission(
@@ -248,7 +323,7 @@ type Query {
     content_type: Float
 
     """Filter by content_type__in"""
-    content_type__in: String
+    content_type__in: [String]
 
     """Filter by codename"""
     codename: String
@@ -294,33 +369,73 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: PermissionComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by name"""
     name: String
-    name__in: String
-    name__isnull: String
-    name__contains: String
+
+    """Filter by name__icontains"""
     name__icontains: String
+
+    """Filter by name__startswith"""
     name__startswith: String
-    name__istartswith: String
+
+    """Filter by name__endswith"""
     name__endswith: String
-    name__iendswith: String
+
+    """Filter by content_type"""
+    content_type: Float
+
+    """Filter by content_type__in"""
+    content_type__in: [String]
+
+    """Filter by codename"""
     codename: String
-    codename__in: String
-    codename__isnull: String
-    codename__contains: String
+
+    """Filter by codename__icontains"""
     codename__icontains: String
+
+    """Filter by codename__startswith"""
     codename__startswith: String
-    codename__istartswith: String
+
+    """Filter by codename__endswith"""
     codename__endswith: String
-    codename__iendswith: String
-  ): PaginatedConnection
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by name__contains"""
+    name__contains: String
+
+    """Filter by name__exact"""
+    name__exact: String
+
+    """Filter by codename__contains"""
+    codename__contains: String
+
+    """Filter by codename__exact"""
+    codename__exact: String
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): PermissionPaginatedConnection
 
   """Retrieve a single group instance"""
   group(
@@ -386,24 +501,49 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: GroupComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by name"""
     name: String
-    name__in: String
-    name__isnull: String
-    name__contains: String
+
+    """Filter by name__icontains"""
     name__icontains: String
+
+    """Filter by name__startswith"""
     name__startswith: String
-    name__istartswith: String
+
+    """Filter by name__endswith"""
     name__endswith: String
-    name__iendswith: String
-  ): PaginatedConnection
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by name__contains"""
+    name__contains: String
+
+    """Filter by name__exact"""
+    name__exact: String
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): GroupPaginatedConnection
 
   """Retrieve a single user instance"""
   user(
@@ -417,13 +557,13 @@ type Query {
     filters: UserComplexFilter
 
     """Filter by logentry"""
-    logentry: String
+    logentry: [String]
 
     """Filter by post"""
-    post: String
+    post: [String]
 
     """Filter by comment"""
-    comment: String
+    comment: [String]
 
     """Filter by profile"""
     profile: String
@@ -604,91 +744,184 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: UserComplexFilter
+
+    """Filter by logentry"""
+    logentry: [String]
+
+    """Filter by post"""
+    post: [String]
+
+    """Filter by comment"""
+    comment: [String]
+
+    """Filter by profile"""
+    profile: String
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by password"""
     password: String
-    password__in: String
-    password__isnull: String
-    password__contains: String
+
+    """Filter by password__icontains"""
     password__icontains: String
+
+    """Filter by password__startswith"""
     password__startswith: String
-    password__istartswith: String
+
+    """Filter by password__endswith"""
     password__endswith: String
-    password__iendswith: String
-    last_login: String
-    last_login__in: String
-    last_login__isnull: String
-    last_login__gt: String
-    last_login__gte: String
-    last_login__lt: String
-    last_login__lte: String
-    last_login__range: String
-    last_login__year: String
-    last_login__month: String
-    last_login__day: String
-    is_superuser: String
-    is_superuser__in: String
-    is_superuser__isnull: String
+
+    """Filter by last_login"""
+    last_login: Date
+
+    """Filter by last_login__year"""
+    last_login__year: Float
+
+    """Filter by last_login__month"""
+    last_login__month: Float
+
+    """Filter by last_login__day"""
+    last_login__day: Float
+
+    """Filter by last_login__gt"""
+    last_login__gt: Date
+
+    """Filter by last_login__lt"""
+    last_login__lt: Date
+
+    """Filter by is_superuser"""
+    is_superuser: Boolean
+
+    """Filter by username"""
     username: String
-    username__in: String
-    username__isnull: String
-    username__contains: String
+
+    """Filter by username__icontains"""
     username__icontains: String
+
+    """Filter by username__startswith"""
     username__startswith: String
-    username__istartswith: String
+
+    """Filter by username__endswith"""
     username__endswith: String
-    username__iendswith: String
+
+    """Filter by first_name"""
     first_name: String
-    first_name__in: String
-    first_name__isnull: String
-    first_name__contains: String
+
+    """Filter by first_name__icontains"""
     first_name__icontains: String
+
+    """Filter by first_name__startswith"""
     first_name__startswith: String
-    first_name__istartswith: String
+
+    """Filter by first_name__endswith"""
     first_name__endswith: String
-    first_name__iendswith: String
+
+    """Filter by last_name"""
     last_name: String
-    last_name__in: String
-    last_name__isnull: String
-    last_name__contains: String
+
+    """Filter by last_name__icontains"""
     last_name__icontains: String
+
+    """Filter by last_name__startswith"""
     last_name__startswith: String
-    last_name__istartswith: String
+
+    """Filter by last_name__endswith"""
     last_name__endswith: String
-    last_name__iendswith: String
+
+    """Filter by email"""
     email: String
-    email__in: String
-    email__isnull: String
-    email__contains: String
+
+    """Filter by email__icontains"""
     email__icontains: String
+
+    """Filter by email__startswith"""
     email__startswith: String
-    email__istartswith: String
+
+    """Filter by email__endswith"""
     email__endswith: String
-    email__iendswith: String
-    is_staff: String
-    is_staff__in: String
-    is_staff__isnull: String
-    is_active: String
-    is_active__in: String
-    is_active__isnull: String
-    date_joined: String
-    date_joined__in: String
-    date_joined__isnull: String
-    date_joined__gt: String
-    date_joined__gte: String
-    date_joined__lt: String
-    date_joined__lte: String
-    date_joined__range: String
-    date_joined__year: String
-    date_joined__month: String
-    date_joined__day: String
-  ): PaginatedConnection
+
+    """Filter by is_staff"""
+    is_staff: Boolean
+
+    """Filter by is_active"""
+    is_active: Boolean
+
+    """Filter by date_joined"""
+    date_joined: Date
+
+    """Filter by date_joined__year"""
+    date_joined__year: Float
+
+    """Filter by date_joined__month"""
+    date_joined__month: Float
+
+    """Filter by date_joined__day"""
+    date_joined__day: Float
+
+    """Filter by date_joined__gt"""
+    date_joined__gt: Date
+
+    """Filter by date_joined__lt"""
+    date_joined__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by password__contains"""
+    password__contains: String
+
+    """Filter by password__exact"""
+    password__exact: String
+
+    """Filter by last_login__range"""
+    last_login__range: Date
+
+    """Filter by username__contains"""
+    username__contains: String
+
+    """Filter by username__exact"""
+    username__exact: String
+
+    """Filter by first_name__contains"""
+    first_name__contains: String
+
+    """Filter by first_name__exact"""
+    first_name__exact: String
+
+    """Filter by last_name__contains"""
+    last_name__contains: String
+
+    """Filter by last_name__exact"""
+    last_name__exact: String
+
+    """Filter by email__contains"""
+    email__contains: String
+
+    """Filter by email__exact"""
+    email__exact: String
+
+    """Filter by date_joined__range"""
+    date_joined__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): UserPaginatedConnection
 
   """Retrieve a single contenttype instance"""
   contenttype(
@@ -702,10 +935,10 @@ type Query {
     filters: ContentTypeComplexFilter
 
     """Filter by logentry"""
-    logentry: String
+    logentry: [String]
 
     """Filter by permission"""
-    permission: String
+    permission: [String]
 
     """Filter by id"""
     id: Float
@@ -778,33 +1011,73 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: ContentTypeComplexFilter
+
+    """Filter by logentry"""
+    logentry: [String]
+
+    """Filter by permission"""
+    permission: [String]
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by app_label"""
     app_label: String
-    app_label__in: String
-    app_label__isnull: String
-    app_label__contains: String
+
+    """Filter by app_label__icontains"""
     app_label__icontains: String
+
+    """Filter by app_label__startswith"""
     app_label__startswith: String
-    app_label__istartswith: String
+
+    """Filter by app_label__endswith"""
     app_label__endswith: String
-    app_label__iendswith: String
+
+    """Filter by model"""
     model: String
-    model__in: String
-    model__isnull: String
-    model__contains: String
+
+    """Filter by model__icontains"""
     model__icontains: String
+
+    """Filter by model__startswith"""
     model__startswith: String
-    model__istartswith: String
+
+    """Filter by model__endswith"""
     model__endswith: String
-    model__iendswith: String
-  ): PaginatedConnection
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by app_label__contains"""
+    app_label__contains: String
+
+    """Filter by app_label__exact"""
+    app_label__exact: String
+
+    """Filter by model__contains"""
+    model__contains: String
+
+    """Filter by model__exact"""
+    model__exact: String
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): ContentTypePaginatedConnection
 
   """Retrieve a single session instance"""
   session(
@@ -891,36 +1164,70 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: SessionComplexFilter
+
+    """Filter by session_key"""
     session_key: String
-    session_key__in: String
-    session_key__isnull: String
-    session_key__contains: String
+
+    """Filter by session_key__icontains"""
     session_key__icontains: String
+
+    """Filter by session_key__startswith"""
     session_key__startswith: String
-    session_key__istartswith: String
+
+    """Filter by session_key__endswith"""
     session_key__endswith: String
-    session_key__iendswith: String
+
+    """Filter by session_data"""
     session_data: String
-    session_data__in: String
-    session_data__isnull: String
-    session_data__contains: String
+
+    """Filter by session_data__icontains"""
     session_data__icontains: String
+
+    """Filter by session_data__startswith"""
     session_data__startswith: String
-    session_data__istartswith: String
+
+    """Filter by session_data__endswith"""
     session_data__endswith: String
-    session_data__iendswith: String
-    expire_date: String
-    expire_date__in: String
-    expire_date__isnull: String
-    expire_date__gt: String
-    expire_date__gte: String
-    expire_date__lt: String
-    expire_date__lte: String
-    expire_date__range: String
-    expire_date__year: String
-    expire_date__month: String
-    expire_date__day: String
-  ): PaginatedConnection
+
+    """Filter by expire_date"""
+    expire_date: Date
+
+    """Filter by expire_date__year"""
+    expire_date__year: Float
+
+    """Filter by expire_date__month"""
+    expire_date__month: Float
+
+    """Filter by expire_date__day"""
+    expire_date__day: Float
+
+    """Filter by expire_date__gt"""
+    expire_date__gt: Date
+
+    """Filter by expire_date__lt"""
+    expire_date__lt: Date
+
+    """Filter by session_key__contains"""
+    session_key__contains: String
+
+    """Filter by session_key__exact"""
+    session_key__exact: String
+
+    """Filter by session_data__contains"""
+    session_data__contains: String
+
+    """Filter by session_data__exact"""
+    session_data__exact: String
+
+    """Filter by expire_date__range"""
+    expire_date__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): SessionPaginatedConnection
 
   """Retrieve a single category instance"""
   category(
@@ -934,7 +1241,7 @@ type Query {
     filters: CategoryComplexFilter
 
     """Filter by post"""
-    post: String
+    post: [String]
 
     """Filter by id"""
     id: Float
@@ -1031,47 +1338,94 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: CategoryComplexFilter
+
+    """Filter by post"""
+    post: [String]
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by name"""
     name: String
-    name__in: String
-    name__isnull: String
-    name__contains: String
+
+    """Filter by name__icontains"""
     name__icontains: String
+
+    """Filter by name__startswith"""
     name__startswith: String
-    name__istartswith: String
+
+    """Filter by name__endswith"""
     name__endswith: String
-    name__iendswith: String
+
+    """Filter by description"""
     description: String
-    description__in: String
-    description__isnull: String
-    description__contains: String
+
+    """Filter by description__icontains"""
     description__icontains: String
+
+    """Filter by description__startswith"""
     description__startswith: String
-    description__istartswith: String
+
+    """Filter by description__endswith"""
     description__endswith: String
-    description__iendswith: String
-    is_active: String
-    is_active__in: String
-    is_active__isnull: String
-    created_at: String
-    created_at__in: String
-    created_at__isnull: String
-    created_at__gt: String
-    created_at__gte: String
-    created_at__lt: String
-    created_at__lte: String
-    created_at__range: String
-    created_at__year: String
-    created_at__month: String
-    created_at__day: String
-  ): PaginatedConnection
+
+    """Filter by is_active"""
+    is_active: Boolean
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by name__contains"""
+    name__contains: String
+
+    """Filter by name__exact"""
+    name__exact: String
+
+    """Filter by description__contains"""
+    description__contains: String
+
+    """Filter by description__exact"""
+    description__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): CategoryPaginatedConnection
 
   """Retrieve a single tag instance"""
   tag(
@@ -1176,44 +1530,88 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: TagComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by name"""
     name: String
-    name__in: String
-    name__isnull: String
-    name__contains: String
+
+    """Filter by name__icontains"""
     name__icontains: String
+
+    """Filter by name__startswith"""
     name__startswith: String
-    name__istartswith: String
+
+    """Filter by name__endswith"""
     name__endswith: String
-    name__iendswith: String
+
+    """Filter by color"""
     color: String
-    color__in: String
-    color__isnull: String
-    color__contains: String
+
+    """Filter by color__icontains"""
     color__icontains: String
+
+    """Filter by color__startswith"""
     color__startswith: String
-    color__istartswith: String
+
+    """Filter by color__endswith"""
     color__endswith: String
-    color__iendswith: String
-    created_at: String
-    created_at__in: String
-    created_at__isnull: String
-    created_at__gt: String
-    created_at__gte: String
-    created_at__lt: String
-    created_at__lte: String
-    created_at__range: String
-    created_at__year: String
-    created_at__month: String
-    created_at__day: String
-  ): PaginatedConnection
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by name__contains"""
+    name__contains: String
+
+    """Filter by name__exact"""
+    name__exact: String
+
+    """Filter by color__contains"""
+    color__contains: String
+
+    """Filter by color__exact"""
+    color__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): TagPaginatedConnection
 
   """Retrieve a single post instance"""
   post(
@@ -1227,7 +1625,7 @@ type Query {
     filters: PostComplexFilter
 
     """Filter by comments"""
-    comments: String
+    comments: [String]
 
     """Filter by id"""
     id: Float
@@ -1284,13 +1682,13 @@ type Query {
     author: Float
 
     """Filter by author__in"""
-    author__in: String
+    author__in: [String]
 
     """Filter by category"""
     category: Float
 
     """Filter by category__in"""
-    category__in: String
+    category__in: [String]
 
     """Filter by created_at"""
     created_at: Date
@@ -1393,75 +1791,163 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: PostComplexFilter
+
+    """Filter by comments"""
+    comments: [String]
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by title"""
     title: String
-    title__in: String
-    title__isnull: String
-    title__contains: String
+
+    """Filter by title__icontains"""
     title__icontains: String
+
+    """Filter by title__startswith"""
     title__startswith: String
-    title__istartswith: String
+
+    """Filter by title__endswith"""
     title__endswith: String
-    title__iendswith: String
+
+    """Filter by content"""
     content: String
-    content__in: String
-    content__isnull: String
-    content__contains: String
+
+    """Filter by content__icontains"""
     content__icontains: String
+
+    """Filter by content__startswith"""
     content__startswith: String
-    content__istartswith: String
+
+    """Filter by content__endswith"""
     content__endswith: String
-    content__iendswith: String
+
+    """Filter by status"""
     status: String
-    status__in: String
-    status__isnull: String
-    status__contains: String
+
+    """Filter by status__icontains"""
     status__icontains: String
+
+    """Filter by status__startswith"""
     status__startswith: String
-    status__istartswith: String
+
+    """Filter by status__endswith"""
     status__endswith: String
-    status__iendswith: String
-    created_at: String
-    created_at__in: String
-    created_at__isnull: String
-    created_at__gt: String
-    created_at__gte: String
-    created_at__lt: String
-    created_at__lte: String
-    created_at__range: String
-    created_at__year: String
-    created_at__month: String
-    created_at__day: String
-    updated_at: String
-    updated_at__in: String
-    updated_at__isnull: String
-    updated_at__gt: String
-    updated_at__gte: String
-    updated_at__lt: String
-    updated_at__lte: String
-    updated_at__range: String
-    updated_at__year: String
-    updated_at__month: String
-    updated_at__day: String
-    published_at: String
-    published_at__in: String
-    published_at__isnull: String
-    published_at__gt: String
-    published_at__gte: String
-    published_at__lt: String
-    published_at__lte: String
-    published_at__range: String
-    published_at__year: String
-    published_at__month: String
-    published_at__day: String
-  ): PaginatedConnection
+
+    """Filter by author"""
+    author: Float
+
+    """Filter by author__in"""
+    author__in: [String]
+
+    """Filter by category"""
+    category: Float
+
+    """Filter by category__in"""
+    category__in: [String]
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
+
+    """Filter by updated_at"""
+    updated_at: Date
+
+    """Filter by updated_at__year"""
+    updated_at__year: Float
+
+    """Filter by updated_at__month"""
+    updated_at__month: Float
+
+    """Filter by updated_at__day"""
+    updated_at__day: Float
+
+    """Filter by updated_at__gt"""
+    updated_at__gt: Date
+
+    """Filter by updated_at__lt"""
+    updated_at__lt: Date
+
+    """Filter by published_at"""
+    published_at: Date
+
+    """Filter by published_at__year"""
+    published_at__year: Float
+
+    """Filter by published_at__month"""
+    published_at__month: Float
+
+    """Filter by published_at__day"""
+    published_at__day: Float
+
+    """Filter by published_at__gt"""
+    published_at__gt: Date
+
+    """Filter by published_at__lt"""
+    published_at__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by title__contains"""
+    title__contains: String
+
+    """Filter by title__exact"""
+    title__exact: String
+
+    """Filter by content__contains"""
+    content__contains: String
+
+    """Filter by content__exact"""
+    content__exact: String
+
+    """Filter by status__contains"""
+    status__contains: String
+
+    """Filter by status__exact"""
+    status__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
+
+    """Filter by updated_at__range"""
+    updated_at__range: Date
+
+    """Filter by published_at__range"""
+    published_at__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): PostPaginatedConnection
 
   """Retrieve a single comment instance"""
   comment(
@@ -1493,13 +1979,13 @@ type Query {
     post: Float
 
     """Filter by post__in"""
-    post__in: String
+    post__in: [String]
 
     """Filter by author"""
     author: Float
 
     """Filter by author__in"""
-    author__in: String
+    author__in: [String]
 
     """Filter by content"""
     content: String
@@ -1563,38 +2049,85 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: CommentComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by post"""
+    post: Float
+
+    """Filter by post__in"""
+    post__in: [String]
+
+    """Filter by author"""
+    author: Float
+
+    """Filter by author__in"""
+    author__in: [String]
+
+    """Filter by content"""
     content: String
-    content__in: String
-    content__isnull: String
-    content__contains: String
+
+    """Filter by content__icontains"""
     content__icontains: String
+
+    """Filter by content__startswith"""
     content__startswith: String
-    content__istartswith: String
+
+    """Filter by content__endswith"""
     content__endswith: String
-    content__iendswith: String
-    is_approved: String
-    is_approved__in: String
-    is_approved__isnull: String
-    created_at: String
-    created_at__in: String
-    created_at__isnull: String
-    created_at__gt: String
-    created_at__gte: String
-    created_at__lt: String
-    created_at__lte: String
-    created_at__range: String
-    created_at__year: String
-    created_at__month: String
-    created_at__day: String
-  ): PaginatedConnection
+
+    """Filter by is_approved"""
+    is_approved: Boolean
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by content__contains"""
+    content__contains: String
+
+    """Filter by content__exact"""
+    content__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): CommentPaginatedConnection
 
   """Retrieve a single profile instance"""
   profile(
@@ -1626,7 +2159,7 @@ type Query {
     user: Float
 
     """Filter by user__in"""
-    user__in: String
+    user__in: [String]
 
     """Filter by bio"""
     bio: String
@@ -1726,56 +2259,115 @@ type Query {
 
     """Number of records per page"""
     per_page: Int = 20
-    id: String
-    id__in: String
-    id__isnull: String
-    id__gt: String
-    id__gte: String
-    id__lt: String
-    id__lte: String
-    id__range: String
+
+    """Advanced filtering with AND, OR, NOT operations"""
+    filters: ProfileComplexFilter
+
+    """Filter by id"""
+    id: Float
+
+    """Filter by id__gt"""
+    id__gt: Float
+
+    """Filter by id__gte"""
+    id__gte: Float
+
+    """Filter by id__lt"""
+    id__lt: Float
+
+    """Filter by id__lte"""
+    id__lte: Float
+
+    """Filter by user"""
+    user: Float
+
+    """Filter by user__in"""
+    user__in: [String]
+
+    """Filter by bio"""
     bio: String
-    bio__in: String
-    bio__isnull: String
-    bio__contains: String
+
+    """Filter by bio__icontains"""
     bio__icontains: String
+
+    """Filter by bio__startswith"""
     bio__startswith: String
-    bio__istartswith: String
+
+    """Filter by bio__endswith"""
     bio__endswith: String
-    bio__iendswith: String
+
+    """Filter by avatar"""
     avatar: String
-    avatar__in: String
-    avatar__isnull: String
-    avatar__contains: String
+
+    """Filter by avatar__icontains"""
     avatar__icontains: String
+
+    """Filter by avatar__startswith"""
     avatar__startswith: String
-    avatar__istartswith: String
+
+    """Filter by avatar__endswith"""
     avatar__endswith: String
-    avatar__iendswith: String
+
+    """Filter by website"""
     website: String
-    website__in: String
-    website__isnull: String
-    website__contains: String
+
+    """Filter by website__icontains"""
     website__icontains: String
+
+    """Filter by website__startswith"""
     website__startswith: String
-    website__istartswith: String
+
+    """Filter by website__endswith"""
     website__endswith: String
-    website__iendswith: String
-    is_verified: String
-    is_verified__in: String
-    is_verified__isnull: String
-    created_at: String
-    created_at__in: String
-    created_at__isnull: String
-    created_at__gt: String
-    created_at__gte: String
-    created_at__lt: String
-    created_at__lte: String
-    created_at__range: String
-    created_at__year: String
-    created_at__month: String
-    created_at__day: String
-  ): PaginatedConnection
+
+    """Filter by is_verified"""
+    is_verified: Boolean
+
+    """Filter by created_at"""
+    created_at: Date
+
+    """Filter by created_at__year"""
+    created_at__year: Float
+
+    """Filter by created_at__month"""
+    created_at__month: Float
+
+    """Filter by created_at__day"""
+    created_at__day: Float
+
+    """Filter by created_at__gt"""
+    created_at__gt: Date
+
+    """Filter by created_at__lt"""
+    created_at__lt: Date
+
+    """Filter by id__range"""
+    id__range: String
+
+    """Filter by bio__contains"""
+    bio__contains: String
+
+    """Filter by bio__exact"""
+    bio__exact: String
+
+    """Filter by avatar__contains"""
+    avatar__contains: String
+
+    """Filter by avatar__exact"""
+    avatar__exact: String
+
+    """Filter by website__contains"""
+    website__contains: String
+
+    """Filter by website__exact"""
+    website__exact: String
+
+    """Filter by created_at__range"""
+    created_at__range: Date
+
+    """Fields to order by (prefix with - for descending)"""
+    order_by: [String]
+  ): ProfilePaginatedConnection
   _debug: DjangoDebug
 }
 
@@ -1840,13 +2432,21 @@ type UserType implements Node {
   """
   is_active: Boolean!
   date_joined: DateTime!
-  logentry_set(offset: Int, before: String, after: String, first: Int, last: Int): LogEntryTypeConnection!
-  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
-  comment_set(offset: Int, before: String, after: String, first: Int, last: Int): CommentTypeConnection!
-  profile: ProfileType
 
   """Primary key of the model"""
   pk: ID
+
+  """Related LogEntry objects"""
+  logentry_set: [LogEntryType]
+
+  """Related Post objects"""
+  post_set: [PostType]
+
+  """Related Comment objects"""
+  comment_set: [CommentType]
+
+  """Related Profile objects"""
+  profile: [ProfileType]
 }
 
 """GraphQL type for the Group model."""
@@ -1858,11 +2458,11 @@ type GroupType implements Node {
   """Related Permission objects"""
   permissions: [PermissionType]
 
-  """Related User objects"""
-  user_set: [UserType]
-
   """Primary key of the model"""
   pk: ID
+
+  """Related User objects"""
+  user_set: [UserType]
 }
 
 """GraphQL type for the Permission model."""
@@ -1872,13 +2472,15 @@ type PermissionType implements Node {
   name: String!
   content_type: ContentTypeType!
   codename: String!
-  group_set(offset: Int, before: String, after: String, first: Int, last: Int): GroupTypeConnection!
-
-  """Related User objects"""
-  user_set: [UserType]
 
   """Primary key of the model"""
   pk: ID
+
+  """Related Group objects"""
+  group_set: [GroupType]
+
+  """Related User objects"""
+  user_set: [UserType]
 }
 
 """GraphQL type for the ContentType model."""
@@ -1887,96 +2489,15 @@ type ContentTypeType implements Node {
   id: ID!
   app_label: String!
   model: String!
-  logentry_set(offset: Int, before: String, after: String, first: Int, last: Int): LogEntryTypeConnection!
-  permission_set(offset: Int, before: String, after: String, first: Int, last: Int): PermissionTypeConnection!
 
   """Primary key of the model"""
   pk: ID
-}
 
-type LogEntryTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
+  """Related LogEntry objects"""
+  logentry_set: [LogEntryType]
 
-  """Contains the nodes in this connection."""
-  edges: [LogEntryTypeEdge]!
-}
-
-"""
-The Relay compliant `PageInfo` type, containing data necessary to paginate this connection.
-"""
-type PageInfo {
-  """When paginating forwards, are there more items?"""
-  hasNextPage: Boolean!
-
-  """When paginating backwards, are there more items?"""
-  hasPreviousPage: Boolean!
-
-  """When paginating backwards, the cursor to continue."""
-  startCursor: String
-
-  """When paginating forwards, the cursor to continue."""
-  endCursor: String
-}
-
-"""A Relay edge containing a `LogEntryType` and its cursor."""
-type LogEntryTypeEdge {
-  """The item at the end of the edge"""
-  node: LogEntryType
-
-  """A cursor for use in pagination"""
-  cursor: String!
-}
-
-type PermissionTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [PermissionTypeEdge]!
-}
-
-"""A Relay edge containing a `PermissionType` and its cursor."""
-type PermissionTypeEdge {
-  """The item at the end of the edge"""
-  node: PermissionType
-
-  """A cursor for use in pagination"""
-  cursor: String!
-}
-
-type GroupTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [GroupTypeEdge]!
-}
-
-"""A Relay edge containing a `GroupType` and its cursor."""
-type GroupTypeEdge {
-  """The item at the end of the edge"""
-  node: GroupType
-
-  """A cursor for use in pagination"""
-  cursor: String!
-}
-
-type PostTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
-
-  """Contains the nodes in this connection."""
-  edges: [PostTypeEdge]!
-}
-
-"""A Relay edge containing a `PostType` and its cursor."""
-type PostTypeEdge {
-  """The item at the end of the edge"""
-  node: PostType
-
-  """A cursor for use in pagination"""
-  cursor: String!
+  """Related Permission objects"""
+  permission_set: [PermissionType]
 }
 
 """GraphQL type for the Post model."""
@@ -1995,11 +2516,11 @@ type PostType implements Node {
   updated_at: DateTime!
   published_at: DateTime
 
-  """Related Comment objects"""
-  comments: [CommentType]
-
   """Primary key of the model"""
   pk: ID
+
+  """Related Comment objects"""
+  comments: [CommentType]
 }
 
 """An enumeration."""
@@ -2022,10 +2543,12 @@ type CategoryType implements Node {
   description: String!
   is_active: Boolean!
   created_at: DateTime!
-  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
 
   """Primary key of the model"""
   pk: ID
+
+  """Related Post objects"""
+  post_set: [PostType]
 }
 
 """GraphQL type for the Tag model."""
@@ -2035,28 +2558,15 @@ type TagType implements Node {
   name: String!
   color: String!
   created_at: DateTime!
-  post_set(offset: Int, before: String, after: String, first: Int, last: Int): PostTypeConnection!
-  comment_set(offset: Int, before: String, after: String, first: Int, last: Int): CommentTypeConnection!
 
   """Primary key of the model"""
   pk: ID
-}
 
-type CommentTypeConnection {
-  """Pagination data for this connection."""
-  pageInfo: PageInfo!
+  """Related Post objects"""
+  post_set: [PostType]
 
-  """Contains the nodes in this connection."""
-  edges: [CommentTypeEdge]!
-}
-
-"""A Relay edge containing a `CommentType` and its cursor."""
-type CommentTypeEdge {
-  """The item at the end of the edge"""
-  node: CommentType
-
-  """A cursor for use in pagination"""
-  cursor: String!
+  """Related Comment objects"""
+  comment_set: [CommentType]
 }
 
 """GraphQL type for the Comment model."""
@@ -2152,7 +2662,7 @@ value as specified by
 """
 scalar Date
 
-type PaginatedConnection {
+type LogEntryPaginatedConnection {
   """List of logentry instances"""
   items: [LogEntryType]
 
@@ -2204,6 +2714,14 @@ input PermissionComplexFilter {
   NOT: PermissionComplexFilter = null
 }
 
+type PermissionPaginatedConnection {
+  """List of permission instances"""
+  items: [PermissionType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
+}
+
 input GroupComplexFilter {
   id: Float
   id__gt: Float
@@ -2219,6 +2737,14 @@ input GroupComplexFilter {
   AND: [GroupComplexFilter]
   OR: [GroupComplexFilter]
   NOT: GroupComplexFilter = null
+}
+
+type GroupPaginatedConnection {
+  """List of group instances"""
+  items: [GroupType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
 }
 
 input UserComplexFilter {
@@ -2278,6 +2804,14 @@ input UserComplexFilter {
   NOT: UserComplexFilter = null
 }
 
+type UserPaginatedConnection {
+  """List of user instances"""
+  items: [UserType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
+}
+
 input ContentTypeComplexFilter {
   id: Float
   id__gt: Float
@@ -2299,6 +2833,14 @@ input ContentTypeComplexFilter {
   AND: [ContentTypeComplexFilter]
   OR: [ContentTypeComplexFilter]
   NOT: ContentTypeComplexFilter = null
+}
+
+type ContentTypePaginatedConnection {
+  """List of contenttype instances"""
+  items: [ContentTypeType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
 }
 
 """GraphQL type for the Session model."""
@@ -2338,6 +2880,14 @@ input SessionComplexFilter {
   NOT: SessionComplexFilter = null
 }
 
+type SessionPaginatedConnection {
+  """List of session instances"""
+  items: [SessionType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
+}
+
 input CategoryComplexFilter {
   id: Float
   id__gt: Float
@@ -2368,6 +2918,14 @@ input CategoryComplexFilter {
   NOT: CategoryComplexFilter = null
 }
 
+type CategoryPaginatedConnection {
+  """List of category instances"""
+  items: [CategoryType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
+}
+
 input TagComplexFilter {
   id: Float
   id__gt: Float
@@ -2395,6 +2953,14 @@ input TagComplexFilter {
   AND: [TagComplexFilter]
   OR: [TagComplexFilter]
   NOT: TagComplexFilter = null
+}
+
+type TagPaginatedConnection {
+  """List of tag instances"""
+  items: [TagType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
 }
 
 input PostComplexFilter {
@@ -2446,6 +3012,14 @@ input PostComplexFilter {
   NOT: PostComplexFilter = null
 }
 
+type PostPaginatedConnection {
+  """List of post instances"""
+  items: [PostType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
+}
+
 input CommentComplexFilter {
   id: Float
   id__gt: Float
@@ -2470,6 +3044,14 @@ input CommentComplexFilter {
   AND: [CommentComplexFilter]
   OR: [CommentComplexFilter]
   NOT: CommentComplexFilter = null
+}
+
+type CommentPaginatedConnection {
+  """List of comment instances"""
+  items: [CommentType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
 }
 
 input ProfileComplexFilter {
@@ -2507,6 +3089,14 @@ input ProfileComplexFilter {
   AND: [ProfileComplexFilter]
   OR: [ProfileComplexFilter]
   NOT: ProfileComplexFilter = null
+}
+
+type ProfilePaginatedConnection {
+  """List of profile instances"""
+  items: [ProfileType]
+
+  """Pagination metadata"""
+  page_info: PaginationInfo
 }
 
 """Debugging information for the current query."""
