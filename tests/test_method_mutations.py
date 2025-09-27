@@ -2,7 +2,7 @@
 Tests for method-to-mutation conversion functionality.
 Tests the enhanced MutationGenerator with business logic decorators.
 """
-
+from test_app.models import Post,Category,Tag
 import pytest
 from unittest.mock import Mock, patch
 from django.test import TestCase
