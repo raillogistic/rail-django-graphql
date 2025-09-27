@@ -10,6 +10,71 @@ from django.conf import settings
 from .settings import MutationGeneratorSettings, TypeGeneratorSettings, SchemaSettings
 
 
+class ConfigLoader:
+    """
+    Configuration loader class for Django GraphQL Auto-Generation.
+    
+    This class provides methods to load and validate configuration from Django settings.
+    """
+    
+    @staticmethod
+    def get_django_graphql_auto_settings() -> Dict[str, Any]:
+        """
+        Get DJANGO_GRAPHQL_AUTO settings from Django settings.
+        
+        Returns:
+            Dictionary containing the configuration, or empty dict if not found.
+        """
+        return get_django_graphql_auto_settings()
+    
+    @staticmethod
+    def load_mutation_settings() -> MutationGeneratorSettings:
+        """
+        Load MutationGeneratorSettings from Django settings.
+        
+        Returns:
+            MutationGeneratorSettings instance with configuration from Django settings.
+        """
+        return load_mutation_settings()
+    
+    @staticmethod
+    def load_type_settings() -> TypeGeneratorSettings:
+        """
+        Load TypeGeneratorSettings from Django settings.
+        
+        Returns:
+            TypeGeneratorSettings instance with configuration from Django settings.
+        """
+        return load_type_settings()
+    
+    @staticmethod
+    def load_schema_settings() -> SchemaSettings:
+        """
+        Load SchemaSettings from Django settings.
+        
+        Returns:
+            SchemaSettings instance with configuration from Django settings.
+        """
+        return load_schema_settings()
+    
+    @staticmethod
+    def validate_configuration() -> bool:
+        """
+        Validate the DJANGO_GRAPHQL_AUTO configuration.
+        
+        Returns:
+            True if configuration is valid, False otherwise.
+        """
+        return validate_configuration()
+    
+    @staticmethod
+    def debug_configuration() -> None:
+        """
+        Print debug information about the current configuration.
+        """
+        debug_configuration()
+
+
 def get_django_graphql_auto_settings() -> Dict[str, Any]:
     """
     Get DJANGO_GRAPHQL_AUTO settings from Django settings.

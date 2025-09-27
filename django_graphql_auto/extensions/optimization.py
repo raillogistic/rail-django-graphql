@@ -8,6 +8,7 @@ This module provides comprehensive performance optimization features including:
 - Resource usage monitoring and timeout handling
 """
 
+import json
 import logging
 import time
 from collections import defaultdict
@@ -352,6 +353,69 @@ class CacheManager:
         
         self._field_cache[cache_key] = value
     
+    def get_query_result(
+        self,
+        query_string: str,
+        variables: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None
+    ) -> Optional[Any]:
+        """Get cached query result with support for variables and user-specific caching."""
+        if not self.config.enable_query_caching:
+            return None
+        
+        # Generate cache key based on query string, variables, and user
+        import hashlib
+        cache_key_parts = [query_string]
+        if variables:
+            # Sort variables for consistent cache keys
+            sorted_vars = json.dumps(variables, sort_keys=True)
+            cache_key_parts.append(sorted_vars)
+        if user_id:
+            cache_key_parts.append(f"user_{user_id}")
+        
+        # Create a safe cache key by hashing
+        cache_key_raw = "_".join(cache_key_parts)
+        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
+        
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            logger.debug(f"Cache hit for query: {cache_key}")
+            return cached_result
+        
+        logger.debug(f"Cache miss for query: {cache_key}")
+        return None
+
+    def set_query_result(
+        self,
+        query_string: str,
+        result: Any,
+        variables: Optional[Dict[str, Any]] = None,
+        user_id: Optional[int] = None,
+        timeout: Optional[int] = None
+    ) -> None:
+        """Cache query result with support for variables and user-specific caching."""
+        if not self.config.enable_query_caching:
+            return
+        
+        # Generate cache key based on query string, variables, and user
+        import hashlib
+        cache_key_parts = [query_string]
+        if variables:
+            # Sort variables for consistent cache keys
+            sorted_vars = json.dumps(variables, sort_keys=True)
+            cache_key_parts.append(sorted_vars)
+        if user_id:
+            cache_key_parts.append(f"user_{user_id}")
+        
+        # Create a safe cache key by hashing
+        cache_key_raw = "_".join(cache_key_parts)
+        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
+        
+        # Use provided timeout or default from config
+        cache_timeout = timeout if timeout is not None else self.config.cache_timeout
+        cache.set(cache_key, result, cache_timeout)
+        logger.debug(f"Cached query result: {cache_key} (timeout: {cache_timeout}s)")
+
     def invalidate_cache(self, pattern: str = None) -> None:
         """Invalidate cache entries matching pattern."""
         if pattern:
@@ -414,6 +478,42 @@ class PerformanceMonitor:
         
         return metrics
     
+    def record_query_performance(
+        self, 
+        query_name: str, 
+        execution_time: float, 
+        cache_hit: bool = False,
+        error: str = None,
+        query_count: int = None
+    ) -> None:
+        
+        """Record query performance metrics."""
+        if not self.config.enable_performance_monitoring:
+            return
+        
+        # Create performance metrics
+        metrics = PerformanceMetrics(
+            execution_time=execution_time,
+            query_count=query_count or 0,
+            cache_hits=1 if cache_hit else 0,
+            cache_misses=0 if cache_hit else 1
+        )
+        
+        # Store metrics
+        self.metrics[query_name].append(metrics)
+        
+        # Log slow queries
+        if self.config.log_slow_queries and execution_time > self.config.slow_query_threshold:
+            logger.warning(
+                f"Slow query detected: {query_name} took {execution_time:.2f}s"
+                + (f" (cache hit)" if cache_hit else "")
+                + (f" - Error: {error}" if error else "")
+            )
+        
+        # Log errors
+        if error:
+            logger.error(f"Query error in {query_name}: {error}")
+
     def get_performance_stats(self, query_name: str = None) -> Dict[str, Any]:
         """Get performance statistics."""
         if query_name:

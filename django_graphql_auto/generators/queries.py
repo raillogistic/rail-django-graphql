@@ -23,6 +23,33 @@ from ..extensions.optimization import (
     QueryOptimizationConfig
 )
 
+
+class PaginationInfo(graphene.ObjectType):
+    """
+    Informations de pagination pour les requêtes GraphQL paginées.
+    
+    Cette classe est définie au niveau du module pour permettre la sérialisation
+    (pickle) lors de la mise en cache des résultats.
+    """
+    total_count = graphene.Int(description="Total number of records")
+    page_count = graphene.Int(description="Total number of pages")
+    current_page = graphene.Int(description="Current page number")
+    per_page = graphene.Int(description="Number of records per page")
+    has_next_page = graphene.Boolean(description="Whether there is a next page")
+    has_previous_page = graphene.Boolean(description="Whether there is a previous page")
+
+
+class PaginatedResult:
+    """
+    Classe de résultat paginé pour les requêtes GraphQL.
+    
+    Cette classe est définie au niveau du module pour permettre la sérialisation
+    (pickle) lors de la mise en cache des résultats.
+    """
+    def __init__(self, items, page_info):
+        self.items = items
+        self.page_info = page_info
+
 class QueryGenerator:
     """
     Creates GraphQL queries for Django models, supporting single object lookups,
@@ -200,14 +227,8 @@ class QueryGenerator:
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
 
-        # Create a pagination info type
-        class PaginationInfo(graphene.ObjectType):
-            total_count = graphene.Int(description="Total number of records")
-            page_count = graphene.Int(description="Total number of pages")
-            current_page = graphene.Int(description="Current page number")
-            per_page = graphene.Int(description="Number of records per page")
-            has_next_page = graphene.Boolean(description="Whether there is a next page")
-            has_previous_page = graphene.Boolean(description="Whether there is a previous page")
+        # Create a pagination info type (using module-level class)
+        # PaginationInfo is now defined at module level for pickle support
 
         # Create a model-specific connection type for the paginated results
         connection_name = f"{model.__name__}PaginatedConnection"
@@ -283,11 +304,6 @@ class QueryGenerator:
             )
 
             # Return a simple object with the required attributes
-            class PaginatedResult:
-                def __init__(self, items, page_info):
-                    self.items = items
-                    self.page_info = page_info
-            
             return PaginatedResult(items=items, page_info=page_info)
 
         # Define arguments for the query

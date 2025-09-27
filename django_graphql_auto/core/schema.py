@@ -21,9 +21,6 @@ from graphene_django.debug import DjangoDebug
 
 from .settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
-from ..generators.types import TypeGenerator
-from ..generators.queries import QueryGenerator
-from ..generators.mutations import MutationGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +43,12 @@ class SchemaBuilder:
     def __init__(self, settings: Optional[SchemaSettings] = None):
         if not hasattr(self, '_initialized'):
             self.settings = settings or SchemaSettings()
+            
+            # Use dynamic imports to avoid circular imports
+            from ..generators.types import TypeGenerator
+            from ..generators.queries import QueryGenerator
+            from ..generators.mutations import MutationGenerator
+            
             self.type_generator = TypeGenerator()
             self.query_generator = QueryGenerator(self.type_generator)
             # Load mutation settings from Django configuration
@@ -390,6 +393,11 @@ class SchemaBuilder:
             logger.error(f"Failed to reload schema for app '{app_label}': {str(e)}", exc_info=True)
             raise
 
-# Create a global schema instance
-schema_builder = SchemaBuilder()
-schema = schema_builder.get_schema()
+# Create a global schema instance - moved to a function to avoid circular imports
+def get_schema_builder():
+    """Get or create the global schema builder instance."""
+    return SchemaBuilder()
+
+def get_schema():
+    """Get the global GraphQL schema."""
+    return get_schema_builder().get_schema()

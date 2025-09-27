@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "django_graphql_auto.generators",
     "django_graphql_auto.extensions",
     "test_app",
+    "tests",
 ]
 
 MIDDLEWARE = [

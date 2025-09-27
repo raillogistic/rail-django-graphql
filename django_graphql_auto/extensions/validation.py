@@ -19,25 +19,10 @@ from django.core.validators import validate_email, URLValidator
 from django.utils.html import strip_tags
 from django.db import models
 
+# Import des nouvelles exceptions personnalisées
+from ..core.exceptions import ValidationError as GraphQLValidationError, SecurityError
+
 logger = logging.getLogger(__name__)
-
-
-class ValidationError(Exception):
-    """Erreur de validation personnalisée."""
-    
-    def __init__(self, message: str, field: str = None):
-        self.message = message
-        self.field = field
-        super().__init__(message)
-
-
-class SecurityError(Exception):
-    """Erreur de sécurité détectée."""
-    
-    def __init__(self, message: str, threat_type: str = None):
-        self.message = message
-        self.threat_type = threat_type
-        super().__init__(message)
 
 
 class InputSanitizer:
@@ -117,7 +102,7 @@ class InputSanitizer:
                 logger.warning(f"Tentative d'injection SQL détectée: {value[:100]}")
                 raise SecurityError(
                     "Contenu potentiellement dangereux détecté",
-                    "sql_injection"
+                    threat_type="sql_injection"
                 )
     
     @classmethod
@@ -128,7 +113,7 @@ class InputSanitizer:
                 logger.warning(f"Tentative XSS détectée: {value[:100]}")
                 raise SecurityError(
                     "Contenu potentiellement dangereux détecté",
-                    "xss"
+                    threat_type="xss"
                 )
     
     @classmethod
@@ -163,10 +148,10 @@ class FieldValidator:
             Email validé et nettoyé
             
         Raises:
-            ValidationError: Si l'email n'est pas valide
+            GraphQLValidationError: Si l'email n'est pas valide
         """
         if not value:
-            raise ValidationError("L'adresse email est requise", "email")
+            raise GraphQLValidationError("L'adresse email est requise", field="email")
         
         # Nettoyage de base
         cleaned_email = InputSanitizer.sanitize_string(value).lower().strip()
@@ -175,7 +160,7 @@ class FieldValidator:
         try:
             validate_email(cleaned_email)
         except ValidationError as e:
-            raise ValidationError(f"Format d'email invalide: {e}", "email")
+            raise GraphQLValidationError(f"Format d'email invalide: {e}", field="email")
         
         return cleaned_email
     
@@ -200,11 +185,18 @@ class FieldValidator:
         cleaned_url = InputSanitizer.sanitize_string(value).strip()
         
         # Validation du format
-        validator = URLValidator()
         try:
-            validator(cleaned_url)
+            validator = URLValidator()
+            validator(value)
+            
+            # Vérification du protocole
+            parsed = urlparse(value)
+            if parsed.scheme not in ['http', 'https']:
+                raise GraphQLValidationError("Seuls les protocoles HTTP et HTTPS sont autorisés", field="url")
+            
+            return value
         except ValidationError as e:
-            raise ValidationError(f"Format d'URL invalide: {e}", "url")
+            raise GraphQLValidationError(f"Format d'URL invalide: {e}", field="url")
         
         # Vérification du protocole (seulement http/https)
         parsed = urlparse(cleaned_url)
@@ -232,13 +224,13 @@ class FieldValidator:
         try:
             int_value = int(value)
         except (ValueError, TypeError):
-            raise ValidationError("Valeur entière requise", "integer")
+            raise GraphQLValidationError("Valeur entière requise", field="integer")
         
         if min_value is not None and int_value < min_value:
-            raise ValidationError(f"La valeur doit être supérieure ou égale à {min_value}", "integer")
+            raise GraphQLValidationError(f"La valeur doit être supérieure ou égale à {min_value}", field="integer")
         
         if max_value is not None and int_value > max_value:
-            raise ValidationError(f"La valeur doit être inférieure ou égale à {max_value}", "integer")
+            raise GraphQLValidationError(f"La valeur doit être inférieure ou égale à {max_value}", field="integer")
         
         return int_value
     
@@ -261,20 +253,20 @@ class FieldValidator:
         try:
             decimal_value = Decimal(str(value))
         except (InvalidOperation, ValueError, TypeError):
-            raise ValidationError("Valeur décimale requise", "decimal")
+            raise GraphQLValidationError("Valeur décimale requise", field="decimal")
         
         if max_digits is not None:
             # Vérification du nombre total de chiffres
             sign, digits, exponent = decimal_value.as_tuple()
             total_digits = len(digits)
             if total_digits > max_digits:
-                raise ValidationError(f"Maximum {max_digits} chiffres autorisés", "decimal")
+                raise GraphQLValidationError(f"Maximum {max_digits} chiffres autorisés", field="decimal")
         
         if decimal_places is not None:
             # Vérification du nombre de décimales
             sign, digits, exponent = decimal_value.as_tuple()
             if exponent < -decimal_places:
-                raise ValidationError(f"Maximum {decimal_places} décimales autorisées", "decimal")
+                raise GraphQLValidationError(f"Maximum {decimal_places} décimales autorisées", field="decimal")
         
         return decimal_value
     
@@ -305,14 +297,14 @@ class FieldValidator:
         
         # Validation de la longueur
         if min_length is not None and len(cleaned_value) < min_length:
-            raise ValidationError(f"Longueur minimale: {min_length} caractères", "string")
+            raise GraphQLValidationError(f"Longueur minimale: {min_length} caractères", field="string")
         
         if max_length is not None and len(cleaned_value) > max_length:
-            raise ValidationError(f"Longueur maximale: {max_length} caractères", "string")
+            raise GraphQLValidationError(f"Longueur maximale: {max_length} caractères", field="string")
         
         # Validation du pattern
         if pattern and not re.match(pattern, cleaned_value):
-            raise ValidationError("Format invalide", "string")
+            raise GraphQLValidationError("Format invalide", field="string")
         
         return cleaned_value
 
@@ -371,7 +363,7 @@ class InputValidator:
                 try:
                     validated_data[field_name] = self.field_validators[field_name](value)
                 except Exception as e:
-                    raise ValidationError(f"Erreur de validation pour {field_name}: {e}", field_name)
+                    raise GraphQLValidationError(f"Erreur de validation pour {field_name}: {e}", field=field_name)
             else:
                 # Validation générique basée sur le type
                 validated_data[field_name] = self._validate_generic_field(field_name, value)
@@ -381,7 +373,7 @@ class InputValidator:
             try:
                 validator(validated_data)
             except Exception as e:
-                raise ValidationError(f"Erreur de validation du modèle {model_name}: {e}")
+                raise GraphQLValidationError(f"Erreur de validation du modèle {model_name}: {e}")
         
         return validated_data
     
@@ -456,9 +448,9 @@ def validate_input(model_name: str = None):
                             elif isinstance(value, dict):
                                 kwargs[key].update(validated_data)
                 
-            except ValidationError as e:
+            except GraphQLValidationError as e:
                 logger.warning(f"Erreur de validation: {e.message}")
-                raise ValidationError(e.message)
+                raise GraphQLValidationError(e.message)
             except SecurityError as e:
                 logger.error(f"Menace de sécurité détectée: {e.message}")
                 raise SecurityError(e.message)
@@ -480,16 +472,16 @@ def setup_default_validators():
     def validate_password(value: str) -> str:
         """Valide un mot de passe."""
         if len(value) < 8:
-            raise ValidationError("Le mot de passe doit contenir au moins 8 caractères", "password")
+            raise GraphQLValidationError("Le mot de passe doit contenir au moins 8 caractères", field="password")
         
         if not re.search(r'[A-Z]', value):
-            raise ValidationError("Le mot de passe doit contenir au moins une majuscule", "password")
+            raise GraphQLValidationError("Le mot de passe doit contenir au moins une majuscule", field="password")
         
         if not re.search(r'[a-z]', value):
-            raise ValidationError("Le mot de passe doit contenir au moins une minuscule", "password")
+            raise GraphQLValidationError("Le mot de passe doit contenir au moins une minuscule", field="password")
         
         if not re.search(r'\d', value):
-            raise ValidationError("Le mot de passe doit contenir au moins un chiffre", "password")
+            raise GraphQLValidationError("Le mot de passe doit contenir au moins un chiffre", field="password")
         
         return value
     
@@ -536,7 +528,7 @@ class ValidationQuery(graphene.ObjectType):
                 sanitized_value=str(sanitized)
             )
         
-        except (ValidationError, SecurityError) as e:
+        except (GraphQLValidationError, SecurityError) as e:
             return ValidationInfo(
                 field_name=field_name,
                 is_valid=False,

@@ -20,33 +20,10 @@ from graphql.language import ast
 from django.core.cache import cache
 from django.conf import settings
 
+# Import des nouvelles exceptions personnalisées
+from ..core.exceptions import RateLimitError, QueryComplexityError, QueryDepthError
+
 logger = logging.getLogger(__name__)
-
-
-class RateLimitExceeded(GraphQLError):
-    """Exception levée quand la limite de taux est dépassée."""
-    
-    def __init__(self, message: str, retry_after: int = None):
-        super().__init__(message)
-        self.retry_after = retry_after
-
-
-class QueryComplexityExceeded(GraphQLError):
-    """Exception levée quand la complexité de la requête est trop élevée."""
-    
-    def __init__(self, message: str, complexity: int, max_complexity: int):
-        super().__init__(message)
-        self.complexity = complexity
-        self.max_complexity = max_complexity
-
-
-class QueryDepthExceeded(GraphQLError):
-    """Exception levée quand la profondeur de la requête est trop élevée."""
-    
-    def __init__(self, message: str, depth: int, max_depth: int):
-        super().__init__(message)
-        self.depth = depth
-        self.max_depth = max_depth
 
 
 class RateLimiter:
@@ -350,7 +327,7 @@ class GraphQLSecurityMiddleware:
         allowed, retry_after = self.rate_limiter.is_allowed(identifier)
         if not allowed:
             logger.warning(f"Rate limit dépassé pour {identifier}")
-            raise RateLimitExceeded(
+            raise RateLimitError(
                 "Trop de requêtes. Veuillez réessayer plus tard.",
                 retry_after
             )
@@ -359,7 +336,7 @@ class GraphQLSecurityMiddleware:
         complexity = self.complexity_analyzer.analyze_query(query_ast)
         if complexity > self.complexity_analyzer.max_complexity:
             logger.warning(f"Complexité trop élevée: {complexity}")
-            raise QueryComplexityExceeded(
+            raise QueryComplexityError(
                 f"Requête trop complexe (score: {complexity})",
                 complexity,
                 self.complexity_analyzer.max_complexity
@@ -369,7 +346,7 @@ class GraphQLSecurityMiddleware:
         depth = self.depth_analyzer.analyze_query(query_ast)
         if depth > self.depth_analyzer.max_depth:
             logger.warning(f"Profondeur trop élevée: {depth}")
-            raise QueryDepthExceeded(
+            raise QueryDepthError(
                 f"Requête trop profonde (profondeur: {depth})",
                 depth,
                 self.depth_analyzer.max_depth
@@ -506,7 +483,7 @@ def rate_limit(max_requests: int = 100, window_seconds: int = 3600):
             
             allowed, retry_after = limiter.is_allowed(identifier)
             if not allowed:
-                raise RateLimitExceeded(
+                raise RateLimitError(
                     f"Limite de {max_requests} requêtes par {window_seconds}s dépassée",
                     retry_after
                 )
