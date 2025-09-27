@@ -13,7 +13,7 @@ django.setup()
 
 from graphene.test import Client
 from django_graphql_auto.schema import schema
-from test_app.models import User, Post, Comment
+from tests.fixtures.test_data_fixtures import TestAuthor, TestBook, TestCategory
 
 def test_direct_access():
     """Test that reverse relationships use direct access instead of Connection types."""

@@ -40,7 +40,7 @@ try:
 except ImportError:
     BOTO3_AVAILABLE = False
 
-from ..core.settings import GraphQLAutoSettings
+from ..core.settings import GraphQLAutoConfig
 
 
 class MediaProcessingError(Exception):
@@ -149,7 +149,7 @@ class StorageBackend:
 class LocalStorageBackend(StorageBackend):
     """Backend de stockage local utilisant le système de fichiers."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.storage = default_storage
     
@@ -177,7 +177,7 @@ class LocalStorageBackend(StorageBackend):
 class S3StorageBackend(StorageBackend):
     """Backend de stockage Amazon S3."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         if not BOTO3_AVAILABLE:
             raise MediaProcessingError("boto3 n'est pas installé. Installez-le avec: pip install boto3")
         
@@ -234,7 +234,7 @@ class S3StorageBackend(StorageBackend):
 class CDNManager:
     """Gestionnaire d'intégration CDN."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.cdn_base_url = getattr(settings, 'CDN_BASE_URL', None)
         self.cdn_enabled = getattr(settings, 'CDN_ENABLED', False)
@@ -272,7 +272,7 @@ class CDNManager:
 class ImageProcessor:
     """Processeur d'images avec génération de miniatures."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         if not PIL_AVAILABLE:
             raise MediaProcessingError("Pillow n'est pas installé. Installez-le avec: pip install Pillow")
         
@@ -439,7 +439,7 @@ class ImageProcessor:
 class MediaManager:
     """Gestionnaire principal des médias."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.storage_backend = self._get_storage_backend()
         self.cdn_manager = CDNManager(settings)

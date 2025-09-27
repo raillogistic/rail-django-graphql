@@ -17,7 +17,7 @@ from django_graphql_auto.generators.types import TypeGenerator
 from django_graphql_auto.generators.introspector import ModelIntrospector
 from django_graphql_auto.core.settings import MutationGeneratorSettings
 from django_graphql_auto.decorators import mutation, business_logic, custom_mutation_name
-from test_app.models import Post, Category, Tag, Comment, Profile
+from tests.fixtures.test_data_fixtures import FixtureTestBook, FixtureTestCategory, FixtureTestAuthor, FixtureTestReview, FixtureTestPublisher
 
 
 class TestMethodMutationGeneration(TestCase):
@@ -331,7 +331,7 @@ class TestDecoratorFunctionality(TestCase):
         self.assertEqual(test_method._mutation_description, "Combined test")
 
 
-class TestCategoryMethodMutations(TestCase):
+class FixtureTestCategoryMethodMutations(TestCase):
     """Test method mutations on Category model."""
 
     def setUp(self):

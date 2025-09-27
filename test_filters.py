@@ -12,7 +12,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
 django.setup()
 
 from django_graphql_auto.schema import schema
-from test_app.models import Comment, Post, User
+from tests.fixtures.test_data_fixtures import TestReview, TestBook, TestAuthor
 from django.contrib.auth.models import User as AuthUser
 
 def test_filter_consistency():

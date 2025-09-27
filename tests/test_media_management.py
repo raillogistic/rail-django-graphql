@@ -27,18 +27,7 @@ from django_graphql_auto.extensions.media import (
     MediaProcessingError
 )
 from django_graphql_auto.core.settings import GraphQLAutoSettings
-
-
-class TestMediaModel(models.Model):
-    """Modèle de test pour les médias."""
-    title = models.CharField(max_length=255, verbose_name="Titre")
-    image = models.ImageField(upload_to='test_media/', verbose_name="Image")
-    thumbnail = models.ImageField(upload_to='test_thumbnails/', verbose_name="Miniature", blank=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Propriétaire")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
-    class Meta:
-        app_label = 'test_app'
+from tests.models import TestMediaModel
 
 
 class MediaInfoTest(TestCase):

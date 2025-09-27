@@ -11,7 +11,7 @@ from django.conf import settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
 django.setup()
 
-from test_app.models import Comment
+from tests.fixtures.test_data_fixtures import TestAuthor, TestBook, TestCategory, TestReview, TestPublisher
 from django_graphql_auto.generators.filters import AdvancedFilterGenerator
 
 def debug_filterset_validation():

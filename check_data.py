@@ -11,7 +11,7 @@ from django.conf import settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
 django.setup()
 
-from test_app.models import Comment, Post
+from tests.fixtures.test_data_fixtures import TestAuthor, TestBook, TestCategory, TestReview, TestPublisher
 from django.contrib.auth.models import User
 
 def check_database_data():

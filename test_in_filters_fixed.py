@@ -14,7 +14,7 @@ django.setup()
 
 from graphene.test import Client
 from django_graphql_auto.schema import schema
-from test_app.models import User, Post, Comment
+from tests.fixtures.test_data_fixtures import TestAuthor, TestBook, TestCategory, TestReview, TestPublisher
 
 def test_in_filters():
     """Test __in filters with array syntax"""

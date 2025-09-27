@@ -44,35 +44,12 @@ from django_graphql_auto.middleware.performance import (
 )
 
 
-# Modèles de test
-class TestAuthor(models.Model):
-    """Modèle auteur pour les tests."""
-    name = models.CharField(max_length=100, verbose_name="Nom de l'auteur")
-    email = models.EmailField(verbose_name="Email de l'auteur")
-    
-    class Meta:
-        app_label = 'test_app'
-
-
-class TestBook(models.Model):
-    """Modèle livre pour les tests."""
-    title = models.CharField(max_length=200, verbose_name="Titre du livre")
-    author = models.ForeignKey(TestAuthor, on_delete=models.CASCADE, verbose_name="Auteur")
-    publication_year = models.IntegerField(verbose_name="Année de publication")
-    
-    class Meta:
-        app_label = 'test_app'
-
-
-class TestReview(models.Model):
-    """Modèle avis pour les tests."""
-    book = models.ForeignKey(TestBook, on_delete=models.CASCADE, verbose_name="Livre")
-    reviewer = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Critique")
-    rating = models.IntegerField(verbose_name="Note")
-    comment = models.TextField(verbose_name="Commentaire")
-    
-    class Meta:
-        app_label = 'test_app'
+# Import models from tests.models to avoid conflicts during pytest collection
+from tests.models import (
+    PerformanceTestAuthor,
+    PerformanceTestBook,
+    PerformanceTestReview
+)
 
 
 # Types GraphQL de test
@@ -83,7 +60,7 @@ class AuthorType(ObjectType):
     books = List(lambda: BookType)
     
     def resolve_books(self, info):
-        return self.testbook_set.all()
+        return self.PerformanceTestBook_set.all()
 
 
 class BookType(ObjectType):
@@ -94,7 +71,7 @@ class BookType(ObjectType):
     reviews = List(lambda: ReviewType)
     
     def resolve_reviews(self, info):
-        return self.testreview_set.all()
+        return self.PerformanceTestReview_set.all()
 
 
 class ReviewType(ObjectType):
@@ -114,25 +91,25 @@ class TestQueryOptimization(TestCase):
     def setUp(self):
         """Configuration des tests."""
         # Créer des données de test
-        self.author1 = TestAuthor.objects.create(name="Auteur 1", email="auteur1@test.com")
-        self.author2 = TestAuthor.objects.create(name="Auteur 2", email="auteur2@test.com")
+        self.author1 = PerformanceTestAuthor.objects.create(name="Auteur 1", email="auteur1@test.com")
+        self.author2 = PerformanceTestAuthor.objects.create(name="Auteur 2", email="auteur2@test.com")
         
-        self.book1 = TestBook.objects.create(
+        self.book1 = PerformanceTestBook.objects.create(
             title="Livre 1", author=self.author1, publication_year=2020
         )
-        self.book2 = TestBook.objects.create(
+        self.book2 = PerformanceTestBook.objects.create(
             title="Livre 2", author=self.author1, publication_year=2021
         )
-        self.book3 = TestBook.objects.create(
+        self.book3 = PerformanceTestBook.objects.create(
             title="Livre 3", author=self.author2, publication_year=2022
         )
         
         self.user = User.objects.create_user(username="testuser", email="test@test.com")
         
-        TestReview.objects.create(
+        PerformanceTestReview.objects.create(
             book=self.book1, reviewer=self.user, rating=5, comment="Excellent"
         )
-        TestReview.objects.create(
+        PerformanceTestReview.objects.create(
             book=self.book2, reviewer=self.user, rating=4, comment="Très bien"
         )
         
@@ -152,14 +129,14 @@ class TestQueryOptimization(TestCase):
         """Test de la prévention des requêtes N+1."""
         # Créer un resolver qui devrait déclencher N+1 sans optimisation
         def unoptimized_resolver(root, info):
-            books = TestBook.objects.all()
+            books = PerformanceTestBook.objects.all()
             # Ceci devrait déclencher N+1 sans optimisation
             return [(book.title, book.author.name) for book in books]
         
         # Créer un resolver optimisé
         @optimize_query(enable_caching=False)
         def optimized_resolver(root, info):
-            books = TestBook.objects.all()
+            books = PerformanceTestBook.objects.all()
             return [(book.title, book.author.name) for book in books]
         
         # Mock info object
@@ -179,7 +156,7 @@ class TestQueryOptimization(TestCase):
         # Note: Le test réel nécessiterait une intégration complète
         # Ici on simule l'optimisation
         with patch.object(self.optimizer, 'optimize_queryset') as mock_optimize:
-            mock_optimize.return_value = TestBook.objects.select_related('author').all()
+            mock_optimize.return_value = PerformanceTestBook.objects.select_related('author').all()
             
             # Avec optimisation, on devrait avoir moins de requêtes
             optimized_result = optimized_resolver(None, mock_info)
@@ -220,7 +197,7 @@ class TestQueryOptimization(TestCase):
     def test_queryset_optimization(self):
         """Test de l'optimisation automatique des querysets."""
         # Créer un queryset de base
-        queryset = TestBook.objects.all()
+        queryset = PerformanceTestBook.objects.all()
         
         # Mock info avec des champs relationnels
         mock_info = Mock()
@@ -237,7 +214,7 @@ class TestQueryOptimization(TestCase):
         mock_info.field_asts[0].selection_set.selections = [mock_selection_author]
         
         # Optimiser le queryset
-        optimized_queryset = self.optimizer.optimize_queryset(queryset, mock_info, TestBook)
+        optimized_queryset = self.optimizer.optimize_queryset(queryset, mock_info, PerformanceTestBook)
         
         # Vérifier que l'optimisation a été appliquée
         # Note: Dans un test réel, on vérifierait les select_related/prefetch_related
@@ -285,7 +262,7 @@ class TestCachingSystem(TestCase):
     
     def test_field_level_caching(self):
         """Test du cache au niveau des champs."""
-        model_name = "TestBook"
+        model_name = "PerformanceTestBook"
         field_name = "title"
         instance_id = 1
         user_id = 1
@@ -312,14 +289,14 @@ class TestCachingSystem(TestCase):
         """Test de l'invalidation du cache."""
         # Mettre quelques éléments en cache
         self.cache_manager.set_query_result("query1", "result1", {}, 1)
-        self.cache_manager.set_field_value("TestBook", "title", 1, "Title", 1)
+        self.cache_manager.set_field_value("PerformanceTestBook", "title", 1, "Title", 1)
         
         # Vérifier qu'ils sont en cache
         self.assertIsNotNone(self.cache_manager.get_query_result("query1", {}, 1))
-        self.assertIsNotNone(self.cache_manager.get_field_value("TestBook", "title", 1, 1))
+        self.assertIsNotNone(self.cache_manager.get_field_value("PerformanceTestBook", "title", 1, 1))
         
         # Invalider le cache pour le modèle
-        self.cache_manager.invalidate_model(TestBook, 1)
+        self.cache_manager.invalidate_model(PerformanceTestBook, 1)
         
         # Note: L'invalidation réelle dépend de l'implémentation du backend
         # Ici on teste la logique de base
@@ -492,9 +469,9 @@ class TestIntegrationPerformance(TestCase):
     def setUp(self):
         """Configuration des tests d'intégration."""
         # Créer des données de test
-        self.author = TestAuthor.objects.create(name="Test Author", email="test@test.com")
+        self.author = PerformanceTestAuthor.objects.create(name="Test Author", email="test@test.com")
         self.books = [
-            TestBook.objects.create(
+            PerformanceTestBook.objects.create(
                 title=f"Book {i}", 
                 author=self.author, 
                 publication_year=2020 + i
@@ -506,7 +483,7 @@ class TestIntegrationPerformance(TestCase):
         
         # Créer des avis pour chaque livre
         for book in self.books:
-            TestReview.objects.create(
+            PerformanceTestReview.objects.create(
                 book=book,
                 reviewer=self.user,
                 rating=5,
@@ -521,7 +498,7 @@ class TestIntegrationPerformance(TestCase):
             
             @optimize_query(enable_caching=True, complexity_limit=50)
             def resolve_books(self, info):
-                return TestBook.objects.all()
+                return PerformanceTestBook.objects.all()
         
         schema = graphene.Schema(query=Query)
         client = Client(schema)
@@ -566,14 +543,14 @@ class TestIntegrationPerformance(TestCase):
         """Test des benchmarks de performance."""
         # Créer plus de données pour un test significatif
         authors = [
-            TestAuthor.objects.create(name=f"Author {i}", email=f"author{i}@test.com")
+            PerformanceTestAuthor.objects.create(name=f"Author {i}", email=f"author{i}@test.com")
             for i in range(50)
         ]
         
         books = []
         for i, author in enumerate(authors):
             for j in range(5):  # 5 livres par auteur
-                books.append(TestBook.objects.create(
+                books.append(PerformanceTestBook.objects.create(
                     title=f"Book {i}-{j}",
                     author=author,
                     publication_year=2020 + (i % 5)
@@ -582,7 +559,7 @@ class TestIntegrationPerformance(TestCase):
         # Test sans optimisation (simulation)
         def unoptimized_query():
             result = []
-            for book in TestBook.objects.all():
+            for book in PerformanceTestBook.objects.all():
                 result.append({
                     'title': book.title,
                     'author_name': book.author.name,  # N+1 query
@@ -593,7 +570,7 @@ class TestIntegrationPerformance(TestCase):
         # Test avec optimisation
         def optimized_query():
             result = []
-            books = TestBook.objects.select_related('author').all()
+            books = PerformanceTestBook.objects.select_related('author').all()
             for book in books:
                 result.append({
                     'title': book.title,

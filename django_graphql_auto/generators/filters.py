@@ -105,6 +105,8 @@ class AdvancedFilterGenerator:
             filters.update(self._generate_boolean_filters(field_name))
         elif isinstance(field, (models.FileField, models.ImageField)):
             filters.update(self._generate_file_filters(field_name))
+        elif isinstance(field, models.JSONField):
+            filters.update(self._generate_json_filters(field_name))
         elif hasattr(field, 'choices') and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
@@ -243,6 +245,21 @@ class AdvancedFilterGenerator:
             ),
         }
 
+    def _generate_json_filters(self, field_name: str) -> Dict[str, CharFilter]:
+        """Generate JSON-specific filters: exact match and null checks."""
+        return {
+            f'{field_name}': CharFilter(
+                field_name=field_name,
+                lookup_expr='exact',
+                help_text=f'Filter {field_name} with exact JSON match'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=field_name,
+                lookup_expr='isnull',
+                help_text=f'Filter {field_name} for null/empty values'
+            ),
+        }
+
     def _generate_foreign_key_filters(self, field_name: str, related_model: Type[models.Model] = None) -> Dict[str, NumberFilter]:
         """Generate foreign key filters: exact, in."""
         filters = {
@@ -282,6 +299,8 @@ class AdvancedFilterGenerator:
         elif isinstance(field, models.BooleanField):
             return ['exact']
         elif isinstance(field, (models.FileField, models.ImageField)):
+            return ['exact', 'isnull']
+        elif isinstance(field, models.JSONField):
             return ['exact', 'isnull']
         elif hasattr(field, 'choices') and field.choices:
             return ['exact', 'in']

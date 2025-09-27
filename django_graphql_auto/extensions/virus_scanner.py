@@ -20,7 +20,7 @@ from datetime import datetime
 from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.conf import settings
 
-from ..core.settings import GraphQLAutoSettings
+from ..core.settings import GraphQLAutoConfig
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class ScanResult:
 class ClamAVScanner:
     """Scanner antivirus utilisant ClamAV."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.clamav_path = getattr(settings, 'CLAMAV_PATH', 'clamscan')
         self.clamd_socket = getattr(settings, 'CLAMD_SOCKET', None)
@@ -222,7 +222,7 @@ class ClamAVScanner:
 class MockScanner:
     """Scanner factice pour les environnements de développement."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.simulate_threats = getattr(settings, 'MOCK_SCANNER_SIMULATE_THREATS', False)
         self.threat_patterns = getattr(settings, 'MOCK_SCANNER_THREAT_PATTERNS', [
@@ -286,7 +286,7 @@ class MockScanner:
 class VirusScanner:
     """Gestionnaire principal de scan antivirus."""
     
-    def __init__(self, settings: GraphQLAutoSettings):
+    def __init__(self, settings: GraphQLAutoConfig):
         self.settings = settings
         self.enabled = getattr(settings, 'VIRUS_SCANNING_ENABLED', True)
         self.scanner_type = getattr(settings, 'VIRUS_SCANNER_TYPE', 'clamav')

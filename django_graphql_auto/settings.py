@@ -640,7 +640,7 @@ DJANGO_GRAPHQL_AUTO = {
     
     'I18N': {
         # Activer la prise en charge multilingue
-        'ENABLE_I18N': False,
+        'ENABLE_I18N': True,
         
         # Langues supportées
         'SUPPORTED_LANGUAGES': ['fr', 'en'],

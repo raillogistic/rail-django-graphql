@@ -325,7 +325,7 @@ django_graphql_auto/
   - [x] JWT Authentication system (login, registration, refresh, logout)
   - [x] Permission system with role-based access control
   - [x] Input validation and sanitization (XSS, SQL injection prevention)
-  - [x] Rate limiting implementation with configurable windows
+  - [x] Rate limiting implementation with configu<rable windows
   - [x] Query complexity and depth analysis
   - [x] Security information queries (security_info, query_stats)
   - [x] Comprehensive test suite with all security features
