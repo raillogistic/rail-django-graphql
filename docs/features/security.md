@@ -13,7 +13,8 @@ The Django GraphQL Auto-Generation System includes a comprehensive security laye
 3. **Input Validation** - Comprehensive input sanitization and validation
 4. **Rate Limiting** - Configurable request rate limiting per user/IP
 5. **Query Analysis** - Complexity and depth analysis to prevent malicious queries
-6. **Security Monitoring** - Real-time security information and statistics
+6. **File Upload Security** - Comprehensive file validation, virus scanning, and quarantine system
+7. **Security Monitoring** - Real-time security information and statistics
 
 ### Security Middleware Integration
 
@@ -27,6 +28,7 @@ GRAPHQL_SECURITY = {
     'ENABLE_RATE_LIMITING': True,
     'ENABLE_QUERY_ANALYSIS': True,
     'ENABLE_INPUT_VALIDATION': True,
+    'ENABLE_FILE_UPLOAD_SECURITY': True,
 }
 ```
 
@@ -227,7 +229,104 @@ GRAPHQL_SECURITY = {
 }
 ```
 
-### 6. Security Monitoring
+### 6. File Upload Security
+
+#### Comprehensive File Validation
+- **File Type Validation**: Whitelist-based MIME type and extension checking
+- **File Size Limits**: Configurable maximum file size restrictions
+- **Content Validation**: Deep file content analysis beyond extension checking
+- **Malicious File Detection**: Advanced pattern matching for suspicious content
+
+#### Virus Scanning Integration
+- **ClamAV Integration**: Real-time antivirus scanning using ClamAV engine
+- **Quarantine System**: Automatic isolation of infected or suspicious files
+- **Scan Result Logging**: Comprehensive audit trail of all scan results
+- **Configurable Scan Timeout**: Prevents hanging on large files
+
+#### File Upload Security Configuration
+```python
+GRAPHQL_SECURITY = {
+    'FILE_UPLOAD_SECURITY': {
+        'ENABLE_VIRUS_SCANNING': True,
+        'VIRUS_SCANNER_TYPE': 'clamav',  # 'clamav' or 'mock'
+        'VIRUS_SCAN_TIMEOUT': 30,
+        'QUARANTINE_PATH': '/var/quarantine/',
+        'MAX_FILE_SIZE': 10 * 1024 * 1024,  # 10MB
+        'ALLOWED_MIME_TYPES': [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/pdf', 'text/plain'
+        ],
+        'ALLOWED_EXTENSIONS': [
+            '.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt'
+        ],
+        'ENABLE_CONTENT_VALIDATION': True,
+        'SCAN_RESULT_RETENTION_DAYS': 30,
+    }
+}
+```
+
+#### File Upload Security Mutations
+```graphql
+# Secure File Upload with Validation
+mutation SecureFileUpload {
+  uploadFile(input: {
+    file: "base64EncodedContent"
+    filename: "document.pdf"
+    mimeType: "application/pdf"
+    validateVirus: true
+    validateContent: true
+  }) {
+    ok
+    file {
+      id
+      filename
+      scanResult {
+        status  # CLEAN, INFECTED, SUSPICIOUS, ERROR
+        scanTime
+        threats
+      }
+      quarantined
+    }
+    errors
+  }
+}
+
+# Check File Scan Status
+query FileScanStatus($fileId: ID!) {
+  fileScanStatus(fileId: $fileId) {
+    status
+    scanResult {
+      status
+      threats
+      scanTime
+      scannerVersion
+    }
+    quarantined
+    quarantineReason
+  }
+}
+```
+
+#### Security Monitoring for File Uploads
+```graphql
+# File Upload Security Statistics
+query FileUploadSecurityStats {
+  fileUploadStats {
+    totalUploads
+    cleanFiles
+    infectedFiles
+    quarantinedFiles
+    scanFailures
+    avgScanTime
+    threatTypes {
+      type
+      count
+    }
+  }
+}
+```
+
+### 7. Security Monitoring
 
 #### Real-Time Security Information
 ```graphql
@@ -292,6 +391,24 @@ GRAPHQL_SECURITY = {
         'ENABLE_SQL_INJECTION_PROTECTION': True,
         'STRIP_HTML_TAGS': True,
         'CUSTOM_VALIDATORS': {},
+    },
+    
+    # File Upload Security Settings
+    'FILE_UPLOAD_SECURITY': {
+        'ENABLE_VIRUS_SCANNING': True,
+        'VIRUS_SCANNER_TYPE': 'clamav',
+        'VIRUS_SCAN_TIMEOUT': 30,
+        'QUARANTINE_PATH': '/var/quarantine/',
+        'MAX_FILE_SIZE': 10 * 1024 * 1024,  # 10MB
+        'ALLOWED_MIME_TYPES': [
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'application/pdf', 'text/plain'
+        ],
+        'ALLOWED_EXTENSIONS': [
+            '.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt'
+        ],
+        'ENABLE_CONTENT_VALIDATION': True,
+        'SCAN_RESULT_RETENTION_DAYS': 30,
     }
 }
 ```

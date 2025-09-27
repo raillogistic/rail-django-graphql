@@ -30,6 +30,14 @@ pip install django-filter>=22.1
 pip install django-cors-headers>=4.0.0
 pip install django-extensions>=3.2.0
 pip install graphene-file-upload>=1.3.0
+
+# File Upload & Media Dependencies
+pip install Pillow>=9.0.0          # Image processing
+pip install python-magic>=0.4.27   # File type detection
+pip install pyclamd>=0.5.0          # ClamAV virus scanner integration
+pip install boto3>=1.26.0          # AWS S3 storage (optional)
+pip install google-cloud-storage>=2.7.0  # Google Cloud Storage (optional)
+pip install azure-storage-blob>=12.14.0  # Azure Blob Storage (optional)
 ```
 
 Or use the provided requirements file:
@@ -99,6 +107,17 @@ DJANGO_GRAPHQL_AUTO = {
     'ENABLE_FILTERS': True,
     'ENABLE_NESTED_OPERATIONS': True,
     'ENABLE_FILE_UPLOADS': True,
+    
+    # File Upload & Media Configuration
+    'FILE_UPLOADS': {
+        'ENABLE_FILE_UPLOADS': True,
+        'MAX_FILE_SIZE': 10 * 1024 * 1024,  # 10MB
+        'ALLOWED_EXTENSIONS': ['.jpg', '.png', '.pdf', '.txt'],
+        'UPLOAD_PATH': 'uploads/',
+        'ENABLE_VIRUS_SCANNING': True,
+        'ENABLE_IMAGE_PROCESSING': True,
+        'STORAGE_BACKEND': 'local',  # 'local', 's3', 'gcs', 'azure'
+    },
 }
 ```
 
@@ -142,13 +161,81 @@ urlpatterns = [
 
 ## 🔧 Initial Setup
 
-### Step 1: Run Migrations
+### Step 1: System Dependencies (For File Uploads)
+
+If you plan to use file uploads and media processing, install these system dependencies:
+
+#### Ubuntu/Debian:
+```bash
+# Install ClamAV for virus scanning
+sudo apt-get update
+sudo apt-get install clamav clamav-daemon
+
+# Install image processing libraries
+sudo apt-get install libjpeg-dev libpng-dev libtiff-dev libwebp-dev
+
+# Install file type detection
+sudo apt-get install libmagic1
+
+# Update virus definitions
+sudo freshclam
+
+# Start ClamAV daemon
+sudo systemctl start clamav-daemon
+sudo systemctl enable clamav-daemon
+```
+
+#### macOS:
+```bash
+# Install ClamAV
+brew install clamav
+
+# Install image processing libraries
+brew install jpeg libpng libtiff webp
+
+# Install file type detection
+brew install libmagic
+
+# Update virus definitions
+freshclam
+
+# Start ClamAV daemon
+brew services start clamav
+```
+
+#### Windows:
+```powershell
+# Install ClamAV (download from https://www.clamav.net/downloads)
+# Or use Chocolatey
+choco install clamav
+
+# For image processing, Pillow should work out of the box
+# File type detection will use python-magic-bin package
+```
+
+### Step 2: Run Migrations
 
 ```bash
 python manage.py migrate
 ```
 
-### Step 2: Generate GraphQL Schema
+### Step 3: Create Upload Directories
+
+Create necessary directories for file uploads:
+
+```bash
+# Create upload directories
+mkdir -p media/uploads
+mkdir -p media/thumbnails
+mkdir -p var/quarantine
+
+# Set appropriate permissions (Linux/macOS)
+chmod 755 media/uploads
+chmod 755 media/thumbnails
+chmod 700 var/quarantine  # Restricted access for quarantine
+```
+
+### Step 4: Generate GraphQL Schema
 
 ```bash
 python manage.py generate_graphql_schema
@@ -160,7 +247,7 @@ This command will:
 - Create schema files in the configured output directory
 - Register the schema with GraphQL
 
-### Step 3: Verify Installation
+### Step 5: Verify Installation
 
 Start your Django development server:
 
@@ -240,20 +327,32 @@ query {
   }
 }
 
-# Create a new author
+# Test file upload functionality
 mutation {
-  createAuthor(input: {
-    name: "Jane Doe"
-    email: "jane@example.com"
-    bio: "A prolific writer"
+  uploadFile(input: {
+    file: null  # File will be provided via multipart form
+    description: "Test upload"
   }) {
     ok
-    author {
+    file {
       id
-      name
-      email
+      filename
+      size
+      mimeType
+      uploadedAt
     }
     errors
+  }
+}
+
+# Query file processing status
+query {
+  fileProcessingStatus(fileId: "1") {
+    id
+    status
+    virusScanResult
+    thumbnailGenerated
+    processingErrors
   }
 }
 ```

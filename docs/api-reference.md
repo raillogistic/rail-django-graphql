@@ -9,6 +9,7 @@ This document provides a comprehensive reference for all GraphQL queries, mutati
 - [Mutation Operations](#mutation-operations)
 - [Method Mutations](#method-mutations)
 - [Bulk Operations](#bulk-operations)
+- [File Upload Operations](#file-upload-operations)
 - [Performance Optimization APIs](#performance-optimization-apis)
 - [Input Types](#input-types)
 - [Output Types](#output-types)
@@ -545,6 +546,132 @@ input BulkDelete<Model>Input {
 }
 ```
 
+## 📁 File Upload Operations
+
+Handle file uploads with automatic validation, processing, and security scanning.
+
+### Single File Upload
+
+Upload a single file with validation and processing.
+
+#### Syntax
+```graphql
+uploadFile(input: FileUploadInput!): FileUploadPayload
+```
+
+#### Example
+```graphql
+mutation UploadFile($input: FileUploadInput!) {
+  uploadFile(input: $input) {
+    ok
+    file {
+      id
+      filename
+      originalName
+      mimeType
+      size
+      url
+      thumbnails {
+        size
+        url
+        width
+        height
+      }
+    }
+    errors
+  }
+}
+```
+
+#### Variables
+```json
+{
+  "input": {
+    "file": "base64EncodedFileContent",
+    "filename": "image.jpg",
+    "mimeType": "image/jpeg",
+    "validateVirus": true,
+    "generateThumbnails": true,
+    "thumbnailSizes": ["SMALL", "MEDIUM", "LARGE"]
+  }
+}
+```
+
+### Multiple File Upload
+
+Upload multiple files in a single operation.
+
+#### Syntax
+```graphql
+uploadMultipleFiles(input: MultipleFileUploadInput!): MultipleFileUploadPayload
+```
+
+#### Example
+```graphql
+mutation UploadMultipleFiles($input: MultipleFileUploadInput!) {
+  uploadMultipleFiles(input: $input) {
+    ok
+    files {
+      id
+      filename
+      originalName
+      mimeType
+      size
+      url
+      processingStatus
+    }
+    errors
+  }
+}
+```
+
+#### Variables
+```json
+{
+  "input": {
+    "files": [
+      {
+        "file": "base64EncodedFileContent1",
+        "filename": "image1.jpg",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "file": "base64EncodedFileContent2",
+        "filename": "document.pdf",
+        "mimeType": "application/pdf"
+      }
+    ],
+    "validateVirus": true,
+    "processAsync": true
+  }
+}
+```
+
+### File Processing Status
+
+Check the processing status of uploaded files.
+
+#### Syntax
+```graphql
+fileProcessingStatus(fileId: ID!): FileProcessingStatusPayload
+```
+
+#### Example
+```graphql
+query FileProcessingStatus($fileId: ID!) {
+  fileProcessingStatus(fileId: $fileId) {
+    status  # PENDING, PROCESSING, COMPLETED, FAILED
+    progress  # 0-100
+    thumbnails {
+      size
+      url
+      status
+    }
+    errors
+  }
+}
+```
+
 ## ⚡ Performance Optimization APIs
 
 The Django GraphQL Auto-Generation Library includes comprehensive performance optimization APIs for N+1 query prevention, caching, and performance monitoring.
@@ -800,6 +927,99 @@ type BulkDelete<Model>Payload {
   ok: Boolean!
   deletedIds: [ID]
   errors: [String]
+}
+```
+
+### File Upload Payload Types
+
+File upload operations return specialized payload types.
+
+```graphql
+type FileUploadPayload {
+  ok: Boolean!
+  file: FileInfo
+  errors: [String]
+}
+
+type MultipleFileUploadPayload {
+  ok: Boolean!
+  files: [FileInfo]
+  errors: [String]
+}
+
+type FileProcessingStatusPayload {
+  status: FileProcessingStatus!  # PENDING, PROCESSING, COMPLETED, FAILED
+  progress: Int  # 0-100
+  thumbnails: [ThumbnailInfo]
+  errors: [String]
+}
+
+type FileInfo {
+  id: ID!
+  filename: String!
+  originalName: String!
+  mimeType: String!
+  size: Int!
+  url: String!
+  thumbnails: [ThumbnailInfo]
+  processingStatus: FileProcessingStatus
+  uploadedAt: DateTime!
+  metadata: JSON
+}
+
+type ThumbnailInfo {
+  size: ThumbnailSize!  # SMALL, MEDIUM, LARGE, XLARGE
+  url: String!
+  width: Int!
+  height: Int!
+  status: FileProcessingStatus
+}
+
+enum FileProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  QUARANTINED
+}
+
+enum ThumbnailSize {
+  SMALL
+  MEDIUM
+  LARGE
+  XLARGE
+}
+```
+
+### File Upload Input Types
+
+Input types for file upload operations.
+
+```graphql
+input FileUploadInput {
+  file: String!  # Base64 encoded file content
+  filename: String!
+  mimeType: String!
+  validateVirus: Boolean = true
+  generateThumbnails: Boolean = false
+  thumbnailSizes: [ThumbnailSize] = [MEDIUM]
+  processAsync: Boolean = false
+  metadata: JSON
+}
+
+input MultipleFileUploadInput {
+  files: [FileUploadInput!]!
+  validateVirus: Boolean = true
+  processAsync: Boolean = true
+  batchSize: Int = 10
+}
+
+input FileProcessingOptions {
+  generateThumbnails: Boolean = false
+  thumbnailSizes: [ThumbnailSize] = [SMALL, MEDIUM, LARGE]
+  optimizeImages: Boolean = true
+  extractMetadata: Boolean = true
+  virusScan: Boolean = true
 }
 ```
 

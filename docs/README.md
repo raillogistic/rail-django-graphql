@@ -15,6 +15,12 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 - **[Bulk Operations](features/bulk-operations.md)** - Efficient batch operations
 - **[Method Mutations](features/method-mutations.md)** - Custom mutation methods
 
+### 📁 File Uploads & Media (Phase 6)
+- **[File Uploads & Media Management](file-uploads-media.md)** - Comprehensive file upload and media processing system
+- **[File Upload Security](file-uploads-media.md#sécurité)** - Virus scanning, validation, and quarantine
+- **[Media Processing](file-uploads-media.md#gestion-des-médias)** - Image processing, thumbnail generation, and optimization
+- **[Storage Backends](file-uploads-media.md#backends-de-stockage)** - Local, S3, and CDN storage support
+
 ### 🔐 Security Implementation (Phase 4)
 - **[Security Overview](features/security.md)** - Comprehensive security architecture
 - **[Authentication Examples](examples/authentication-examples.md)** - JWT and session authentication
@@ -67,7 +73,8 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 2. Follow the [Installation](setup/installation.md) instructions
 3. Try the [Basic Examples](examples/basic-examples.md)
 4. Configure [Security](setup/security-configuration.md)
-5. Optimize [Performance](performance-optimization.md)
+5. Set up [File Uploads & Media](file-uploads-media.md)
+6. Optimize [Performance](performance-optimization.md)
 
 ### For Developers
 1. Review the [API Reference](api/graphql-api-reference.md)
@@ -97,6 +104,31 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 4. Enable [Performance Monitoring](performance-optimization.md#surveillance-des-performances)
 5. Run [Performance Benchmarks](performance-optimization.md#benchmarks-et-tests-de-performance)
 6. Optimize [Query Complexity](performance-optimization.md#contrôle-de-la-complexité)
+
+## 📁 File Uploads & Media Features Highlights
+
+The Django GraphQL Auto-Generation System includes comprehensive file upload and media management:
+
+### File Upload System
+- **Auto-Generated Mutations** - Automatic GraphQL mutations for file uploads
+- **Multiple File Support** - Single and batch file upload capabilities
+- **File Validation** - Type, size, and format validation
+- **Security Scanning** - Integrated virus scanning with ClamAV
+- **Quarantine System** - Automatic isolation of suspicious files
+
+### Media Management
+- **Image Processing** - Automatic resizing, optimization, and format conversion
+- **Thumbnail Generation** - Multiple size thumbnail creation
+- **Metadata Extraction** - EXIF data and file information extraction
+- **CDN Integration** - Content delivery network support
+- **Storage Abstraction** - Local, S3, and cloud storage backends
+
+### Security & Performance
+- **Virus Scanning** - Real-time antivirus protection
+- **File Type Validation** - Whitelist-based file type checking
+- **Size Limits** - Configurable file size restrictions
+- **Asynchronous Processing** - Background media processing
+- **Caching** - Intelligent metadata and thumbnail caching
 
 ## 🔐 Security Features Highlights
 
@@ -160,10 +192,11 @@ The Django GraphQL Auto-Generation System includes advanced performance optimiza
 
 ## 📊 Documentation Statistics
 
-- **Total Documents**: 30+ comprehensive guides
+- **Total Documents**: 35+ comprehensive guides
 - **Security Documentation**: 8 dedicated security documents
 - **Performance Documentation**: 6 dedicated performance optimization documents
-- **Code Examples**: 150+ practical examples
+- **File Upload & Media Documentation**: 4 dedicated file management documents
+- **Code Examples**: 200+ practical examples
 - **API Coverage**: Complete GraphQL API documentation
 - **Deployment Guides**: Production-ready deployment instructions
 - **Benchmarking Tools**: Comprehensive performance testing suite
@@ -192,6 +225,7 @@ This documentation is actively maintained and updated. Key areas of focus:
 
 - **Security Documentation** - Continuously updated with new security features
 - **Performance Documentation** - Regularly updated with optimization techniques and benchmarks
+- **File Upload & Media Documentation** - Updated with new file processing capabilities and storage options
 - **API Reference** - Kept in sync with code changes
 - **Examples** - Regularly updated with real-world use cases
 - **Deployment Guides** - Updated with latest best practices
@@ -200,7 +234,7 @@ This documentation is actively maintained and updated. Key areas of focus:
 ---
 
 **Last Updated**: January 2024  
-**Documentation Version**: 1.1  
-**System Version**: Compatible with Django GraphQL Auto-Generation System v1.1+ (includes Phase 5 Performance Optimization)
+**Documentation Version**: 1.2  
+**System Version**: Compatible with Django GraphQL Auto-Generation System v1.2+ (includes Phase 6 File Uploads & Media)
 
 For the most up-to-date information, please refer to the individual documentation files and the project repository.

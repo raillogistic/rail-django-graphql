@@ -36,6 +36,34 @@ from .extensions.caching import (
     cache_query,
     cache_field
 )
+
+# Imports de gestion des fichiers et médias
+from .generators.file_uploads import (
+    FileUploadGenerator,
+    FileInfo,
+    FileUploadResult,
+    MultipleFileUploadResult,
+    FileValidator,
+    FileProcessor
+)
+from .extensions.media import (
+    MediaManager,
+    ImageProcessor,
+    ThumbnailSize,
+    MediaInfo,
+    ThumbnailInfo,
+    StorageBackend,
+    LocalStorageBackend,
+    S3StorageBackend,
+    CDNManager
+)
+from .extensions.virus_scanner import (
+    VirusScanner,
+    ClamAVScanner,
+    MockScanner,
+    ScanResult,
+    ThreatDetected
+)
 from .middleware.performance import (
     GraphQLPerformanceMiddleware,
     GraphQLPerformanceView,
@@ -74,6 +102,28 @@ __all__ = [
     'get_cache_manager',
     'cache_query',
     'cache_field',
+    
+    # File upload and media components
+    'FileUploadGenerator',
+    'FileInfo',
+    'FileUploadResult',
+    'MultipleFileUploadResult',
+    'FileValidator',
+    'FileProcessor',
+    'MediaManager',
+    'ImageProcessor',
+    'ThumbnailSize',
+    'MediaInfo',
+    'ThumbnailInfo',
+    'StorageBackend',
+    'LocalStorageBackend',
+    'S3StorageBackend',
+    'CDNManager',
+    'VirusScanner',
+    'ClamAVScanner',
+    'MockScanner',
+    'ScanResult',
+    'ThreatDetected',
     
     # Middleware components
     'GraphQLPerformanceMiddleware',
