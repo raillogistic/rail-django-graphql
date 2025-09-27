@@ -5,7 +5,8 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 ## 📚 Documentation Structure
 
 ### 🚀 Getting Started
-- **[Quick Start Guide](quick-start.md)** - Get up and running in minutes
+- **[Quick Start Guide](quick-start.md)** - Get up and running in minutes with comprehensive examples
+- **[Setup Guide](setup/setup-guide.md)** - Complete setup guide with prerequisites and configuration
 - **[Installation](setup/installation.md)** - Detailed installation instructions
 - **[Basic Usage](usage/basic-usage.md)** - Learn the fundamentals
 
@@ -37,10 +38,16 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 - **[Query Complexity Control](performance-optimization.md#contrôle-de-la-complexité)** - Resource usage management
 - **[Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)** - Performance testing and validation
 
-### 📖 API Reference
+### 📖 API Reference & Usage
+- **[Advanced Usage Guide](usage/advanced-usage.md)** - Advanced patterns, API reference, and schema generation
 - **[GraphQL API Reference](api/graphql-api-reference.md)** - Complete API documentation
 - **[Core Classes](api/core-classes.md)** - Python class documentation
 - **[API Reference](api-reference.md)** - Legacy API reference
+
+### 🛠️ Development & Architecture
+- **[Developer Guide](development/developer-guide.md)** - Architecture, extension development, and testing
+- **[Performance](development/performance.md)** - Performance optimization
+- **[Testing](development/testing.md)** - Testing strategies
 
 ### 💡 Examples
 - **[Basic Examples](examples/basic-examples.md)** - Simple usage examples
@@ -54,7 +61,7 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 
 ### 🚀 Deployment & Production
 - **[Production Deployment](deployment/production-deployment.md)** - Complete production setup guide
-- **[Performance](development/performance.md)** - Performance optimization
+- **[Performance Optimization](performance-optimization.md)** - Comprehensive performance optimization guide
 - **[Testing](development/testing.md)** - Testing strategies
 
 ### 🔍 Troubleshooting
@@ -70,18 +77,21 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 
 ### For New Users
 1. Start with the [Quick Start Guide](quick-start.md)
-2. Follow the [Installation](setup/installation.md) instructions
-3. Try the [Basic Examples](examples/basic-examples.md)
-4. Configure [Security](setup/security-configuration.md)
-5. Set up [File Uploads & Media](file-uploads-media.md)
-6. Optimize [Performance](performance-optimization.md)
+2. Follow the [Setup Guide](setup/setup-guide.md) for comprehensive configuration
+3. Review the [Installation](setup/installation.md) instructions
+4. Try the [Basic Examples](examples/basic-examples.md)
+5. Configure [Security](setup/security-configuration.md)
+6. Set up [File Uploads & Media](file-uploads-media.md)
+7. Optimize [Performance](performance-optimization.md)
 
 ### For Developers
-1. Review the [API Reference](api/graphql-api-reference.md)
-2. Explore [Advanced Examples](examples/advanced-examples.md)
-3. Check [Performance Optimization](performance-optimization.md) guidelines
-4. Set up [Testing](development/testing.md)
-5. Use [Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)
+1. Review the [Developer Guide](development/developer-guide.md) for architecture overview
+2. Explore the [Advanced Usage Guide](usage/advanced-usage.md) for API patterns
+3. Check the [API Reference](api/graphql-api-reference.md)
+4. Try [Advanced Examples](examples/advanced-examples.md)
+5. Follow [Performance Optimization](performance-optimization.md) guidelines
+6. Set up [Testing](development/testing.md)
+7. Use [Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)
 
 ### For DevOps/Deployment
 1. Follow the [Production Deployment](deployment/production-deployment.md) guide
@@ -192,14 +202,16 @@ The Django GraphQL Auto-Generation System includes advanced performance optimiza
 
 ## 📊 Documentation Statistics
 
-- **Total Documents**: 35+ comprehensive guides
+- **Total Documents**: 40+ comprehensive guides
+- **Phase 7.1 Documentation**: 4 new comprehensive documentation files
 - **Security Documentation**: 8 dedicated security documents
 - **Performance Documentation**: 6 dedicated performance optimization documents
 - **File Upload & Media Documentation**: 4 dedicated file management documents
-- **Code Examples**: 200+ practical examples
+- **Code Examples**: 300+ practical examples
 - **API Coverage**: Complete GraphQL API documentation
 - **Deployment Guides**: Production-ready deployment instructions
 - **Benchmarking Tools**: Comprehensive performance testing suite
+- **Developer Resources**: Architecture guides and extension development documentation
 
 ## 🤝 Contributing to Documentation
 
@@ -223,6 +235,7 @@ If you need help or have questions:
 
 This documentation is actively maintained and updated. Key areas of focus:
 
+- **Phase 7.1 Documentation** - New comprehensive setup guide, advanced usage patterns, and developer architecture documentation
 - **Security Documentation** - Continuously updated with new security features
 - **Performance Documentation** - Regularly updated with optimization techniques and benchmarks
 - **File Upload & Media Documentation** - Updated with new file processing capabilities and storage options
@@ -230,11 +243,12 @@ This documentation is actively maintained and updated. Key areas of focus:
 - **Examples** - Regularly updated with real-world use cases
 - **Deployment Guides** - Updated with latest best practices
 - **Benchmarking Tools** - Updated with new performance testing capabilities
+- **Developer Resources** - New architecture guides and extension development documentation
 
 ---
 
 **Last Updated**: January 2024  
-**Documentation Version**: 1.2  
-**System Version**: Compatible with Django GraphQL Auto-Generation System v1.2+ (includes Phase 6 File Uploads & Media)
+**Documentation Version**: 1.3  
+**System Version**: Compatible with Django GraphQL Auto-Generation System v1.3+ (includes Phase 7.1 Documentation)
 
 For the most up-to-date information, please refer to the individual documentation files and the project repository.

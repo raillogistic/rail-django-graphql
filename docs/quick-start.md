@@ -1,178 +1,246 @@
-# 🚀 Quick Start Guide
+# Quick Start Guide
 
-Get up and running with the Django GraphQL Auto-Generation Library in just a few minutes!
+Get your Django GraphQL API up and running in minutes with the Django GraphQL Auto-Generation Library.
 
-## Prerequisites
+## 🚀 5-Minute Setup
 
-- Python 3.8+
-- Django 3.2+
-- Basic knowledge of Django and GraphQL
-
-## 1. Installation
+### Step 1: Install the Library
 
 ```bash
 pip install django-graphql-auto
 ```
 
-## 2. Django Configuration
-
-Add to your `settings.py`:
+### Step 2: Add to Django Settings
 
 ```python
+# settings.py
 INSTALLED_APPS = [
-    # ... your other apps
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    
+    # Third-party apps
     'graphene_django',
-    'django_graphql_auto',
-    'corsheaders',  # For frontend integration
+    'django_graphql_auto',  # Add this line
+    
+    # Your apps
+    'myapp',
 ]
 
-# GraphQL Configuration
+# GraphQL Auto-Generation Configuration
+DJANGO_GRAPHQL_AUTO = {
+    'MODELS': [
+        'myapp.models.Post',
+        'myapp.models.Category',
+        'myapp.models.Author',
+    ],
+    'ENABLE_MUTATIONS': True,
+    'ENABLE_FILTERS': True,
+    'ENABLE_PAGINATION': True,
+}
+
+# Graphene Django Configuration
 GRAPHENE = {
     'SCHEMA': 'django_graphql_auto.schema.schema'
 }
-
-# Auto-generation settings
-DJANGO_GRAPHQL_AUTO = {
-    'APPS': ['your_app'],  # Apps to generate schema for
-    'AUTO_GENERATE': True,
-    'ENABLE_FILTERING': True,
-    'ENABLE_PAGINATION': True,
-    'MUTATION_SETTINGS': {
-        'enable_method_mutations': True,  # Enable method mutations
-        'enable_bulk_operations': True,   # Enable bulk operations
-        'bulk_batch_size': 100,          # Batch size for bulk operations
-        'enable_nested_relations': True,  # Enable nested operations
-    },
-    # Performance Optimization Settings (Phase 5)
-    'PERFORMANCE': {
-        'ENABLE_QUERY_OPTIMIZATION': True,    # Enable automatic N+1 prevention
-        'ENABLE_CACHING': True,               # Enable multi-level caching
-        'ENABLE_PERFORMANCE_MONITORING': True, # Enable performance monitoring
-        'CACHE_BACKEND': 'redis',             # Cache backend (redis, memcached, database)
-        'CACHE_TTL': 300,                     # Default cache TTL in seconds
-        'MAX_QUERY_COMPLEXITY': 1000,        # Maximum query complexity
-        'ENABLE_QUERY_ANALYSIS': True,       # Enable query analysis
-    }
-}
-
-# CORS (for frontend integration)
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React default
-    "http://127.0.0.1:3000",
-]
 ```
 
-## 3. URL Configuration
-
-Add to your main `urls.py`:
+### Step 3: Add URL Configuration
 
 ```python
-from django.urls import path, include
+# urls.py
+from django.contrib import admin
+from django.urls import path
 from graphene_django.views import GraphQLView
-from django_graphql_auto.middleware import setup_performance_monitoring
-
-# Setup performance monitoring (optional but recommended)
-setup_performance_monitoring()
 
 urlpatterns = [
-    # ... your other URLs
+    path('admin/', admin.site.urls),
     path('graphql/', GraphQLView.as_view(graphiql=True)),
-    # Performance monitoring endpoint (optional)
-    path('graphql/performance/', include('django_graphql_auto.urls')),
 ]
 ```
 
-## 4. Create Your Models
+### Step 4: Create Your Models
 
 ```python
-# models.py
+# myapp/models.py
 from django.db import models
+from django.contrib.auth.models import User
 
-class Author(models.Model):
-    name = models.CharField(max_length=100)
-    email = models.EmailField()
-    bio = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
+class Category(models.Model):
+    name = models.CharField("Nom de la catégorie", max_length=100)
+    description = models.TextField("Description", blank=True)
+    created_at = models.DateTimeField("Date de création", auto_now_add=True)
+    
+    class Meta:
+        verbose_name = "Catégorie"
+        verbose_name_plural = "Catégories"
+    
     def __str__(self):
         return self.name
 
-class Post(models.Model):
-    title = models.CharField(max_length=200)
-    content = models.TextField()
-    author = models.ForeignKey(Author, on_delete=models.CASCADE, related_name='posts')
-    published = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+class Author(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    bio = models.TextField("Biographie", blank=True)
+    website = models.URLField("Site web", blank=True)
+    
+    class Meta:
+        verbose_name = "Auteur"
+        verbose_name_plural = "Auteurs"
+    
+    def __str__(self):
+        return self.user.username
 
+class Post(models.Model):
+    title = models.CharField("Titre", max_length=200)
+    content = models.TextField("Contenu")
+    author = models.ForeignKey(Author, on_delete=models.CASCADE, verbose_name="Auteur")
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
+    tags = models.ManyToManyField('Tag', blank=True, verbose_name="Tags")
+    published = models.BooleanField("Publié", default=False)
+    created_at = models.DateTimeField("Date de création", auto_now_add=True)
+    updated_at = models.DateTimeField("Date de modification", auto_now=True)
+    
+    class Meta:
+        verbose_name = "Article"
+        verbose_name_plural = "Articles"
+        ordering = ['-created_at']
+    
     def __str__(self):
         return self.title
-    
-    # Custom methods that will become GraphQL mutations
-    def publish_post(self):
-        """Publier le post (Publish the post)"""
-        self.published = True
-        self.save()
-        return self
-    
-    def archive_post(self):
-        """Archiver le post (Archive the post)"""
-        self.published = False
-        self.save()
-        return self
 
-# Optional: Use performance optimization decorators for custom methods
-from django_graphql_auto import optimize_query, cache_query
-
-class Category(models.Model):
-    name = models.CharField(max_length=100, verbose_name="Nom de la catégorie")
-    description = models.TextField(blank=True, verbose_name="Description")
+class Tag(models.Model):
+    name = models.CharField("Nom du tag", max_length=50, unique=True)
+    color = models.CharField("Couleur", max_length=7, default="#007bff")
     
-    @optimize_query  # Automatically optimize N+1 queries
-    def get_popular_posts(self):
-        """Obtenir les posts populaires de cette catégorie"""
-        return self.posts.filter(published=True).order_by('-created_at')[:10]
+    class Meta:
+        verbose_name = "Tag"
+        verbose_name_plural = "Tags"
     
-    @cache_query(ttl=300)  # Cache for 5 minutes
-    def get_post_count(self):
-        """Obtenir le nombre de posts dans cette catégorie"""
-        return self.posts.filter(published=True).count()
+    def __str__(self):
+        return self.name
 ```
 
-## 5. Generate Schema & Run Performance Benchmarks
+### Step 5: Run Migrations
 
 ```bash
+python manage.py makemigrations
 python manage.py migrate
-python manage.py generate_graphql_schema
-
-# Optional: Run performance benchmarks to test optimization
-python manage.py run_performance_benchmarks --test-type all --output-dir benchmarks/
 ```
 
-## 6. Test Your API
+### Step 6: Create Sample Data (Optional)
 
-Start the development server:
+```python
+# Create a management command: myapp/management/commands/create_sample_data.py
+from django.core.management.base import BaseCommand
+from django.contrib.auth.models import User
+from myapp.models import Category, Author, Post, Tag
+
+class Command(BaseCommand):
+    help = 'Create sample data for testing'
+    
+    def handle(self, *args, **options):
+        # Create categories
+        tech_category = Category.objects.create(
+            name="Technologie",
+            description="Articles sur la technologie et l'innovation"
+        )
+        
+        lifestyle_category = Category.objects.create(
+            name="Style de vie",
+            description="Articles sur le style de vie et les loisirs"
+        )
+        
+        # Create tags
+        python_tag = Tag.objects.create(name="Python", color="#3776ab")
+        django_tag = Tag.objects.create(name="Django", color="#092e20")
+        graphql_tag = Tag.objects.create(name="GraphQL", color="#e10098")
+        
+        # Create user and author
+        user = User.objects.create_user(
+            username='john_doe',
+            email='john@example.com',
+            first_name='John',
+            last_name='Doe'
+        )
+        
+        author = Author.objects.create(
+            user=user,
+            bio="Développeur passionné par les technologies web modernes.",
+            website="https://johndoe.dev"
+        )
+        
+        # Create posts
+        post1 = Post.objects.create(
+            title="Introduction à GraphQL avec Django",
+            content="GraphQL est une technologie révolutionnaire...",
+            author=author,
+            category=tech_category,
+            published=True
+        )
+        post1.tags.add(python_tag, django_tag, graphql_tag)
+        
+        post2 = Post.objects.create(
+            title="Les meilleures pratiques Django en 2024",
+            content="Django continue d'évoluer avec de nouvelles fonctionnalités...",
+            author=author,
+            category=tech_category,
+            published=True
+        )
+        post2.tags.add(python_tag, django_tag)
+        
+        self.stdout.write(
+            self.style.SUCCESS('Sample data created successfully!')
+        )
+```
+
+Run the command:
+```bash
+python manage.py create_sample_data
+```
+
+### Step 7: Start the Server
 
 ```bash
 python manage.py runserver
 ```
 
-Visit `http://localhost:8000/graphql/` and try these queries:
+## 🎯 Test Your GraphQL API
 
-### Query All Authors
+Visit `http://localhost:8000/graphql/` to access GraphiQL interface.
+
+### Basic Queries
+
+#### 1. Get All Posts
 ```graphql
 query {
-  authors {
+  posts {
     edges {
       node {
         id
-        name
-        email
-        posts {
+        title
+        content
+        published
+        createdAt
+        author {
+          user {
+            username
+            firstName
+            lastName
+          }
+          bio
+        }
+        category {
+          name
+          description
+        }
+        tags {
           edges {
             node {
-              title
-              published
+              name
+              color
             }
           }
         }
@@ -182,18 +250,70 @@ query {
 }
 ```
 
-### Create a New Author
+#### 2. Get Single Post
+```graphql
+query {
+  post(id: "1") {
+    id
+    title
+    content
+    author {
+      user {
+        username
+      }
+    }
+    category {
+      name
+    }
+  }
+}
+```
+
+#### 3. Filter Posts by Category
+```graphql
+query {
+  posts(category: "1") {
+    edges {
+      node {
+        id
+        title
+        category {
+          name
+        }
+      }
+    }
+  }
+}
+```
+
+#### 4. Search Posts
+```graphql
+query {
+  posts(title_Icontains: "GraphQL") {
+    edges {
+      node {
+        id
+        title
+        content
+      }
+    }
+  }
+}
+```
+
+### Basic Mutations
+
+#### 1. Create a New Category
 ```graphql
 mutation {
-  createAuthor(input: {
-    name: "John Doe"
-    email: "john@example.com"
-    bio: "A passionate writer"
+  createCategory(input: {
+    name: "Science"
+    description: "Articles scientifiques et recherche"
   }) {
-    author {
+    category {
       id
       name
-      email
+      description
     }
     success
     errors
@@ -201,21 +321,21 @@ mutation {
 }
 ```
 
-### Create a Post
+#### 2. Create a New Post
 ```graphql
 mutation {
   createPost(input: {
-    title: "My First Post"
-    content: "This is the content of my first post"
-    authorId: "1"  # Use the ID from the author you created
+    title: "Mon Premier Article GraphQL"
+    content: "Ceci est le contenu de mon premier article créé via GraphQL..."
+    authorId: 1
+    categoryId: 1
     published: true
   }) {
     post {
       id
       title
-      author {
-        name
-      }
+      published
+      createdAt
     }
     success
     errors
@@ -223,133 +343,242 @@ mutation {
 }
 ```
 
-### Use Method Mutations
+#### 3. Update a Post
 ```graphql
 mutation {
-  postPublishPost(input: {
-    id: "1"  # ID of the post to publish
+  updatePost(input: {
+    id: 1
+    title: "Titre Mis à Jour"
+    published: true
   }) {
-    ok
     post {
       id
       title
-      published
+      updatedAt
     }
+    success
     errors
   }
 }
 ```
 
-### Bulk Create Posts
+#### 4. Delete a Post
 ```graphql
 mutation {
-  bulkCreatePost(input: {
-    objects: [
-      {
-        title: "Post 1"
-        content: "Content for post 1"
-        authorId: "1"
-      },
-      {
-        title: "Post 2"
-        content: "Content for post 2"
-        authorId: "1"
-      }
-    ]
+  deletePost(input: {
+    id: 1
   }) {
-    ok
-    objects {
-      id
-      title
-    }
+    success
     errors
   }
 }
 ```
-### Query with Filtering and Performance Optimization
-```graphql
-# This query automatically benefits from N+1 prevention and caching
-query {
-  posts(published: true, title_Icontains: "first") {
-    edges {
-      node {
-        title
-        content
-        author {
-          name
-          email  # No N+1 queries thanks to automatic optimization
+
+## 🔧 Advanced Configuration
+
+### Enable Authentication
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    'MODELS': [
+        'myapp.models.Post',
+        'myapp.models.Category',
+        'myapp.models.Author',
+    ],
+    'ENABLE_MUTATIONS': True,
+    'ENABLE_FILTERS': True,
+    'ENABLE_PAGINATION': True,
+    'AUTHENTICATION': {
+        'ENABLE': True,
+        'REQUIRED_FOR_MUTATIONS': True,
+        'LOGIN_REQUIRED_MODELS': ['myapp.models.Post'],
+    },
+}
+```
+
+### Add Permissions
+
+```python
+# myapp/models.py
+class Post(models.Model):
+    # ... existing fields ...
+    
+    class GraphQLMeta:
+        permissions = {
+            'create': ['myapp.add_post'],
+            'update': ['myapp.change_post'],
+            'delete': ['myapp.delete_post'],
         }
-        createdAt
-      }
+```
+
+### Enable Caching
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    # ... existing config ...
+    'CACHING': {
+        'ENABLE': True,
+        'TIMEOUT': 300,  # 5 minutes
+        'CACHE_QUERIES': True,
+        'CACHE_MUTATIONS': False,
+    },
+}
+
+# Add Redis cache backend
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
     }
-  }
+}
+```
+
+### Add Rate Limiting
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    # ... existing config ...
+    'RATE_LIMITING': {
+        'ENABLE': True,
+        'QUERIES_PER_MINUTE': 100,
+        'MUTATIONS_PER_MINUTE': 20,
+        'BURST_LIMIT': 10,
+    },
+}
+```
+
+## 📊 Monitoring and Debugging
+
+### Enable Query Logging
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    # ... existing config ...
+    'LOGGING': {
+        'ENABLE_QUERY_LOGGING': True,
+        'ENABLE_PERFORMANCE_LOGGING': True,
+        'LOG_SLOW_QUERIES': True,
+        'SLOW_QUERY_THRESHOLD': 1.0,  # seconds
+    },
+}
+
+# Configure Django logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'graphql.log',
+        },
+    },
+    'loggers': {
+        'django_graphql_auto': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
 }
 ```
 
 ### Performance Monitoring Query
+
 ```graphql
-# Check query performance metrics
 query {
-  __performance {
-    queryCount
-    executionTime
-    cacheHits
-    cacheMisses
+  __schema {
+    queryType {
+      fields {
+        name
+        type {
+          name
+        }
+      }
+    }
+    mutationType {
+      fields {
+        name
+        type {
+          name
+        }
+      }
+    }
   }
 }
 ```
 
-## 🎉 That's It!
+## 🚀 Next Steps
 
-You now have a fully functional GraphQL API with:
-- ✅ Automatic schema generation
-- ✅ CRUD operations for all models
-- ✅ Method mutations for custom model methods
-- ✅ Bulk operations for efficient data handling
-- ✅ Relationship handling
-- ✅ Filtering and pagination
-- ✅ GraphiQL interface for testing
-- ✅ **N+1 Query Prevention** - Automatic optimization of database queries
-- ✅ **Multi-Level Caching** - Schema, query, and field-level caching
-- ✅ **Performance Monitoring** - Real-time performance metrics and alerts
-- ✅ **Query Complexity Control** - Protection against expensive queries
-- ✅ **Benchmarking Tools** - Performance testing and optimization
+### 1. Explore Advanced Features
+- **File Uploads**: [File Upload Guide](features/file-uploads-media.md)
+- **Real-time Subscriptions**: [Subscription Guide](features/subscriptions.md)
+- **Custom Extensions**: [Extension Development](development/developer-guide.md)
 
-## Next Steps
+### 2. Production Deployment
+- **Security Configuration**: [Security Guide](features/security.md)
+- **Performance Optimization**: [Performance Guide](setup/performance.md)
+- **Monitoring Setup**: [Monitoring Guide](setup/monitoring.md)
 
-1. **[📖 Read the Full Documentation](index.md)** - Learn about all features
-2. **[⚡ Explore Performance Optimization](performance-optimization.md)** - Deep dive into N+1 prevention, caching, and monitoring
-3. **[🔧 Advanced Features](advanced/)** - Custom scalars, inheritance, nested operations
-4. **[💡 Check Out Examples](examples/)** - Real-world usage patterns
-5. **[📊 Performance Benchmarking](development/performance.md)** - Best practices for production optimization
+### 3. Integration Examples
+- **React Frontend**: [React Integration](examples/react-integration.md)
+- **Vue.js Frontend**: [Vue Integration](examples/vue-integration.md)
+- **Mobile Apps**: [Mobile Integration](examples/mobile-integration.md)
 
-## Common Issues
+### 4. Community Resources
+- **GitHub Repository**: [Source Code](https://github.com/your-org/django-graphql-auto)
+- **Documentation**: [Full Documentation](README.md)
+- **Examples**: [Real-world Examples](examples/)
+- **Support**: [Community Forum](https://github.com/your-org/django-graphql-auto/discussions)
 
-### Schema Not Generating?
-- Make sure your app is in `DJANGO_GRAPHQL_AUTO['APPS']`
-- Run `python manage.py generate_graphql_schema` after model changes
-- Check the console for any error messages
+## 🆘 Troubleshooting
 
-### CORS Issues?
-- Add your frontend URL to `CORS_ALLOWED_ORIGINS`
-- Install `django-cors-headers` if not already installed
+### Common Issues
 
-### GraphiQL Not Loading?
-- Ensure `graphiql=True` in your GraphQLView
-- Check that you're accessing the correct URL (`/graphql/`)
+#### Schema Not Generated
+```python
+# Check if models are properly configured
+python manage.py shell
+>>> from django_graphql_auto.core.schema_generator import SchemaGenerator
+>>> generator = SchemaGenerator(debug=True)
+>>> schema = generator.generate_schema()
+```
 
-### Performance Issues?
-- Check query complexity with `python manage.py run_performance_benchmarks`
-- Enable caching in `DJANGO_GRAPHQL_AUTO['PERFORMANCE']` settings
-- Monitor performance at `/graphql/performance/` endpoint
-- Review N+1 query prevention in the performance documentation
+#### GraphiQL Not Loading
+- Ensure `DEBUG = True` in development
+- Check that `graphene_django` is installed
+- Verify URL configuration
 
-## Need Help?
+#### Permission Errors
+```python
+# Check user permissions
+python manage.py shell
+>>> from django.contrib.auth.models import User
+>>> user = User.objects.get(username='your_username')
+>>> user.user_permissions.all()
+>>> user.groups.all()
+```
 
-- 📚 [Full Documentation](index.md)
-- 🛠️ [Troubleshooting Guide](development/troubleshooting.md)
-- 💬 [Contributing Guide](CONTRIBUTING.md)
+#### Performance Issues
+- Enable query optimization in settings
+- Add database indexes for filtered fields
+- Use pagination for large datasets
+- Enable caching for frequently accessed data
+
+### Getting Help
+
+1. **Check the Documentation**: [Full Documentation](README.md)
+2. **Search Issues**: [GitHub Issues](https://github.com/your-org/django-graphql-auto/issues)
+3. **Ask Questions**: [Community Discussions](https://github.com/your-org/django-graphql-auto/discussions)
+4. **Report Bugs**: [Bug Reports](https://github.com/your-org/django-graphql-auto/issues/new)
 
 ---
 
-**Happy coding!** 🚀
+**Congratulations!** 🎉 You now have a fully functional GraphQL API generated automatically from your Django models. Start building amazing applications with the power of GraphQL and Django!
