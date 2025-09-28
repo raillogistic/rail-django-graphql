@@ -1,67 +1,67 @@
-# Gestion des Données de Test - Django GraphQL Auto
+# Test Data Management - Django GraphQL Auto
 
-Ce guide détaille les stratégies et bonnes pratiques pour la gestion des données de test dans le projet Django GraphQL Auto.
+This guide details strategies and best practices for test data management in the Django GraphQL Auto project.
 
-## 📋 Table des Matières
+## 📋 Table of Contents
 
-- [Vue d'Ensemble](#vue-densemble)
-- [Stratégies de Données](#stratégies-de-données)
-- [Fixtures Django](#fixtures-django)
+- [Overview](#overview)
+- [Data Strategies](#data-strategies)
+- [Django Fixtures](#django-fixtures)
 - [Factory Pattern](#factory-pattern)
-- [Gestion des Bases de Données](#gestion-des-bases-de-données)
-- [Données de Test GraphQL](#données-de-test-graphql)
-- [Nettoyage et Isolation](#nettoyage-et-isolation)
-- [Performance et Optimisation](#performance-et-optimisation)
-- [Bonnes Pratiques](#bonnes-pratiques)
+- [Database Management](#database-management)
+- [GraphQL Test Data](#graphql-test-data)
+- [Cleanup and Isolation](#cleanup-and-isolation)
+- [Performance and Optimization](#performance-and-optimization)
+- [Best Practices](#best-practices)
 
-## 🎯 Vue d'Ensemble
+## 🎯 Overview
 
-### Principes Fondamentaux
+### Fundamental Principles
 
 ```python
-# Principes de gestion des données de test
+# Test data management principles
 test_data_principles = {
-    'isolation': 'Chaque test doit être indépendant',
-    'repeatability': 'Les tests doivent être reproductibles',
-    'minimalism': 'Utiliser le minimum de données nécessaires',
-    'realism': 'Les données doivent être réalistes',
-    'cleanup': 'Nettoyer après chaque test',
-    'performance': 'Optimiser la création/destruction des données'
+    'isolation': 'Each test must be independent',
+    'repeatability': 'Tests must be reproducible',
+    'minimalism': 'Use minimum necessary data',
+    'realism': 'Data must be realistic',
+    'cleanup': 'Clean up after each test',
+    'performance': 'Optimize data creation/destruction'
 }
 ```
 
-### Architecture des Données de Test
+### Test Data Architecture
 
 ```
 tests/
 ├── fixtures/
 │   ├── __init__.py
-│   ├── base_fixtures.py      # Fixtures de base
-│   ├── user_fixtures.py      # Fixtures utilisateurs
-│   ├── content_fixtures.py   # Fixtures de contenu
-│   └── graphql_fixtures.py   # Fixtures GraphQL
+│   ├── base_fixtures.py      # Base fixtures
+│   ├── user_fixtures.py      # User fixtures
+│   ├── content_fixtures.py   # Content fixtures
+│   └── graphql_fixtures.py   # GraphQL fixtures
 ├── factories/
 │   ├── __init__.py
-│   ├── base_factory.py       # Factory de base
-│   ├── user_factory.py       # Factory utilisateurs
-│   └── content_factory.py    # Factory de contenu
+│   ├── base_factory.py       # Base factory
+│   ├── user_factory.py       # User factories
+│   └── content_factory.py    # Content factory
 ├── data/
-│   ├── sample_data.json      # Données d'exemple
-│   ├── test_schema.json      # Schémas de test
-│   └── mock_responses.json   # Réponses mockées
+│   ├── sample_data.json      # Sample data
+│   ├── test_schema.json      # Test schemas
+│   └── mock_responses.json   # Mocked responses
 └── utils/
-    ├── data_builders.py      # Constructeurs de données
-    ├── data_cleaners.py      # Nettoyeurs de données
-    └── data_validators.py    # Validateurs de données
+    ├── data_builders.py      # Data builders
+    ├── data_cleaners.py      # Data cleaners
+    └── data_validators.py    # Data validators
 ```
 
-## 📊 Stratégies de Données
+## 📊 Data Strategies
 
-### 1. Stratégie par Type de Test
+### 1. Strategy by Test Type
 
 ```python
 # tests/strategies/data_strategy.py
-"""Stratégies de données par type de test."""
+"""Data strategies by test type."""
 
 from enum import Enum
 from typing import Dict, Any, List
@@ -69,18 +69,18 @@ from dataclasses import dataclass
 
 
 class TestDataStrategy(Enum):
-    """Types de stratégies de données de test."""
+    """Types of test data strategies."""
     
-    MINIMAL = "minimal"          # Données minimales
-    REALISTIC = "realistic"      # Données réalistes
-    EDGE_CASES = "edge_cases"    # Cas limites
-    PERFORMANCE = "performance"  # Tests de performance
-    SECURITY = "security"        # Tests de sécurité
+    MINIMAL = "minimal"          # Minimal data
+    REALISTIC = "realistic"      # Realistic data
+    EDGE_CASES = "edge_cases"    # Edge cases
+    PERFORMANCE = "performance"  # Performance tests
+    SECURITY = "security"        # Security tests
 
 
 @dataclass
 class DataRequirement:
-    """Exigences pour les données de test."""
+    """Requirements for test data."""
     
     strategy: TestDataStrategy
     models: List[str]
@@ -91,7 +91,7 @@ class DataRequirement:
 
 
 class TestDataManager:
-    """Gestionnaire des stratégies de données de test."""
+    """Manager for test data strategies."""
     
     def __init__(self):
         self.strategies = {

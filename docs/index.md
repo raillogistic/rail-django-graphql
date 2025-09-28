@@ -8,6 +8,7 @@ Welcome to the complete documentation for the Django GraphQL Auto-Generation Sys
 |----------|-------------|---------------|
 | **Getting Started** | New to the system? Start here | [Quick Start](quick-start.md), [Installation](setup/installation.md) |
 | **Security** | Comprehensive security features | [Security Overview](features/security.md), [Auth Examples](examples/authentication-examples.md) |
+| **Configuration** | System configuration and feature flags | [Configuration Guide](configuration-guide.md), [Feature Flags](configuration-guide.md#feature-flags) |
 | **API Reference** | Complete API documentation | [GraphQL API](api/graphql-api-reference.md), [Core Classes](api/core-classes.md) |
 | **Examples** | Practical code examples | [Basic Examples](examples/basic-examples.md), [Security Examples](examples/security-practical-examples.md) |
 | **Deployment** | Production deployment | [Production Guide](deployment/production-deployment.md) |
@@ -92,6 +93,13 @@ Welcome to the complete documentation for the Django GraphQL Auto-Generation Sys
 - **[Custom Scalars](advanced/custom-scalars.md)** - Custom GraphQL scalar types
 - **[Inheritance](advanced/inheritance.md)** - Django model inheritance patterns
 - **[Performance](advanced/performance.md)** - Optimization strategies
+
+#### Configuration Management
+- **[Configuration Guide](configuration-guide.md)** - Comprehensive configuration documentation
+- **[Feature Flags](configuration-guide.md#feature-flags)** - Dynamic feature toggling system
+- **[Runtime Configuration](configuration-guide.md#configuration-runtime)** - Live configuration updates
+- **[Environment Configuration](setup/security-configuration.md)** - Environment-specific settings
+- **[Configuration Validation](configuration-guide.md#validation-de-configuration)** - Schema-based validation
 
 #### Customization
 - **[Custom Resolvers](advanced/custom-resolvers.md)** - Custom query/mutation resolvers

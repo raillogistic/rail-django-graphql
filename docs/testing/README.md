@@ -1,68 +1,68 @@
-# Guide de Tests - Django GraphQL Auto
+# Testing Guide - Django GraphQL Auto
 
-Ce guide fournit une documentation complète pour l'exécution et la maintenance des tests du projet Django GraphQL Auto.
+This guide provides comprehensive documentation for running and maintaining tests for the Django GraphQL Auto project.
 
-## 📋 Table des Matières
+## 📋 Table of Contents
 
-- [Vue d'ensemble](#vue-densemble)
+- [Overview](#overview)
 - [Configuration](#configuration)
-- [Structure des Tests](#structure-des-tests)
-- [Exécution des Tests](#exécution-des-tests)
-- [Types de Tests](#types-de-tests)
-- [Fixtures et Utilitaires](#fixtures-et-utilitaires)
-- [Rapports et Métriques](#rapports-et-métriques)
-- [Bonnes Pratiques](#bonnes-pratiques)
-- [Dépannage](#dépannage)
+- [Test Structure](#test-structure)
+- [Running Tests](#running-tests)
+- [Test Types](#test-types)
+- [Fixtures and Utilities](#fixtures-and-utilities)
+- [Reports and Metrics](#reports-and-metrics)
+- [Best Practices](#best-practices)
+- [Troubleshooting](#troubleshooting)
 
-## 🎯 Vue d'ensemble
+## 🎯 Overview
 
-La suite de tests de Django GraphQL Auto est conçue pour garantir la qualité, la performance et la fiabilité du système de génération automatique de schémas GraphQL.
+The Django GraphQL Auto test suite is designed to ensure quality, performance, and reliability of the automatic GraphQL schema generation system.
 
-### Objectifs des Tests
+### Test Objectives
 
-- **Qualité du Code** : Validation de la logique métier et des fonctionnalités
-- **Performance** : Mesure des temps d'exécution et de l'utilisation mémoire
-- **Fiabilité** : Tests de concurrence et de gestion d'erreurs
-- **Sécurité** : Validation des mécanismes de protection
-- **Régression** : Prévention des régressions lors des modifications
+- **Code Quality**: Validation of business logic and functionality
+- **Performance**: Measurement of execution times and memory usage
+- **Reliability**: Concurrency and error handling tests
+- **Security**: Validation of protection mechanisms
+- **Regression**: Prevention of regressions during modifications
 
-### Couverture de Tests
+### Test Coverage
 
-- ✅ **Tests Unitaires** : Composants individuels
-- ✅ **Tests d'Intégration** : Workflow complet
-- ✅ **Tests de Performance** : Optimisation et scalabilité
-- ✅ **Tests de Sécurité** : Vulnérabilités et protections
-- ✅ **Tests de Régression** : Stabilité des fonctionnalités
+- ✅ **Unit Tests**: Individual components
+- ✅ **Integration Tests**: Complete workflow
+- ✅ **Performance Tests**: Optimization and scalability
+- ✅ **Security Tests**: Vulnerabilities and protections
+- ✅ **Regression Tests**: Feature stability
 
 ## ⚙️ Configuration
 
-### Prérequis
+### Prerequisites
 
 ```bash
-# Installation des dépendances de test
+# Install test dependencies
 pip install pytest pytest-django pytest-cov pytest-xdist
 pip install factory-boy faker
 pip install coverage[toml]
 ```
 
-### Variables d'Environnement
+### Environment Variables
 
 ```bash
-# Configuration de base
+# Basic configuration
 export DJANGO_SETTINGS_MODULE=tests.settings
 export TESTING=True
 
-# Configuration optionnelle
+# Optional configuration
 export DEBUG=False
 export DATABASE_URL=sqlite:///test.db
 ```
 
-### Configuration Django
+### Django Configuration
 
-Le fichier `tests/settings.py` contient la configuration spécifique aux tests :
+The `tests/settings.py` file contains test-specific configuration:
 
 ```python
-# Base de données en mémoire pour les tests
+# In-memory database for tests
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -70,7 +70,7 @@ DATABASES = {
     }
 }
 
-# Cache local pour les tests
+# Local cache for tests
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
@@ -78,108 +78,108 @@ CACHES = {
 }
 ```
 
-## 🏗️ Structure des Tests
+## 🏗️ Test Structure
 
 ```
 tests/
-├── __init__.py                 # Configuration du package de tests
-├── settings.py                 # Configuration Django pour les tests
-├── conftest.py                 # Configuration pytest globale
-├── urls.py                     # URLs de test
-├── schema.py                   # Schéma GraphQL de test
-├── models.py                   # Modèles de test
-├── apps.py                     # Configuration de l'app de test
-├── admin.py                    # Interface admin pour les tests
-├── views.py                    # Vues de test et utilitaires
+├── __init__.py                 # Test package configuration
+├── settings.py                 # Django configuration for tests
+├── conftest.py                 # Global pytest configuration
+├── urls.py                     # Test URLs
+├── schema.py                   # Test GraphQL schema
+├── models.py                   # Test models
+├── apps.py                     # Test app configuration
+├── admin.py                    # Admin interface for tests
+├── views.py                    # Test views and utilities
 │
-├── fixtures/                   # Fixtures et utilitaires
+├── fixtures/                   # Fixtures and utilities
 │   ├── __init__.py
-│   ├── test_data_fixtures.py   # Données de test
-│   ├── test_utilities.py       # Utilitaires de test
-│   ├── mocks_and_stubs.py      # Mocks et stubs
-│   └── assertion_helpers.py    # Helpers d'assertion
+│   ├── test_data_fixtures.py   # Test data
+│   ├── test_utilities.py       # Test utilities
+│   ├── mocks_and_stubs.py      # Mocks and stubs
+│   └── assertion_helpers.py    # Assertion helpers
 │
-├── test_core/                  # Tests des composants principaux
+├── test_core/                  # Core component tests
 │   ├── __init__.py
 │   ├── test_model_introspector.py
 │   ├── test_type_generator.py
 │   ├── test_query_generator.py
 │   └── test_mutation_generator.py
 │
-├── test_generators/            # Tests des générateurs
+├── test_generators/            # Generator tests
 │   ├── __init__.py
 │   ├── test_schema_generator.py
 │   ├── test_field_resolver.py
 │   └── test_relationship_handler.py
 │
-├── test_integration/           # Tests d'intégration
+├── test_integration/           # Integration tests
 │   ├── __init__.py
 │   ├── test_complete_workflow.py
 │   ├── test_django_integration.py
 │   └── test_graphql_execution.py
 │
-├── test_business_methods/      # Tests des méthodes métier
+├── test_business_methods/      # Business method tests
 │   ├── __init__.py
 │   ├── test_method_detection.py
 │   ├── test_method_integration.py
 │   └── test_custom_resolvers.py
 │
-├── test_edge_cases/            # Tests des cas limites
+├── test_edge_cases/            # Edge case tests
 │   ├── __init__.py
 │   ├── test_error_handling.py
 │   ├── test_invalid_models.py
 │   └── test_complex_relationships.py
 │
-├── test_performance/           # Tests de performance
+├── test_performance/           # Performance tests
 │   ├── __init__.py
 │   ├── test_memory_usage.py
 │   ├── test_query_optimization.py
 │   └── test_concurrent_requests.py
 │
-└── management/                 # Commandes de gestion
+└── management/                 # Management commands
     └── commands/
-        └── run_test_suite.py   # Commande d'exécution complète
+        └── run_test_suite.py   # Complete execution command
 ```
 
-## 🚀 Exécution des Tests
+## 🚀 Running Tests
 
-### Commandes de Base
+### Basic Commands
 
 ```bash
-# Exécution de tous les tests
+# Run all tests
 pytest
 
-# Tests avec couverture
+# Tests with coverage
 pytest --cov=django_graphql_auto --cov-report=html
 
-# Tests en parallèle
+# Parallel tests
 pytest -n auto
 
-# Tests avec rapport détaillé
+# Tests with detailed report
 pytest -v --tb=short
 
-# Tests d'un module spécifique
+# Tests for a specific module
 pytest tests/test_core/
 
-# Tests avec tags
+# Tests with tags
 pytest -m "unit"
 pytest -m "not slow"
 ```
 
-### Commande de Gestion Django
+### Django Management Command
 
 ```bash
-# Exécution complète avec rapports
+# Complete execution with reports
 python manage.py run_test_suite --coverage --performance
 
-# Tests avec configuration personnalisée
+# Tests with custom configuration
 python manage.py run_test_suite \
     --parallel 4 \
     --output-dir reports \
     --exclude-tags slow
 ```
 
-### Configuration pytest.ini
+### pytest.ini Configuration
 
 ```ini
 [tool:pytest]
@@ -198,23 +198,23 @@ addopts =
     --maxfail=5
     --tb=short
 markers =
-    unit: Tests unitaires
-    integration: Tests d'intégration
-    performance: Tests de performance
-    slow: Tests lents
-    database: Tests nécessitant la base de données
+    unit: Unit tests
+    integration: Integration tests
+    performance: Performance tests
+    slow: Slow tests
+    database: Tests requiring database
 ```
 
-## 🧪 Types de Tests
+## 🧪 Test Types
 
-### Tests Unitaires
+### Unit Tests
 
-Tests des composants individuels en isolation.
+Tests of individual components in isolation.
 
 ```python
 @pytest.mark.unit
 def test_model_introspector_get_fields():
-    """Test de récupération des champs d'un modèle."""
+    """Test for retrieving model fields."""
     introspector = ModelIntrospector()
     fields = introspector.get_fields(TestModel)
     
@@ -222,14 +222,14 @@ def test_model_introspector_get_fields():
     assert fields['name']['type'] == 'CharField'
 ```
 
-### Tests d'Intégration
+### Integration Tests
 
-Tests du workflow complet de génération de schéma.
+Tests of the complete schema generation workflow.
 
 ```python
 @pytest.mark.integration
 def test_complete_schema_generation():
-    """Test de génération complète d'un schéma."""
+    """Test for complete schema generation."""
     generator = AutoSchemaGenerator()
     schema = generator.generate_schema([TestModel])
     
@@ -237,125 +237,125 @@ def test_complete_schema_generation():
     assert_schema_has_type(schema, 'TestModelType')
 ```
 
-### Tests de Performance
+### Performance Tests
 
-Mesure des performances et de l'utilisation des ressources.
+Measurement of performance and resource usage.
 
 ```python
 @pytest.mark.performance
 def test_schema_generation_performance():
-    """Test de performance de génération de schéma."""
+    """Test for schema generation performance."""
     with PerformanceProfiler() as profiler:
         generator = AutoSchemaGenerator()
         schema = generator.generate_schema(large_model_list)
     
-    assert profiler.execution_time < 5.0  # 5 secondes max
+    assert profiler.execution_time < 5.0  # 5 seconds max
     assert profiler.memory_usage < 100 * 1024 * 1024  # 100MB max
 ```
 
-### Tests de Sécurité
+### Security Tests
 
-Validation des mécanismes de sécurité.
+Validation of security mechanisms.
 
 ```python
 @pytest.mark.security
 def test_sql_injection_protection():
-    """Test de protection contre l'injection SQL."""
+    """Test for SQL injection protection."""
     malicious_query = "'; DROP TABLE users; --"
     
     with pytest.raises(ValidationError):
         execute_graphql_query(malicious_query)
 ```
 
-## 🔧 Fixtures et Utilitaires
+## 🔧 Fixtures and Utilities
 
-### Fixtures de Données
+### Data Fixtures
 
 ```python
 @pytest.fixture
 def sample_authors():
-    """Crée des auteurs de test."""
+    """Creates test authors."""
     return AuthorFactory.create_batch(5)
 
 @pytest.fixture
 def complete_dataset():
-    """Crée un jeu de données complet."""
+    """Creates a complete dataset."""
     return create_complete_test_dataset()
 ```
 
-### Utilitaires de Test
+### Test Utilities
 
 ```python
-# Client GraphQL de test
+# GraphQL test client
 client = GraphQLTestClient(schema)
 result = client.execute(query, variables)
 
-# Assertions GraphQL
+# GraphQL assertions
 assert_graphql_success(result)
 assert_graphql_error(result, "Field not found")
 
-# Profiling de performance
+# Performance profiling
 with PerformanceProfiler() as profiler:
-    # Code à profiler
+    # Code to profile
     pass
 ```
 
-### Mocks et Stubs
+### Mocks and Stubs
 
 ```python
 @pytest.fixture
 def mock_model_introspector():
-    """Mock du ModelIntrospector."""
+    """Mock for ModelIntrospector."""
     with patch('django_graphql_auto.core.ModelIntrospector') as mock:
         mock.return_value.get_fields.return_value = {}
         yield mock
 ```
 
-## 📊 Rapports et Métriques
+## 📊 Reports and Metrics
 
-### Rapport de Couverture
+### Coverage Report
 
 ```bash
-# Génération du rapport HTML
+# Generate HTML report
 pytest --cov=django_graphql_auto --cov-report=html
 
-# Rapport dans le terminal
+# Terminal report
 pytest --cov=django_graphql_auto --cov-report=term-missing
 
-# Rapport XML (pour CI/CD)
+# XML report (for CI/CD)
 pytest --cov=django_graphql_auto --cov-report=xml
 ```
 
-### Métriques de Performance
+### Performance Metrics
 
-Les tests de performance génèrent des métriques détaillées :
+Performance tests generate detailed metrics:
 
-- **Temps d'exécution** : Durée des opérations
-- **Utilisation mémoire** : Consommation RAM
-- **Requêtes DB** : Nombre et optimisation
-- **Concurrence** : Performance sous charge
+- **Execution time**: Duration of operations
+- **Memory usage**: RAM consumption
+- **DB queries**: Number and optimization
+- **Concurrency**: Performance under load
 
-### Rapports Personnalisés
+### Custom Reports
 
 ```bash
-# Génération de rapports complets
+# Generate complete reports
 python manage.py run_test_suite \
     --coverage \
     --performance \
     --output-dir reports/$(date +%Y%m%d_%H%M%S)
 ```
 
-## ✅ Bonnes Pratiques
+## ✅ Best Practices
 
-### Écriture de Tests
+### Writing Tests
 
-1. **Nommage Descriptif**
+1. **Descriptive Naming**
    ```python
    def test_model_introspector_handles_foreign_key_relationships():
-       """Test spécifique et descriptif."""
+       """Specific and descriptive test."""
    ```
 
-2. **Structure AAA (Arrange, Act, Assert)**
+2. **AAA Structure (Arrange, Act, Assert)**
    ```python
    def test_example():
        # Arrange
@@ -368,47 +368,47 @@ python manage.py run_test_suite \
        assert result.is_valid
    ```
 
-3. **Tests Indépendants**
-   - Chaque test doit être indépendant
-   - Utiliser des fixtures pour l'isolation
-   - Nettoyer après chaque test
+3. **Independent Tests**
+   - Each test must be independent
+   - Use fixtures for isolation
+   - Clean up after each test
 
-4. **Assertions Claires**
+4. **Clear Assertions**
    ```python
-   # Bon
+   # Good
    assert user.is_active is True
    assert len(results) == 3
    
-   # Éviter
+   # Avoid
    assert user
    assert results
    ```
 
-### Performance des Tests
+### Test Performance
 
-1. **Tests Rapides**
-   - Utiliser des mocks pour les dépendances externes
-   - Base de données en mémoire
-   - Éviter les sleep() inutiles
+1. **Fast Tests**
+   - Use mocks for external dependencies
+   - In-memory database
+   - Avoid unnecessary sleep()
 
-2. **Parallélisation**
+2. **Parallelization**
    ```bash
-   pytest -n auto  # Utilise tous les CPU disponibles
+   pytest -n auto  # Uses all available CPUs
    ```
 
-3. **Réutilisation de DB**
+3. **DB Reuse**
    ```bash
-   pytest --reuse-db  # Réutilise la DB entre les exécutions
+   pytest --reuse-db  # Reuses DB between executions
    ```
 
-### Organisation
+### Organization
 
-1. **Groupement Logique**
-   - Tests par composant
-   - Tests par fonctionnalité
-   - Tests par niveau (unit/integration)
+1. **Logical Grouping**
+   - Tests by component
+   - Tests by functionality
+   - Tests by level (unit/integration)
 
-2. **Tags et Marqueurs**
+2. **Tags and Markers**
    ```python
    @pytest.mark.slow
    @pytest.mark.database
@@ -417,98 +417,98 @@ python manage.py run_test_suite \
    ```
 
 3. **Documentation**
-   - Docstrings explicatives
-   - Commentaires pour la logique complexe
-   - README pour chaque module de test
+   - Explanatory docstrings
+   - Comments for complex logic
+   - README for each test module
 
-## 🔍 Dépannage
+## 🔍 Troubleshooting
 
-### Problèmes Courants
+### Common Issues
 
-#### Tests Lents
+#### Slow Tests
 
 ```bash
-# Identifier les tests lents
+# Identify slow tests
 pytest --durations=10
 
-# Exclure les tests lents
+# Exclude slow tests
 pytest -m "not slow"
 ```
 
-#### Erreurs de Base de Données
+#### Database Errors
 
 ```python
-# Forcer la création d'une nouvelle DB
+# Force creation of new DB
 pytest --create-db
 
-# Réinitialiser les migrations
+# Reset migrations
 pytest --nomigrations
 ```
 
-#### Problèmes de Mémoire
+#### Memory Issues
 
 ```python
-# Profiler l'utilisation mémoire
+# Profile memory usage
 pytest --memprof
 
-# Limiter les tests en parallèle
-pytest -n 2  # Au lieu de -n auto
+# Limit parallel tests
+pytest -n 2  # Instead of -n auto
 ```
 
-#### Erreurs de Concurrence
+#### Concurrency Errors
 
 ```python
-# Tests séquentiels pour le débogage
+# Sequential tests for debugging
 pytest --forked
 
-# Isolation des tests
-pytest --lf  # Derniers échecs seulement
+# Test isolation
+pytest --lf  # Last failures only
 ```
 
-### Débogage
+### Debugging
 
 ```python
-# Mode debug
+# Debug mode
 pytest -s --pdb
 
-# Logs détaillés
+# Detailed logs
 pytest --log-cli-level=DEBUG
 
-# Arrêt au premier échec
+# Stop at first failure
 pytest -x
 ```
 
-### Outils de Diagnostic
+### Diagnostic Tools
 
 ```bash
-# Informations système
+# System information
 python manage.py run_test_suite --debug-mode
 
-# Vérification de santé
+# Health check
 curl http://localhost:8000/test/health/
 
-# Métriques en temps réel
+# Real-time metrics
 curl http://localhost:8000/test/status/
 ```
 
-## 📚 Ressources Supplémentaires
+## 📚 Additional Resources
 
-- [Documentation pytest](https://docs.pytest.org/)
+- [pytest Documentation](https://docs.pytest.org/)
 - [Django Testing](https://docs.djangoproject.com/en/stable/topics/testing/)
 - [GraphQL Testing Best Practices](https://graphql.org/learn/testing/)
 - [Factory Boy Documentation](https://factoryboy.readthedocs.io/)
 
-## 🤝 Contribution
+## 🤝 Contributing
 
-Pour contribuer aux tests :
+To contribute to tests:
 
-1. Suivre les conventions de nommage
-2. Ajouter des tests pour les nouvelles fonctionnalités
-3. Maintenir la couverture > 80%
-4. Documenter les tests complexes
-5. Exécuter la suite complète avant commit
+1. Follow naming conventions
+2. Add tests for new features
+3. Maintain coverage > 80%
+4. Document complex tests
+5. Run complete suite before commit
 
 ```bash
-# Vérification avant commit
+# Pre-commit verification
 python manage.py run_test_suite --coverage --performance
 ```
