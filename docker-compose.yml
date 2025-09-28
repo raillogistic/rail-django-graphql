@@ -1,0 +1,161 @@
+version: '3.8'
+
+services:
+  # Base de données PostgreSQL
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: django_graphql_auto
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cache Redis
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Application Django
+  web:
+    build: .
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn django_graphql_auto.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - ./static:/app/static
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - REDIS_URL=redis://redis:6379/0
+      - ALLOWED_HOSTS=localhost,127.0.0.1,web
+      - SECRET_KEY=your-secret-key-here
+      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx reverse proxy (production)
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./static:/var/www/static
+      - ./media:/var/www/media
+    depends_on:
+      - web
+    profiles:
+      - production
+
+  # Worker Celery pour les tâches asynchrones
+  celery:
+    build: .
+    command: celery -A django_graphql_auto worker -l info
+    volumes:
+      - ./media:/app/media
+      - ./logs:/app/logs
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - production
+
+  # Celery Beat pour les tâches planifiées
+  celery-beat:
+    build: .
+    command: celery -A django_graphql_auto beat -l info
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - DEBUG=False
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - REDIS_URL=redis://redis:6379/0
+      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - production
+
+  # Monitoring avec Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    profiles:
+      - monitoring
+
+  # Grafana pour la visualisation
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  default:
+    driver: bridge

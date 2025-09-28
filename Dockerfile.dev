@@ -1,0 +1,57 @@
+# Dockerfile de développement pour Django GraphQL Auto System
+FROM python:3.11-slim
+
+# Définir les variables d'environnement pour le développement
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=django_graphql_auto.settings \
+    DEBUG=True
+
+# Installer les dépendances système et outils de développement
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    curl \
+    git \
+    vim \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Créer et définir le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances
+COPY requirements.txt .
+COPY requirements-dev.txt .
+
+# Installer les dépendances Python (incluant les outils de développement)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements-dev.txt
+
+# Installer des outils de développement supplémentaires
+RUN pip install --no-cache-dir \
+    django-debug-toolbar \
+    django-extensions \
+    ipython \
+    pytest-django \
+    pytest-cov \
+    black \
+    flake8 \
+    mypy
+
+# Copier le code de l'application
+COPY . .
+
+# Créer les répertoires nécessaires
+RUN mkdir -p /app/media/uploads /app/static /app/logs
+
+# Exposer le port de développement
+EXPOSE 8000
+
+# Script de santé pour le développement
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health/ || exit 1
+
+# Commande par défaut pour le développement
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
