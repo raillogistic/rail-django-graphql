@@ -67,7 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Updated all documentation to reflect current feature set
-- Improved code examples with French verbose names
 - Enhanced quick-start guide with new features
 
 ## [1.3.5] - 2024-01-15 - Phase 3.5: Method Mutations & Bulk Operations

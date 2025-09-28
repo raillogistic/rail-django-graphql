@@ -59,6 +59,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "cache_middleware.GraphQLCacheInvalidationMiddleware",  # Cache invalidation middleware
 ]
 
 ROOT_URLCONF = "django_graphql_auto.urls"
