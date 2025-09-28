@@ -187,3 +187,5 @@ class ClientInformation(models.Model):
     ville = models.CharField("Ville", max_length=255)
     code_postal = models.CharField("Code postal", max_length=20)
     pays = models.CharField("Pays", max_length=255)
+    paysx = models.CharField("Pays", max_length=255)
+    
