@@ -57,6 +57,17 @@ class TypeGenerator:
         models.UUIDField: graphene.UUID,
     }
 
+    # Mapping of Python types to GraphQL scalar types for @property methods
+    PYTHON_TYPE_MAP = {
+        str: graphene.String,
+        int: graphene.Int,
+        float: graphene.Float,
+        bool: graphene.Boolean,
+        list: graphene.List,
+        dict: graphene.JSONString,
+        # Add more mappings as needed
+    }
+
     def __init__(self, settings: Optional[TypeGeneratorSettings] = None, mutation_settings: Optional[MutationGeneratorSettings] = None):
         self.settings = settings or TypeGeneratorSettings()
         self.mutation_settings = mutation_settings or MutationGeneratorSettings()
@@ -127,6 +138,52 @@ class TypeGenerator:
             return field_name in included_fields
 
         return True
+
+    def _get_graphql_type_for_property(self, return_type: Any) -> graphene.Field:
+        """
+        Convert a Python return type annotation to a GraphQL field type.
+        
+        Args:
+            return_type: The return type annotation from a @property method
+            
+        Returns:
+            GraphQL field with appropriate type
+        """
+        # Handle typing.Any or no annotation
+        if return_type is Any or return_type is None:
+            return graphene.String()
+        
+        # Handle basic Python types
+        if return_type in self.PYTHON_TYPE_MAP:
+            graphql_type = self.PYTHON_TYPE_MAP[return_type]
+            # Special handling for List type which requires of_type parameter
+            if graphql_type == graphene.List:
+                return graphene.List(graphene.String)
+            return graphql_type()
+        
+        # Handle typing generics like List[str], Optional[int], etc.
+        origin = getattr(return_type, '__origin__', None)
+        if origin is not None:
+            if origin is list or origin is List:
+                # Handle List[SomeType]
+                args = getattr(return_type, '__args__', ())
+                if args:
+                    inner_type = self._get_graphql_type_for_property(args[0])
+                    # If inner_type is a Field, extract its type
+                    if hasattr(inner_type, '_type'):
+                        return graphene.List(inner_type._type)
+                    return graphene.List(inner_type)
+                return graphene.List(graphene.String)
+            elif origin is Union:
+                # Handle Optional[SomeType] which is Union[SomeType, None]
+                args = getattr(return_type, '__args__', ())
+                if len(args) == 2 and type(None) in args:
+                    # This is Optional[SomeType]
+                    non_none_type = args[0] if args[1] is type(None) else args[1]
+                    return self._get_graphql_type_for_property(non_none_type)
+        
+        # Default to String for unknown types
+        return graphene.String()
 
     def generate_object_type(self, model: Type[models.Model]) -> Type[DjangoObjectType]:
         """
@@ -265,6 +322,24 @@ class TypeGenerator:
             # Add the accessor name to excluded fields to prevent Django from 
             # generating the default Connection field
             exclude_fields.append(accessor_name)
+
+        # Add @property methods as GraphQL fields
+        properties = introspector.properties
+        for prop_name, prop_info in properties.items():
+            if not self._should_include_field(model, prop_name):
+                continue
+                
+            # Convert the property's return type to a GraphQL field
+            graphql_field = self._get_graphql_type_for_property(prop_info.return_type)
+            type_attrs[prop_name] = graphql_field
+            
+            # Add resolver that calls the property
+            def make_property_resolver(property_name):
+                def resolver(self, info):
+                    return getattr(self, property_name)
+                return resolver
+            
+            type_attrs[f'resolve_{prop_name}'] = make_property_resolver(prop_name)
 
         # Create the type class
         model_type = type(

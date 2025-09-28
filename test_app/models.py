@@ -14,6 +14,16 @@ class Category(models.Model):
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
 
+    @property
+    def uppercase_name(self) -> str:
+        """Retourne le nom de la catégorie en majuscules"""
+        return self.name.upper()
+    
+    @property
+    def post_count(self) -> int:
+        """Retourne le nombre de posts dans cette catégorie"""
+        return self.post_set.count()
+
     def __str__(self):
         return self.name
 
@@ -52,28 +62,36 @@ class Tag(models.Model):
 
 
 class Post(models.Model):
-    STATUS_CHOICES = [
-        ('draft', 'Brouillon'),
-        ('published', 'Publié'),
-        ('archived', 'Archivé'),
-    ]
-
     title = models.CharField("Titre", max_length=200)
     content = models.TextField("Contenu")
-    status = models.CharField("Statut", max_length=20, choices=STATUS_CHOICES, default='draft')
-    author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
-    tags = models.ManyToManyField(Tag, blank=True, verbose_name="Tags")
-    created_at = models.DateTimeField("Créé le", auto_now_add=True)
-    updated_at = models.DateTimeField("Modifié le", auto_now=True)
-    published_at = models.DateTimeField("Publié le", null=True, blank=True)
+    tags = models.ManyToManyField('Tag', blank=True, verbose_name="Tags")
+    created_at = models.DateTimeField("Date de création", auto_now_add=True)
+    updated_at = models.DateTimeField("Date de modification", auto_now=True)
+    is_published = models.BooleanField("Publié", default=False)
+
+    @property
+    def title_with_category(self) -> str:
+        """Retourne le titre avec le nom de la catégorie"""
+        return f"{self.title} - {self.category.name}"
+    
+    @property
+    def word_count(self) -> int:
+        """Retourne le nombre de mots dans le contenu"""
+        return len(self.content.split())
+    
+    @property
+    def tag_names(self) -> list:
+        """Retourne la liste des noms des tags"""
+        return [tag.name for tag in self.tags.all()]
+
+    def __str__(self):
+        return self.title
 
     class Meta:
         verbose_name = "Article"
         verbose_name_plural = "Articles"
-
-    def __str__(self):
-        return self.title
+        ordering = ['-created_at']
 
     @business_logic(category="publishing", requires_permission="can_publish_posts")
     def publish_post(self, publish_notes: str = ""):
@@ -178,8 +196,8 @@ class Client(models.Model):
     raison = models.CharField("Nom", max_length=255)
     
     @property
-    def aaaaaa(self)->str:
-        return "aaaa"
+    def uppercase_raison(self)->str:
+        return self.raison.upper()
 
 
 class ClientInformation(models.Model):
