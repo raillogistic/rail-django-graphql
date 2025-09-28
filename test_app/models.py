@@ -180,3 +180,10 @@ class Client(models.Model):
     @mutation
     def ppppp(self):
         return self.raison
+
+class ClientInformation(models.Model):
+    client = models.OneToOneField(Client, on_delete=models.CASCADE, verbose_name="Client",related_name="info")
+    adresse = models.CharField("Adresse", max_length=255)
+    ville = models.CharField("Ville", max_length=255)
+    code_postal = models.CharField("Code postal", max_length=20)
+    pays = models.CharField("Pays", max_length=255)

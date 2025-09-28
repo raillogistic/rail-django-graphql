@@ -194,13 +194,19 @@ class TypeGenerator:
                     description=f"Related {related_model.__name__} objects"
                 )
                 
-                # Add resolver that returns direct queryset
-                def make_resolver(field_name):
+                # Add resolver that handles different relationship types
+                def make_resolver(field_name, rel_info):
                     def resolver(self, info):
-                        return getattr(self, field_name).all()
+                        related_obj = getattr(self, field_name)
+                        # For OneToOne fields, return the single object or None
+                        if rel_info.relationship_type == 'OneToOneField':
+                            return related_obj
+                        # For ForeignKey and ManyToMany, return queryset
+                        else:
+                            return related_obj.all()
                     return resolver
                 
-                type_attrs[f'resolve_{field_name}'] = make_resolver(field_name)
+                type_attrs[f'resolve_{field_name}'] = make_resolver(field_name, rel_info)
 
         # Add custom resolvers for ALL reverse relationships to return direct model lists
         # instead of relay connections (including Django's default _set relationships)
@@ -219,19 +225,42 @@ class TypeGenerator:
                     return self.generate_object_type(model_ref)
                 return lazy_type
             
-            # Add the field as a direct list with proper lazy type resolution
-            type_attrs[accessor_name] = graphene.List(
-                make_lazy_type(related_model),
-                description=f"Related {related_model.__name__} objects"
-            )
+            # Check if this is a OneToOne reverse relationship
+            is_one_to_one_reverse = False
+            if hasattr(model._meta, 'related_objects'):
+                for rel in model._meta.related_objects:
+                    if rel.get_accessor_name() == accessor_name:
+                        # Import OneToOneRel to check relationship type
+                        from django.db.models.fields.reverse_related import OneToOneRel
+                        if isinstance(rel, OneToOneRel):
+                            is_one_to_one_reverse = True
+                            break
             
-            # Add resolver that returns direct queryset
-            def make_resolver(accessor_name):
+            # Add the field - single object for OneToOne, list for others
+            if is_one_to_one_reverse:
+                type_attrs[accessor_name] = graphene.Field(
+                    make_lazy_type(related_model),
+                    description=f"Related {related_model.__name__} object"
+                )
+            else:
+                type_attrs[accessor_name] = graphene.List(
+                    make_lazy_type(related_model),
+                    description=f"Related {related_model.__name__} objects"
+                )
+            
+            # Add resolver that handles different relationship types
+            def make_resolver(accessor_name, is_one_to_one):
                 def resolver(self, info):
-                    return getattr(self, accessor_name).all()
+                    related_obj = getattr(self, accessor_name)
+                    # For OneToOne reverse relationships, return the single object or None
+                    if is_one_to_one:
+                        return related_obj
+                    # For other relationships, return queryset
+                    else:
+                        return related_obj.all()
                 return resolver
             
-            type_attrs[f'resolve_{accessor_name}'] = make_resolver(accessor_name)
+            type_attrs[f'resolve_{accessor_name}'] = make_resolver(accessor_name, is_one_to_one_reverse)
             
             # Add the accessor name to excluded fields to prevent Django from 
             # generating the default Connection field
