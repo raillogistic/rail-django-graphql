@@ -525,8 +525,8 @@ class HealthQuery(ObjectType):
     health_status = Field(HealthReportType, description="Get comprehensive system health report")
     schema_health = Field(HealthStatusType, description="Get GraphQL schema health status")
     system_metrics = Field(SystemMetricsType, description="Get current system performance metrics")
-    
-    def resolve_health_status(self, info):
+
+    def resolve_health_status(self, info, **kwargs):
         """Resolve comprehensive health report."""
         try:
             report = health_checker.get_comprehensive_health_report()
@@ -551,8 +551,8 @@ class HealthQuery(ObjectType):
                 unhealthy_components=1,
                 recommendations=[f"Health check system error: {str(e)}"]
             )
-    
-    def resolve_schema_health(self, info):
+
+    def resolve_schema_health(self, info, **kwargs):
         """Resolve schema health status."""
         try:
             status = health_checker.check_schema_health()
@@ -572,8 +572,8 @@ class HealthQuery(ObjectType):
                 response_time_ms=0.0,
                 timestamp=datetime.now(timezone.utc).isoformat()
             )
-    
-    def resolve_system_metrics(self, info):
+
+    def resolve_system_metrics(self, info, **kwargs):
         """Resolve system performance metrics."""
         try:
             metrics = health_checker.get_system_metrics()

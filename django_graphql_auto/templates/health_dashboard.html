@@ -601,8 +601,9 @@
 
         // Refresh health data
         async function refreshData() {
-            showLoading(true);
-            
+            console.log("qqqqqqqqqqqqqqqqqq")
+            // showLoading(true);
+            console.log("qqqqqqqqqqqqqqqqqq")
             try {
                 // In a real implementation, this would be a GraphQL query
                 const response = await fetch('/graphql', {
@@ -613,37 +614,37 @@
                     body: JSON.stringify({
                         query: `
                             query {
-                                healthStatus {
-                                    overallStatus
-                                    timestamp
-                                    reportGenerationTimeMs
-                                    healthyComponents
-                                    degradedComponents
-                                    unhealthyComponents
-                                    recommendations
-                                }
-                                systemMetrics {
-                                    cpuUsagePercent
-                                    memoryUsagePercent
-                                    memoryUsedMb
-                                    memoryAvailableMb
-                                    diskUsagePercent
-                                    activeConnections
-                                    cacheHitRate
-                                    uptimeSeconds
-                                }
-                                schemaHealth {
-                                    component
-                                    status
-                                    message
-                                    responseTimeMs
-                                    timestamp
-                                }
-                            }
+                    health_status {
+                        overall_status
+                        timestamp
+                        report_generation_time_ms
+                        healthy_components
+                        degraded_components
+                        unhealthy_components
+                        recommendations
+                    }
+                    system_metrics {
+                        cpu_usage_percent
+                        memory_usage_percent
+                        memory_used_mb
+                        memory_available_mb
+                        disk_usage_percent
+                        active_connections
+                        cache_hit_rate
+                        uptime_seconds
+                    }
+                    schema_health {
+                        component
+                        status
+                        message
+                        response_time_ms
+                        timestamp
+                    }
+                }
                         `
                     })
                 });
-
+                console.log(response)
                 if (!response.ok) {
                     throw new Error('Failed to fetch health data');
                 }
@@ -687,46 +688,46 @@
         // Update status overview cards
         function updateStatusOverview(data) {
             const container = document.getElementById('statusOverview');
-            const healthStatus = data.healthStatus || {};
-            const systemMetrics = data.systemMetrics || {};
+            const healthStatus = data.health_status || {};
+                const systemMetrics = data.system_metrics || {};
             
             container.innerHTML = `
                 <div class="status-card">
                     <h3>Overall Status</h3>
                     <div class="status-indicator">
-                        <div class="status-dot ${healthStatus.overallStatus || 'unhealthy'}"></div>
-                        <span class="metric-value">${(healthStatus.overallStatus || 'Unknown').toUpperCase()}</span>
+                        <div class="status-dot ${healthStatus.overall_status || 'unhealthy'}"></div>
+                <span class="metric-value">${(healthStatus.overall_status || 'Unknown').toUpperCase()}</span>
                     </div>
                     <div class="metric-label">System Health</div>
                 </div>
                 
                 <div class="status-card">
                     <h3>CPU Usage</h3>
-                    <div class="metric-value">${(systemMetrics.cpuUsagePercent || 0).toFixed(1)}%</div>
+                    <div class="metric-value">${(systemMetrics.cpu_usage_percent || 0).toFixed(1)}%</div>
                     <div class="metric-label">Current CPU Load</div>
                 </div>
                 
                 <div class="status-card">
                     <h3>Memory Usage</h3>
-                    <div class="metric-value">${(systemMetrics.memoryUsagePercent || 0).toFixed(1)}%</div>
-                    <div class="metric-label">${(systemMetrics.memoryUsedMb || 0).toFixed(0)} MB Used</div>
+                    <div class="metric-value">${(systemMetrics.memory_usage_percent || 0).toFixed(1)}%</div>
+                <div class="metric-label">${(systemMetrics.memory_used_mb || 0).toFixed(0)} MB Used</div>
                 </div>
                 
                 <div class="status-card">
                     <h3>Cache Performance</h3>
-                    <div class="metric-value">${(systemMetrics.cacheHitRate || 0).toFixed(1)}%</div>
+                    <div class="metric-value">${(systemMetrics.cache_hit_rate || 0).toFixed(1)}%</div>
                     <div class="metric-label">Hit Rate</div>
                 </div>
                 
                 <div class="status-card">
                     <h3>Active Connections</h3>
-                    <div class="metric-value">${systemMetrics.activeConnections || 0}</div>
+                    <div class="metric-value">${systemMetrics.active_connections || 0}</div>
                     <div class="metric-label">Database Connections</div>
                 </div>
                 
                 <div class="status-card">
                     <h3>Uptime</h3>
-                    <div class="metric-value">${formatUptime(systemMetrics.uptimeSeconds || 0)}</div>
+                    <div class="metric-value">${formatUptime(systemMetrics.uptime_seconds || 0)}</div>
                     <div class="metric-label">System Uptime</div>
                 </div>
             `;
@@ -734,14 +735,14 @@
 
         // Update charts with new data
         function updateCharts(data) {
-            const systemMetrics = data.systemMetrics || {};
+            const systemMetrics = data.system_metrics || {};
             const timestamp = new Date().toLocaleTimeString();
             
             // Update performance chart
             if (charts.performance) {
                 charts.performance.data.labels.push(timestamp);
-                charts.performance.data.datasets[0].data.push(systemMetrics.cpuUsagePercent || 0);
-                charts.performance.data.datasets[1].data.push(systemMetrics.memoryUsagePercent || 0);
+                charts.performance.data.datasets[0].data.push(systemMetrics.cpu_usage_percent || 0);
+            charts.performance.data.datasets[1].data.push(systemMetrics.memory_usage_percent || 0);
                 
                 // Keep only last 10 data points
                 if (charts.performance.data.labels.length > 10) {
@@ -754,20 +755,20 @@
             }
             
             // Update resource chart
-            if (charts.resource && systemMetrics.memoryUsagePercent) {
+            if (charts.resource && systemMetrics.memory_usage_percent) {
                 charts.resource.data.datasets[0].data = [
-                    systemMetrics.memoryUsagePercent,
-                    100 - systemMetrics.memoryUsagePercent
+                    systemMetrics.memory_usage_percent,
+                    100 - systemMetrics.memory_usage_percent
                 ];
                 charts.resource.update();
             }
             
             // Update health trend chart
-            if (charts.healthTrend && data.healthStatus) {
+            if (charts.healthTrend && data.health_status) {
                 charts.healthTrend.data.labels.push(timestamp);
-                charts.healthTrend.data.datasets[0].data.push(data.healthStatus.healthyComponents || 0);
-                charts.healthTrend.data.datasets[1].data.push(data.healthStatus.degradedComponents || 0);
-                charts.healthTrend.data.datasets[2].data.push(data.healthStatus.unhealthyComponents || 0);
+                charts.healthTrend.data.datasets[0].data.push(data.health_status.healthy_components || 0);
+                charts.healthTrend.data.datasets[1].data.push(data.health_status.degraded_components || 0);
+                charts.healthTrend.data.datasets[2].data.push(data.health_status.unhealthy_components || 0);
                 
                 // Keep only last 10 data points
                 if (charts.healthTrend.data.labels.length > 10) {
@@ -784,7 +785,7 @@
         // Update component status
         function updateComponents(data) {
             const container = document.getElementById('componentsGrid');
-            const schemaHealth = data.schemaHealth || {};
+            const schemaHealth = data.schema_health || {};
             
             // Mock component data - in real implementation, this would come from the API
             const components = [
@@ -830,7 +831,7 @@
         function updateAlerts(data) {
             const container = document.getElementById('alertsList');
             const countElement = document.getElementById('alertCount');
-            const recommendations = data.healthStatus?.recommendations || [];
+            const recommendations = data.health_status?.recommendations || [];
             
             countElement.textContent = recommendations.length;
             
