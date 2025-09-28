@@ -657,3 +657,4 @@ DJANGO_GRAPHQL_AUTO = {
         },
     },
 }
+

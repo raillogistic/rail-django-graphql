@@ -19,6 +19,16 @@ from django.apps import apps
 from graphene import ObjectType, Field, String, Boolean, Int, Float, List as GrapheneList
 from graphql import validate, build_schema
 from graphql.error import GraphQLError
+from .performance_metrics import (
+    performance_collector,
+    PerformanceDistribution,
+    QueryFrequencyStats,
+    SlowQueryAlert,
+    PerformanceDistributionType,
+    QueryFrequencyStatsType,
+    SlowQueryAlertType,
+    ComplexityStatsType
+)
 
 logger = logging.getLogger(__name__)
 
@@ -519,12 +529,158 @@ class HealthReportType(ObjectType):
     recommendations = GrapheneList(String)
 
 
+class PerformanceQuery(ObjectType):
+    """GraphQL queries for advanced performance monitoring."""
+    
+    execution_time_distribution = Field(
+        PerformanceDistributionType,
+        time_window_minutes=Int(default_value=60),
+        description="Get query execution time distribution (p95, p99, etc.)"
+    )
+    
+    most_frequent_queries = Field(
+        GrapheneList(QueryFrequencyStatsType),
+        limit=Int(default_value=10),
+        description="Get most frequently executed queries"
+    )
+    
+    slowest_queries = Field(
+        GrapheneList(QueryFrequencyStatsType),
+        limit=Int(default_value=10),
+        description="Get slowest queries by average execution time"
+    )
+    
+    recent_slow_queries = Field(
+        GrapheneList(SlowQueryAlertType),
+        limit=Int(default_value=20),
+        description="Get recent slow query alerts"
+    )
+    
+    complexity_stats = Field(
+        ComplexityStatsType,
+        description="Get query complexity and depth statistics"
+    )
+
+    def resolve_execution_time_distribution(self, info, time_window_minutes=60, **kwargs):
+        """Resolve query execution time distribution."""
+        try:
+            distribution = performance_collector.get_execution_time_distribution(time_window_minutes)
+            return PerformanceDistributionType(
+                p50=distribution.p50,
+                p75=distribution.p75,
+                p90=distribution.p90,
+                p95=distribution.p95,
+                p99=distribution.p99,
+                min_time=distribution.min_time,
+                max_time=distribution.max_time,
+                avg_time=distribution.avg_time,
+                total_requests=distribution.total_requests
+            )
+        except Exception as e:
+            logger.error(f"Execution time distribution query failed: {e}")
+            return PerformanceDistributionType()
+
+    def resolve_most_frequent_queries(self, info, limit=10, **kwargs):
+        """Resolve most frequently executed queries."""
+        try:
+            queries = performance_collector.get_most_frequent_queries(limit)
+            return [
+                QueryFrequencyStatsType(
+                    query_hash=q.query_hash,
+                    query_name=q.query_name,
+                    query_text=q.query_text[:500] + "..." if len(q.query_text) > 500 else q.query_text,
+                    call_count=q.call_count,
+                    avg_execution_time=q.avg_execution_time,
+                    min_execution_time=q.min_execution_time,
+                    max_execution_time=q.max_execution_time,
+                    last_executed=q.last_executed.isoformat() if q.last_executed else None,
+                    error_count=q.error_count,
+                    success_rate=q.success_rate
+                )
+                for q in queries
+            ]
+        except Exception as e:
+            logger.error(f"Most frequent queries query failed: {e}")
+            return []
+
+    def resolve_slowest_queries(self, info, limit=10, **kwargs):
+        """Resolve slowest queries by average execution time."""
+        try:
+            queries = performance_collector.get_slowest_queries(limit)
+            
+            return [
+                QueryFrequencyStatsType(
+                    query_hash=q.query_hash,
+                    query_name=q.query_name,
+                    query_text=q.query_text[:500] + "..." if len(q.query_text) > 500 else q.query_text,
+                    call_count=q.call_count,
+                    avg_execution_time=q.avg_execution_time,
+                    min_execution_time=q.min_execution_time,
+                    max_execution_time=q.max_execution_time,
+                    last_executed=q.last_executed.isoformat() if q.last_executed else None,
+                    error_count=q.error_count,
+                    success_rate=q.success_rate
+                )
+                for q in queries
+            ]
+        except Exception as e:
+            logger.error(f"Slowest queries query failed: {e}")
+            return []
+
+    def resolve_recent_slow_queries(self, info, limit=20, **kwargs):
+        """Resolve recent slow query alerts."""
+        try:
+            alerts = performance_collector.get_recent_slow_queries(limit)
+            return [
+                SlowQueryAlertType(
+                    query_hash=alert.query_hash,
+                    query_name=alert.query_name,
+                    execution_time=alert.execution_time,
+                    threshold=alert.threshold,
+                    timestamp=alert.timestamp.isoformat(),
+                    user_id=alert.user_id,
+                    query_complexity=alert.query_complexity,
+                    database_queries=alert.database_queries
+                )
+                for alert in alerts
+            ]
+        except Exception as e:
+            logger.error(f"Recent slow queries query failed: {e}")
+            return []
+
+    def resolve_complexity_stats(self, info, **kwargs):
+        """Resolve query complexity statistics."""
+        try:
+            stats = performance_collector.get_complexity_stats()
+            if not stats:
+                return ComplexityStatsType()
+            
+            return ComplexityStatsType(
+                avg_complexity=stats.get('avg_complexity', 0.0),
+                max_complexity=stats.get('max_complexity', 0),
+                avg_depth=stats.get('avg_depth', 0.0),
+                max_depth=stats.get('max_depth', 0),
+                complex_queries_count=stats.get('complex_queries_count', 0),
+                deep_queries_count=stats.get('deep_queries_count', 0)
+            )
+        except Exception as e:
+            logger.error(f"Complexity stats query failed: {e}")
+            return ComplexityStatsType()
+
+
 class HealthQuery(ObjectType):
     """GraphQL queries for health monitoring."""
     
     health_status = Field(HealthReportType, description="Get comprehensive system health report")
     schema_health = Field(HealthStatusType, description="Get GraphQL schema health status")
     system_metrics = Field(SystemMetricsType, description="Get current system performance metrics")
+    
+    # Intégration des métriques de performance avancées
+    performance = Field(PerformanceQuery, description="Advanced performance monitoring queries")
+
+    def resolve_performance(self, info, **kwargs):
+        """Resolve performance monitoring queries."""
+        return PerformanceQuery()
 
     def resolve_health_status(self, info, **kwargs):
         """Resolve comprehensive health report."""

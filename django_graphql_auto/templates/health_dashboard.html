@@ -393,6 +393,218 @@
             margin-top: 20px;
         }
 
+        /* Advanced Performance Monitoring Styles */
+        .performance-section {
+            margin-top: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .performance-section h2 {
+            color: #1f2937;
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+        }
+
+        .performance-card {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e5e7eb;
+        }
+
+        .performance-card h3 {
+            color: #374151;
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            border-bottom: 2px solid #f3f4f6;
+            padding-bottom: 10px;
+        }
+
+        .queries-table {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .queries-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .queries-table th,
+        .queries-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .queries-table th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+            position: sticky;
+            top: 0;
+        }
+
+        .queries-table tbody tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .query-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px;
+            border-bottom: 1px solid #f3f4f6;
+            transition: background-color 0.2s ease;
+        }
+
+        .query-item:hover {
+            background-color: #f9fafb;
+        }
+
+        .query-info {
+            flex: 1;
+            margin-right: 15px;
+        }
+
+        .query-name {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+
+        .query-text {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-family: 'Courier New', monospace;
+            background: #f3f4f6;
+            padding: 4px 8px;
+            border-radius: 4px;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .query-stats {
+            text-align: right;
+            min-width: 120px;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #1f2937;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+        }
+
+        .alerts-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .slow-query-alert {
+            padding: 12px;
+            border-left: 4px solid #ef4444;
+            background: #fef2f2;
+            margin-bottom: 10px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .alert-query-name {
+            font-weight: 600;
+            color: #dc2626;
+            margin-bottom: 4px;
+        }
+
+        .alert-details {
+            font-size: 0.85rem;
+            color: #7f1d1d;
+        }
+
+        .alert-timestamp {
+            font-size: 0.75rem;
+            color: #991b1b;
+            margin-top: 4px;
+        }
+
+        .percentiles-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+
+        .percentile-item {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #f3f4f6, #e5e7eb);
+            border-radius: 10px;
+        }
+
+        .percentile-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #1f2937;
+            margin-bottom: 5px;
+        }
+
+        .percentile-label {
+            font-size: 0.8rem;
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .complexity-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .complexity-item {
+            text-align: center;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .complexity-value {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #2563eb;
+            margin-bottom: 4px;
+        }
+
+        .complexity-label {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .no-alerts,
+        .no-data {
+            text-align: center;
+            color: #6b7280;
+            font-style: italic;
+            padding: 20px;
+        }
+
         @media (max-width: 768px) {
             .dashboard {
                 padding: 10px;
@@ -408,6 +620,18 @@
             
             .status-overview {
                 grid-template-columns: 1fr;
+            }
+
+            .performance-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .percentiles-display {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .complexity-stats {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -448,6 +672,74 @@
                 <h3>Response Times</h3>
                 <canvas id="responseTimeChart" class="chart-canvas"></canvas>
             </div>
+            <div class="chart-container">
+                <h3>Query Execution Distribution</h3>
+                <canvas id="executionDistributionChart" class="chart-canvas"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>Query Complexity Analysis</h3>
+                <canvas id="complexityChart" class="chart-canvas"></canvas>
+            </div>
+        </div>
+
+        <!-- Advanced Performance Monitoring Section -->
+        <div class="performance-section">
+            <h2>Advanced Performance Monitoring</h2>
+            
+            <div class="performance-grid">
+                <div class="performance-card">
+                    <h3>Most Frequent Queries</h3>
+                    <div id="frequentQueriesTable" class="queries-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Query Name</th>
+                                    <th>Call Count</th>
+                                    <th>Avg Time</th>
+                                    <th>Success Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="performance-card">
+                    <h3>Slowest Queries</h3>
+                    <div id="slowestQueriesTable" class="queries-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Query Name</th>
+                                    <th>Call Count</th>
+                                    <th>Avg Time</th>
+                                    <th>Success Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="performance-card">
+                    <h3>Recent Slow Query Alerts</h3>
+                    <div id="slowQueryAlerts" class="alerts-list">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <div class="performance-card">
+                    <h3>Performance Percentiles</h3>
+                    <div id="performancePercentiles" class="percentiles-display">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
             <div class="chart-container">
                 <h3>Component Health Over Time</h3>
                 <canvas id="healthTrendChart" class="chart-canvas"></canvas>
@@ -596,6 +888,66 @@
                     }
                 }
             });
+
+            // Execution Distribution Chart
+            charts.executionDistribution = new Chart(document.getElementById('executionDistributionChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['P50', 'P75', 'P90', 'P95', 'P99'],
+                    datasets: [{
+                        label: 'Execution Time (ms)',
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            '#10b981',
+                            '#3b82f6',
+                            '#8b5cf6',
+                            '#f59e0b',
+                            '#ef4444'
+                        ]
+                    }]
+                },
+                options: {
+                    ...chartOptions,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Time (ms)'
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Complexity Chart
+            charts.complexity = new Chart(document.getElementById('complexityChart'), {
+                type: 'radar',
+                data: {
+                    labels: ['Avg Complexity', 'Max Complexity', 'Avg Depth', 'Max Depth', 'Complex Queries', 'Deep Queries'],
+                    datasets: [{
+                        label: 'Query Complexity Metrics',
+                        data: [0, 0, 0, 0, 0, 0],
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        pointBackgroundColor: '#8b5cf6'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    },
+                    scales: {
+                        r: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
         }
 
         // Get CSRF token from cookie
@@ -655,6 +1007,51 @@
                         response_time_ms
                         timestamp
                     }
+                    performance {
+                        execution_time_distribution(time_window_minutes: 60) {
+                            p50
+                            p75
+                            p90
+                            p95
+                            p99
+                            min_time
+                            max_time
+                            avg_time
+                            total_requests
+                        }
+                        most_frequent_queries(limit: 10) {
+                            query_hash
+                            query_name
+                            query_text
+                            call_count
+                            avg_execution_time
+                            success_rate
+                        }
+                        slowest_queries(limit: 10) {
+                            query_hash
+                            query_name
+                            query_text
+                            call_count
+                            avg_execution_time
+                            success_rate
+                        }
+                        recent_slow_queries(limit: 20) {
+                            query_hash
+                            query_name
+                            execution_time
+                            threshold
+                            timestamp
+                            query_complexity
+                        }
+                        complexity_stats {
+                            avg_complexity
+                            max_complexity
+                            avg_depth
+                            max_depth
+                            complex_queries_count
+                            deep_queries_count
+                        }
+                    }
                 }
                         `
                     })
@@ -687,6 +1084,7 @@
             updateCharts(data);
             updateComponents(data);
             updateAlerts(data);
+            updatePerformanceData(data);
             
             // Store in history for trending
             healthHistory.push({
@@ -906,6 +1304,141 @@
         function updateLastUpdated() {
             const element = document.getElementById('lastUpdated');
             element.textContent = `Last updated: ${new Date().toLocaleString()}`;
+        }
+
+        // Update performance data and visualizations
+        function updatePerformanceData(data) {
+            const performance = data.performance || {};
+            
+            // Update execution distribution chart
+            if (charts.executionDistribution && performance.execution_time_distribution) {
+                const dist = performance.execution_time_distribution;
+                charts.executionDistribution.data.datasets[0].data = [
+                    dist.p50 || 0,
+                    dist.p75 || 0,
+                    dist.p90 || 0,
+                    dist.p95 || 0,
+                    dist.p99 || 0
+                ];
+                charts.executionDistribution.update();
+            }
+            
+            // Update complexity chart
+            if (charts.complexity && performance.complexity_stats) {
+                const stats = performance.complexity_stats;
+                charts.complexity.data.datasets[0].data = [
+                    stats.avg_complexity || 0,
+                    stats.max_complexity || 0,
+                    stats.avg_depth || 0,
+                    stats.max_depth || 0,
+                    stats.complex_queries_count || 0,
+                    stats.deep_queries_count || 0
+                ];
+                charts.complexity.update();
+            }
+            
+            // Update performance percentiles
+            updatePerformancePercentiles(performance.execution_time_distribution);
+            
+            // Update query tables
+            updateQueryTables(performance);
+            
+            // Update slow query alerts
+            updateSlowQueryAlerts(performance.recent_slow_queries);
+        }
+        
+        // Update performance percentiles display
+        function updatePerformancePercentiles(distribution) {
+            const container = document.getElementById('performancePercentiles');
+            if (!container) return;
+            
+            if (!distribution) {
+                container.innerHTML = '<p class="no-data">No performance data available</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="percentile-item">
+                    <span class="percentile-label">P50</span>
+                    <span class="percentile-value">${(distribution.p50 || 0).toFixed(2)}ms</span>
+                </div>
+                <div class="percentile-item">
+                    <span class="percentile-label">P95</span>
+                    <span class="percentile-value">${(distribution.p95 || 0).toFixed(2)}ms</span>
+                </div>
+                <div class="percentile-item">
+                    <span class="percentile-label">P99</span>
+                    <span class="percentile-value">${(distribution.p99 || 0).toFixed(2)}ms</span>
+                </div>
+                <div class="percentile-item">
+                    <span class="percentile-label">Avg</span>
+                    <span class="percentile-value">${(distribution.avg_time || 0).toFixed(2)}ms</span>
+                </div>
+                <div class="percentile-item">
+                    <span class="percentile-label">Total</span>
+                    <span class="percentile-value">${distribution.total_requests || 0}</span>
+                </div>
+            `;
+        }
+        
+        // Update query tables
+        function updateQueryTables(performance) {
+            // Update most frequent queries
+            const frequentContainer = document.getElementById('frequentQueriesTable');
+            if (frequentContainer && performance.most_frequent_queries) {
+                const tbody = frequentContainer.querySelector('tbody');
+                if (tbody) {
+                    tbody.innerHTML = performance.most_frequent_queries.map(query => `
+                        <tr>
+                            <td title="${query.query_text || 'N/A'}">${query.query_name || query.query_hash || 'Unknown'}</td>
+                            <td>${query.call_count || 0}</td>
+                            <td>${(query.avg_execution_time || 0).toFixed(2)}ms</td>
+                            <td>${((query.success_rate || 0) * 100).toFixed(1)}%</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+            
+            // Update slowest queries
+            const slowestContainer = document.getElementById('slowestQueriesTable');
+            if (slowestContainer && performance.slowest_queries) {
+                const tbody = slowestContainer.querySelector('tbody');
+                if (tbody) {
+                    tbody.innerHTML = performance.slowest_queries.map(query => `
+                        <tr>
+                            <td title="${query.query_text || 'N/A'}">${query.query_name || query.query_hash || 'Unknown'}</td>
+                            <td>${query.call_count || 0}</td>
+                            <td>${(query.avg_execution_time || 0).toFixed(2)}ms</td>
+                            <td>${((query.success_rate || 0) * 100).toFixed(1)}%</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+        }
+        
+        // Update slow query alerts
+        function updateSlowQueryAlerts(slowQueries) {
+            const container = document.getElementById('slowQueryAlerts');
+            if (!container) return;
+            
+            if (!slowQueries || slowQueries.length === 0) {
+                container.innerHTML = '<p class="no-alerts">No recent slow queries detected</p>';
+                return;
+            }
+            
+            container.innerHTML = slowQueries.map(alert => `
+                <div class="slow-query-alert">
+                    <div class="alert-header">
+                        <span class="query-name">${alert.query_name || alert.query_hash || 'Unknown Query'}</span>
+                        <span class="alert-time">${new Date(alert.timestamp).toLocaleTimeString()}</span>
+                    </div>
+                    <div class="alert-details">
+                        <span>Execution: ${(alert.execution_time || 0).toFixed(2)}ms</span>
+                        <span>Threshold: ${(alert.threshold || 0).toFixed(2)}ms</span>
+                        <span>Complexity: ${alert.query_complexity || 'N/A'}</span>
+                    </div>
+                </div>
+            `).join('');
         }
 
         // Format uptime seconds to human readable
