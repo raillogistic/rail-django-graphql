@@ -176,7 +176,7 @@ class Profile(models.Model):
 
 class Client(models.Model):
     raison = models.CharField("Nom", max_length=255)
-    @mutation
     
+    @mutation
     def ppppp(self):
         return self.raison

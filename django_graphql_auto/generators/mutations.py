@@ -53,6 +53,7 @@ class MutationGenerator:
             @classmethod
             @transaction.atomic
             def mutate(cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]) -> 'CreateMutation':
+                print("xxxxxxxxxx",cls)
                 try:
                     # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
@@ -101,6 +102,74 @@ class MutationGenerator:
                     return value
                 
                 return {k: sanitize_value(v) for k, v in input_data.items()}
+            
+            @classmethod
+            def _process_dual_fields(cls, input_data: Dict[str, Any], model: Type[models.Model]) -> Dict[str, Any]:
+                """
+                Process dual fields with automatic priority handling.
+                
+                For OneToManyRel (ForeignKey, OneToOneField):
+                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
+                
+                For ManyToManyRel:
+                - If nested_<field_name> is provided, create nested objects first and merge their IDs
+                  into the direct assign data (<field_name>: [ID])
+                
+                Args:
+                    input_data: The input data to process
+                    model: The Django model
+                    
+                Returns:
+                    Dict with processed dual fields
+                """
+                processed_data = input_data.copy()
+                
+                # Get model relationships
+                introspector = ModelIntrospector(model)
+                relationships = introspector.get_model_relationships()
+                
+                for field_name, rel_info in relationships.items():
+                    nested_field_name = f"nested_{field_name}"
+                    
+                    if rel_info.relationship_type in ['ForeignKey', 'OneToOneField']:
+                        # OneToManyRel: Prioritize nested field over direct ID field
+                        if nested_field_name in processed_data and field_name in processed_data:
+                            # Remove direct ID field, keep nested field
+                            processed_data.pop(field_name)
+                            # Transform nested field name to direct field name for processing
+                            processed_data[field_name] = processed_data.pop(nested_field_name)
+                        elif nested_field_name in processed_data:
+                            # Transform nested field name to direct field name
+                            processed_data[field_name] = processed_data.pop(nested_field_name)
+                    
+                    elif rel_info.relationship_type == 'ManyToManyField':
+                        # ManyToManyRel: Create nested objects first, then merge IDs
+                        if nested_field_name in processed_data:
+                            nested_data = processed_data.pop(nested_field_name)
+                            
+                            # For now, transform nested field to direct field for processing
+                            # The nested operation handler will handle the actual creation
+                            processed_data[field_name] = nested_data
+                
+                # Handle reverse relationships (e.g., comments for Post)
+                reverse_relations = introspector.get_reverse_relations()
+                for field_name, related_model in reverse_relations.items():
+                    nested_field_name = f"nested_{field_name}"
+                    
+                    if nested_field_name in processed_data:
+                        # Transform nested field name to direct field name
+                        processed_data[field_name] = processed_data.pop(nested_field_name)
+                
+                return processed_data
+
+            @classmethod
+            def _get_nested_handler(cls, info: graphene.ResolveInfo) -> NestedOperationHandler:
+                """Get the nested operation handler from the mutation generator."""
+                # Access the mutation generator through the schema context
+                if hasattr(info.context, 'mutation_generator'):
+                    return info.context.mutation_generator.nested_handler
+                # Fallback to creating a new handler
+                return NestedOperationHandler()
             
             @classmethod
             def _process_dual_fields(cls, input_data: Dict[str, Any], model: Type[models.Model]) -> Dict[str, Any]:
@@ -354,6 +423,74 @@ class MutationGenerator:
                     return value
                 
                 return {k: sanitize_value(v) for k, v in input_data.items()}
+            
+            @classmethod
+            def _process_dual_fields(cls, input_data: Dict[str, Any], model: Type[models.Model]) -> Dict[str, Any]:
+                """
+                Process dual fields with automatic priority handling.
+                
+                For OneToManyRel (ForeignKey, OneToOneField):
+                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
+                
+                For ManyToManyRel:
+                - If nested_<field_name> is provided, create nested objects first and merge their IDs
+                  into the direct assign data (<field_name>: [ID])
+                
+                Args:
+                    input_data: The input data to process
+                    model: The Django model
+                    
+                Returns:
+                    Dict with processed dual fields
+                """
+                processed_data = input_data.copy()
+                
+                # Get model relationships
+                introspector = ModelIntrospector(model)
+                relationships = introspector.get_model_relationships()
+                
+                for field_name, rel_info in relationships.items():
+                    nested_field_name = f"nested_{field_name}"
+                    
+                    if rel_info.relationship_type in ['ForeignKey', 'OneToOneField']:
+                        # OneToManyRel: Prioritize nested field over direct ID field
+                        if nested_field_name in processed_data and field_name in processed_data:
+                            # Remove direct ID field, keep nested field
+                            processed_data.pop(field_name)
+                            # Transform nested field name to direct field name for processing
+                            processed_data[field_name] = processed_data.pop(nested_field_name)
+                        elif nested_field_name in processed_data:
+                            # Transform nested field name to direct field name
+                            processed_data[field_name] = processed_data.pop(nested_field_name)
+                    
+                    elif rel_info.relationship_type == 'ManyToManyField':
+                        # ManyToManyRel: Create nested objects first, then merge IDs
+                        if nested_field_name in processed_data:
+                            nested_data = processed_data.pop(nested_field_name)
+                            
+                            # For now, transform nested field to direct field for processing
+                            # The nested operation handler will handle the actual creation
+                            processed_data[field_name] = nested_data
+                
+                # Handle reverse relationships (e.g., comments for Post)
+                reverse_relations = introspector.get_reverse_relations()
+                for field_name, related_model in reverse_relations.items():
+                    nested_field_name = f"nested_{field_name}"
+                    
+                    if nested_field_name in processed_data:
+                        # Transform nested field name to direct field name
+                        processed_data[field_name] = processed_data.pop(nested_field_name)
+                
+                return processed_data
+
+            @classmethod
+            def _get_nested_handler(cls, info: graphene.ResolveInfo) -> NestedOperationHandler:
+                """Get the nested operation handler from the mutation generator."""
+                # Access the mutation generator through the schema context
+                if hasattr(info.context, 'mutation_generator'):
+                    return info.context.mutation_generator.nested_handler
+                # Fallback to creating a new handler
+                return NestedOperationHandler()
 
         return type(
             f'Update{model_name}',
