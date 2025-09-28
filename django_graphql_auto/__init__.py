@@ -10,49 +10,34 @@ __version__ = "1.0.0"
 __author__ = "Django GraphQL Auto Team"
 __email__ = "contact@django-graphql-auto.com"
 
-# Imports principaux disponibles
-from .generators.types import TypeGenerator
-from .generators.queries import QueryGenerator
-from .generators.mutations import MutationGenerator
-from .generators.introspector import ModelIntrospector
-
-# Imports d'optimisation des performances disponibles
-from .extensions.optimization import (
-    QueryOptimizer,
-    QueryAnalyzer,
-    PerformanceMonitor
-)
-from .extensions.caching import (
-    GraphQLCacheManager
-)
-
-# Imports de gestion des fichiers et médias disponibles
-from .generators.file_uploads import (
-    FileUploadGenerator
-)
-from .extensions.media import (
-    MediaManager
-)
-
 # Configuration par défaut
 default_app_config = 'django_graphql_auto.apps.DjangoGraphQLAutoConfig'
 
+# Lazy imports to avoid circular dependencies
+def get_type_generator():
+    """Get TypeGenerator class with lazy import."""
+    from .generators.types import TypeGenerator
+    return TypeGenerator
+
+def get_query_generator():
+    """Get QueryGenerator class with lazy import."""
+    from .generators.queries import QueryGenerator
+    return QueryGenerator
+
+def get_mutation_generator():
+    """Get MutationGenerator class with lazy import."""
+    from .generators.mutations import MutationGenerator
+    return MutationGenerator
+
+def get_model_introspector():
+    """Get ModelIntrospector class with lazy import."""
+    from .generators.introspector import ModelIntrospector
+    return ModelIntrospector
+
+# Minimal __all__ to avoid import issues
 __all__ = [
-    # Core components disponibles
-    'TypeGenerator',
-    'QueryGenerator',
-    'MutationGenerator',
-    'ModelIntrospector',
-    
-    # Performance optimization components disponibles
-    'QueryOptimizer',
-    'QueryAnalyzer',
-    'PerformanceMonitor',
-    
-    # Caching components disponibles
-    'GraphQLCacheManager',
-    
-    # File upload and media components disponibles
-    'FileUploadGenerator',
-    'MediaManager',
+    'get_type_generator',
+    'get_query_generator', 
+    'get_mutation_generator',
+    'get_model_introspector',
 ]

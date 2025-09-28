@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "django_filters",
     "corsheaders",
     # Local apps
+    "django_graphql_auto",
     "django_graphql_auto.core",
     "django_graphql_auto.generators",
     "django_graphql_auto.extensions",
