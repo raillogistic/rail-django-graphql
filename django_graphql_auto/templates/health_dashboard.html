@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GraphQL System Health Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.3/index.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -599,17 +598,33 @@
             });
         }
 
+        // Get CSRF token from cookie
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
         // Refresh health data
         async function refreshData() {
-            console.log("qqqqqqqqqqqqqqqqqq")
-            // showLoading(true);
-            console.log("qqqqqqqqqqqqqqqqqq")
+            console.log("Starting data refresh...")
+            showLoading(true);
             try {
-                // In a real implementation, this would be a GraphQL query
-                const response = await fetch('/graphql', {
+                const csrftoken = getCookie('csrftoken');
+                const response = await fetch('/graphql/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
                     },
                     body: JSON.stringify({
                         query: `
