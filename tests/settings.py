@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     
     # Test apps
     'tests',
+    'test_app',
 ]
 
 MIDDLEWARE = [

@@ -6,7 +6,7 @@ GraphQL filters based on Django model field types, supporting complex
 filter combinations and field-specific operations.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union, Set
 import graphene
 from django.db import models
 from django.db.models import Q
@@ -14,6 +14,13 @@ from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 import django_filters
 from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Configuration constants for nested filtering
+DEFAULT_MAX_NESTED_DEPTH = 3
+MAX_ALLOWED_NESTED_DEPTH = 5
 
 
 class AdvancedFilterGenerator:
@@ -21,73 +28,139 @@ class AdvancedFilterGenerator:
     Generates advanced GraphQL filters for Django models based on field types.
     Supports text, numeric, date, boolean, and choice field filtering with
     complex operations like contains, range, and logical combinations.
+    
+    Enhanced with nested field filtering for related models with configurable depth control.
     """
 
-    def __init__(self):
-        self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
-
-    def generate_filter_set(self, model: Type[models.Model]) -> Type[FilterSet]:
+    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH, enable_nested_filters: bool = True):
         """
-        Generates a comprehensive FilterSet for the given Django model.
+        Initialize the filter generator with nested filtering configuration.
         
         Args:
-            model: Django model class to generate filters for
+            max_nested_depth: Maximum depth for nested relationship filtering (default: 3, max: 5)
+            enable_nested_filters: Whether to enable nested field filtering (default: True)
+        """
+        self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
+        self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
+        self.enable_nested_filters = enable_nested_filters
+        self._visited_models: set = set()  # Track visited models to prevent infinite recursion
+        
+        # Log configuration for debugging
+        logger.debug(f"Initialized AdvancedFilterGenerator "
+                    f"with max_nested_depth={self.max_nested_depth}, "
+                    f"enable_nested_filters={self.enable_nested_filters}")
+
+    def generate_filter_set(self, model: Type[models.Model], current_depth: int = 0) -> Type[FilterSet]:
+        """
+        Generate a FilterSet class for the given Django model with nested filtering support.
+        
+        Args:
+            model: Django model to generate filters for
+            current_depth: Current nesting depth (used for recursion control)
             
         Returns:
-            FilterSet class with auto-generated filters based on field types
+            FilterSet class with comprehensive filtering capabilities
         """
-        if model in self._filter_cache:
-            return self._filter_cache[model]
-
-        filter_fields = {}
-        meta_fields = {}
-
-        for field in model._meta.get_fields():
-            if hasattr(field, 'name') and not field.many_to_many:
-                field_filters = self._generate_field_filters(field)
-                filter_fields.update(field_filters)
-                
-                # Add basic field name for simple filtering
-                meta_fields[field.name] = self._get_basic_filter_lookups(field)
-
-        # Create dynamic FilterSet class
-        filter_set_attrs = {
-            **filter_fields,
-            'Meta': type('Meta', (), {
-                'model': model,
-                'fields': meta_fields,
-                'filter_overrides': {
-                    models.ImageField: {
-                        'filter_class': CharFilter,
-                        'extra': lambda f: {
-                            'lookup_expr': 'icontains',
-                        },
-                    },
-                    models.FileField: {
-                        'filter_class': CharFilter,
-                        'extra': lambda f: {
-                            'lookup_expr': 'icontains',
-                        },
-                    },
+        # Create cache key based on model and depth
+        cache_key = f"{model.__name__}_{current_depth}"
+        
+        if cache_key in self._filter_cache:
+            logger.debug(f"Returning cached FilterSet for {cache_key}")
+            return self._filter_cache[cache_key]
+        
+        # Prevent infinite recursion
+        if model in self._visited_models:
+            logger.warning(f"Circular reference detected for model {model.__name__} at depth {current_depth}")
+            return self._generate_basic_filter_set(model)
+        
+        # Check depth limits
+        if current_depth >= self.max_nested_depth:
+            logger.debug(f"Maximum nested depth ({self.max_nested_depth}) reached for {model.__name__}")
+            return self._generate_basic_filter_set(model)
+        
+        # Add model to visited set
+        self._visited_models.add(model)
+        
+        try:
+            # Generate filters with nested support
+            filters = {}
+            for field in model._meta.get_fields():
+                if hasattr(field, 'name'):  # Skip reverse relations without names
+                    field_filters = self._generate_field_filters(field, current_depth, allow_nested=True)
+                    filters.update(field_filters)
+            
+            # Create FilterSet class
+            filter_set_class = type(
+                f'{model.__name__}FilterSet',
+                (FilterSet,),
+                {
+                    **filters,
+                    'Meta': type('Meta', (), {
+                        'model': model,
+                        'fields': list(filters.keys()),
+                        'strict': False,  # Allow partial matches
+                    })
                 }
-            })
-        }
+            )
+            
+            # Cache the result
+            self._filter_cache[cache_key] = filter_set_class
+            logger.debug(f"Generated FilterSet for {model.__name__} with {len(filters)} filters at depth {current_depth}")
+            
+            return filter_set_class
+            
+        finally:
+            # Remove model from visited set to allow it in other branches
+            self._visited_models.discard(model)
 
+    def _generate_basic_filter_set(self, model: Type[models.Model]) -> Type[FilterSet]:
+        """
+        Create a basic FilterSet without nested relationships to prevent infinite recursion.
+        
+        Args:
+            model: Django model to generate basic filters for
+            
+        Returns:
+            Basic FilterSet class without nested filtering
+        """
+        cache_key = f"{model.__name__}_basic"
+        
+        if cache_key in self._filter_cache:
+            return self._filter_cache[cache_key]
+        
+        # Generate only basic field filters (no nested relationships)
+        filters = {}
+        for field in model._meta.get_fields():
+            if hasattr(field, 'name'):  # Skip reverse relations without names
+                field_filters = self._generate_field_filters(field, 0, allow_nested=False)
+                filters.update(field_filters)
+        
         filter_set_class = type(
-            f'{model.__name__}FilterSet',
+            f'{model.__name__}BasicFilterSet',
             (FilterSet,),
-            filter_set_attrs
+            {
+                **filters,
+                'Meta': type('Meta', (), {
+                    'model': model,
+                    'fields': list(filters.keys()),
+                    'strict': False,
+                })
+            }
         )
-
-        self._filter_cache[model] = filter_set_class
+        
+        self._filter_cache[cache_key] = filter_set_class
+        logger.debug(f"Generated basic FilterSet for {model.__name__} with {len(filters)} filters")
+        
         return filter_set_class
 
-    def _generate_field_filters(self, field: models.Field) -> Dict[str, django_filters.Filter]:
+    def _generate_field_filters(self, field: models.Field, current_depth: int = 0, allow_nested: bool = True) -> Dict[str, django_filters.Filter]:
         """
         Generates specific filters based on Django field type.
         
         Args:
             field: Django model field
+            current_depth: Current nesting depth for recursive calls
+            allow_nested: Whether to allow nested field generation
             
         Returns:
             Dictionary of filter name to Filter instance mappings
@@ -110,13 +183,415 @@ class AdvancedFilterGenerator:
         elif hasattr(field, 'choices') and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
-            filters.update(self._generate_foreign_key_filters(field_name, field.related_model))
+            # Only generate basic foreign key filters if nested filtering is enabled
+            if self.enable_nested_filters:
+                filters.update(self._generate_foreign_key_filters(field_name, field.related_model))
+            
+            # Add nested field filters if enabled and within depth limits
+            if (self.enable_nested_filters and allow_nested and 
+                current_depth < self.max_nested_depth and 
+                field.related_model not in self._visited_models):
+                filters.update(self._generate_nested_field_filters(field, current_depth))
 
         return filters
+
+    def _generate_nested_field_filters(self, field: models.Field, current_depth: int) -> Dict[str, django_filters.Filter]:
+        """
+        Generates nested field filters for related model fields.
+        
+        Args:
+            field: Django ForeignKey or OneToOneField
+            current_depth: Current nesting depth
+            
+        Returns:
+            Dictionary of nested filter name to Filter instance mappings
+        """
+        nested_filters = {}
+        field_name = field.name
+        related_model = field.related_model
+        
+        # Track performance optimization suggestions
+        optimization_suggestions = []
+        
+        # Get all fields from the related model
+        for related_field in related_model._meta.get_fields():
+            if not hasattr(related_field, 'name') or related_field.many_to_many:
+                continue
+                
+            nested_field_name = f"{field_name}__{related_field.name}"
+            
+            # Generate filters based on the related field type
+            if isinstance(related_field, (models.CharField, models.TextField)):
+                nested_filters.update(self._generate_nested_text_filters(nested_field_name, related_field.name))
+            elif isinstance(related_field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                nested_filters.update(self._generate_nested_numeric_filters(nested_field_name, related_field.name))
+            elif isinstance(related_field, (models.DateField, models.DateTimeField)):
+                nested_filters.update(self._generate_nested_date_filters(nested_field_name, related_field.name))
+            elif isinstance(related_field, models.BooleanField):
+                nested_filters.update(self._generate_nested_boolean_filters(nested_field_name, related_field.name))
+            elif isinstance(related_field, models.ForeignKey):
+                # Add basic foreign key filter
+                nested_filters[nested_field_name] = NumberFilter(
+                    field_name=nested_field_name,
+                    help_text=f'Filter by {nested_field_name} ID'
+                )
+                
+                # Recursively add deeper nested filters if within depth limits
+                if current_depth + 1 < self.max_nested_depth:
+                    deeper_nested_filters = self._generate_nested_field_filters(
+                        related_field, current_depth + 1
+                    )
+                    # Prefix the deeper nested filters with current field name
+                    for deep_filter_name, deep_filter in deeper_nested_filters.items():
+                        prefixed_name = f"{field_name}__{deep_filter_name}"
+                        # Extract the lookup expression from the filter name
+                        if '__' in deep_filter_name:
+                            base_field_path = deep_filter_name.rsplit('__', 1)[0]
+                            lookup_expr = deep_filter_name.rsplit('__', 1)[1]
+                        else:
+                            base_field_path = deep_filter_name
+                            lookup_expr = 'exact'
+                        
+                        # Create the correct field path for Django ORM
+                        correct_field_path = f"{field_name}__{base_field_path}"
+                        
+                        # Create a new filter instance with the correct field_name
+                        filter_class = type(deep_filter)
+                        new_filter = filter_class(
+                            field_name=correct_field_path,
+                            lookup_expr=lookup_expr,
+                            help_text=getattr(deep_filter, 'help_text', f'Filter by {correct_field_path}')
+                        )
+                        nested_filters[prefixed_name] = new_filter
+        
+        # Log performance optimization suggestions
+        if nested_filters:
+            field_path = field_name
+            if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+                optimization_suggestions.append(f"select_related('{field_path}')")
+            elif hasattr(field, 'related_model'):
+                optimization_suggestions.append(f"prefetch_related('{field_path}')")
+            
+            if optimization_suggestions:
+                logger.debug(f"Performance suggestion for {related_model.__name__}: "
+                           f"Consider using {', '.join(optimization_suggestions)} for better performance")
+        
+        return nested_filters
+
+    def analyze_query_performance(self, model: Type[models.Model], filters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Analyze the performance implications of applied filters and suggest optimizations.
+        
+        Args:
+            model: Django model being filtered
+            filters: Dictionary of applied filters
+            
+        Returns:
+            Dictionary containing performance analysis and optimization suggestions
+        """
+        analysis = {
+            'model': model.__name__,
+            'total_filters': len(filters),
+            'nested_filters': 0,
+            'max_depth': 0,
+            'select_related_suggestions': set(),
+            'prefetch_related_suggestions': set(),
+            'potential_n_plus_one_risks': [],
+            'performance_score': 'good',  # good, moderate, poor
+            'recommendations': []
+        }
+        
+        # Analyze each filter
+        for filter_name, filter_value in filters.items():
+            if '__' in filter_name:
+                # Calculate depth
+                depth = filter_name.count('__') - 1  # Subtract 1 for lookup expression
+                if depth > 0:
+                    # Only count as nested filter if it crosses model boundaries
+                    analysis['nested_filters'] += 1
+                    analysis['max_depth'] = max(analysis['max_depth'], depth)
+                    
+                    # Extract field path (remove lookup expression)
+                    parts = filter_name.split('__')
+                    lookup_expr = parts[-1]
+                    field_path_parts = parts[:-1]
+                    
+                    # Build field path for optimization suggestions
+                    current_model = model
+                    field_path = []
+                    
+                    for i, part in enumerate(field_path_parts):
+                        try:
+                            field = current_model._meta.get_field(part)
+                            field_path.append(part)
+                            
+                            if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+                                # Forward relationship - suggest select_related
+                                path = '__'.join(field_path)
+                                analysis['select_related_suggestions'].add(path)
+                                current_model = field.related_model
+                            elif hasattr(field, 'related_model'):
+                                # Reverse relationship - suggest prefetch_related
+                                path = '__'.join(field_path)
+                                analysis['prefetch_related_suggestions'].add(path)
+                                analysis['potential_n_plus_one_risks'].append(path)
+                                current_model = field.related_model
+                        except:
+                            break
+        
+        # Calculate performance score
+        if analysis['max_depth'] > 3 or analysis['nested_filters'] > 10:
+            analysis['performance_score'] = 'poor'
+        elif analysis['max_depth'] > 2 or analysis['nested_filters'] > 5:
+            analysis['performance_score'] = 'moderate'
+        
+        # Generate recommendations
+        if analysis['select_related_suggestions']:
+            select_related_list = sorted(analysis['select_related_suggestions'])
+            analysis['recommendations'].append(
+                f"Use select_related({', '.join(repr(s) for s in select_related_list)}) "
+                f"to optimize forward relationship queries"
+            )
+        
+        if analysis['prefetch_related_suggestions']:
+            prefetch_related_list = sorted(analysis['prefetch_related_suggestions'])
+            analysis['recommendations'].append(
+                f"Use prefetch_related({', '.join(repr(p) for p in prefetch_related_list)}) "
+                f"to optimize reverse relationship queries"
+            )
+        
+        if analysis['potential_n_plus_one_risks']:
+            analysis['recommendations'].append(
+                f"Potential N+1 query risks detected in: {', '.join(analysis['potential_n_plus_one_risks'])}"
+            )
+        
+        if analysis['max_depth'] > 3:
+            analysis['recommendations'].append(
+                f"Consider reducing max_nested_depth from {analysis['max_depth']} to improve performance"
+            )
+        
+        # Convert sets to lists for JSON serialization
+        analysis['select_related_suggestions'] = list(analysis['select_related_suggestions'])
+        analysis['prefetch_related_suggestions'] = list(analysis['prefetch_related_suggestions'])
+        
+        # Log performance analysis
+        logger.info(f"Performance analysis for {model.__name__}: "
+                   f"Score={analysis['performance_score']}, "
+                   f"Nested filters={analysis['nested_filters']}, "
+                   f"Max depth={analysis['max_depth']}")
+        
+        return analysis
+
+    def get_optimized_queryset(self, model: Type[models.Model], filters: Dict[str, Any], 
+                              base_queryset=None) -> models.QuerySet:
+        """
+        Get an optimized queryset based on the filters being applied.
+        
+        Args:
+            model: Django model
+            filters: Dictionary of filters to be applied
+            base_queryset: Optional base queryset to optimize
+            
+        Returns:
+            Optimized QuerySet with appropriate select_related and prefetch_related calls
+        """
+        if base_queryset is None:
+            queryset = model.objects.all()
+        else:
+            queryset = base_queryset
+        
+        # Analyze performance implications
+        analysis = self.analyze_query_performance(model, filters)
+        
+        # Apply select_related optimizations
+        if analysis['select_related_suggestions']:
+            queryset = queryset.select_related(*analysis['select_related_suggestions'])
+            logger.debug(f"Applied select_related({analysis['select_related_suggestions']}) to {model.__name__} queryset")
+        
+        # Apply prefetch_related optimizations
+        if analysis['prefetch_related_suggestions']:
+            queryset = queryset.prefetch_related(*analysis['prefetch_related_suggestions'])
+            logger.debug(f"Applied prefetch_related({analysis['prefetch_related_suggestions']}) to {model.__name__} queryset")
+        
+        return queryset
+        """Generate nested text-specific filters for related fields."""
+        return {
+            f'{field_name}__contains': CharFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='contains',
+                help_text=f'Filter {base_field_name} containing the specified text (case-sensitive)'
+            ),
+            f'{field_name}__icontains': CharFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='icontains',
+                help_text=f'Filter {base_field_name} containing the specified text (case-insensitive)'
+            ),
+            f'{field_name}__startswith': CharFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='startswith',
+                help_text=f'Filter {base_field_name} starting with the specified text'
+            ),
+            f'{field_name}__endswith': CharFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='endswith',
+                help_text=f'Filter {base_field_name} ending with the specified text'
+            ),
+            f'{field_name}__exact': CharFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='exact',
+                help_text=f'Filter {base_field_name} with exact match'
+            ),
+        }
+
+    def _generate_nested_text_filters(self, field_name: str, base_field_name: str) -> Dict[str, CharFilter]:
+        """
+        Generate nested text-based filters for CharField and TextField.
+        
+        Args:
+            field_name: The nested field name (e.g., 'category__name')
+            base_field_name: The base field name (e.g., 'name')
+            
+        Returns:
+            Dictionary of nested text filter mappings
+        """
+        return {
+            f'{field_name}__exact': CharFilter(
+                field_name=field_name,
+                lookup_expr='exact',
+                help_text=f'Exact match for {base_field_name}'
+            ),
+            field_name: CharFilter(
+                field_name=field_name,
+                lookup_expr='exact',
+                help_text=f'Exact match for {base_field_name}'
+            ),
+            f'{field_name}__icontains': CharFilter(
+                field_name=field_name,
+                lookup_expr='icontains',
+                help_text=f'Case-insensitive partial match for {base_field_name}'
+            ),
+            f'{field_name}__istartswith': CharFilter(
+                field_name=field_name,
+                lookup_expr='istartswith',
+                help_text=f'Case-insensitive starts with for {base_field_name}'
+            ),
+            f'{field_name}__iendswith': CharFilter(
+                field_name=field_name,
+                lookup_expr='iendswith',
+                help_text=f'Case-insensitive ends with for {base_field_name}'
+            ),
+        }
+
+    def _generate_nested_numeric_filters(self, field_name: str, base_field_name: str) -> Dict[str, NumberFilter]:
+        """Generate nested numeric filters for related fields."""
+        return {
+            f'{field_name}__exact': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='exact',
+                help_text=f'Filter {base_field_name} with exact value'
+            ),
+            f'{field_name}__gt': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='gt',
+                help_text=f'Filter {base_field_name} greater than the specified value'
+            ),
+            f'{field_name}__gte': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='gte',
+                help_text=f'Filter {base_field_name} greater than or equal to the specified value'
+            ),
+            f'{field_name}__lt': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='lt',
+                help_text=f'Filter {base_field_name} less than the specified value'
+            ),
+            f'{field_name}__lte': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='lte',
+                help_text=f'Filter {base_field_name} less than or equal to the specified value'
+            ),
+            f'{field_name}__range': django_filters.RangeFilter(
+                field_name=field_name.replace('__', '__'),
+                help_text=f'Filter {base_field_name} within the specified range'
+            ),
+        }
+
+    def _generate_nested_date_filters(self, field_name: str, base_field_name: str) -> Dict[str, DateFilter]:
+        """Generate nested date filters for related fields."""
+        return {
+            f'{field_name}__exact': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='exact',
+                help_text=f'Filter {base_field_name} with exact date match'
+            ),
+            f'{field_name}__gt': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='gt',
+                help_text=f'Filter {base_field_name} after the specified date'
+            ),
+            f'{field_name}__gte': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='gte',
+                help_text=f'Filter {base_field_name} on or after the specified date'
+            ),
+            f'{field_name}__lt': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='lt',
+                help_text=f'Filter {base_field_name} before the specified date'
+            ),
+            f'{field_name}__lte': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='lte',
+                help_text=f'Filter {base_field_name} on or before the specified date'
+            ),
+            f'{field_name}__date': DateFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='date',
+                help_text=f'Filter {base_field_name} by date (ignoring time)'
+            ),
+            f'{field_name}__year': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='year',
+                help_text=f'Filter {base_field_name} by year'
+            ),
+            f'{field_name}__month': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='month',
+                help_text=f'Filter {base_field_name} by month'
+            ),
+            f'{field_name}__day': NumberFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='day',
+                help_text=f'Filter {base_field_name} by day'
+            ),
+        }
+
+    def _generate_nested_boolean_filters(self, field_name: str, base_field_name: str) -> Dict[str, BooleanFilter]:
+        """Generate nested boolean filters for related fields."""
+        return {
+            f'{field_name}__exact': BooleanFilter(
+                field_name=field_name,
+                lookup_expr='exact',
+                help_text=f'Exact match for {base_field_name}'
+            ),
+            f'{field_name}': BooleanFilter(
+                field_name=field_name.replace('__', '__'),
+                help_text=f'Filter {base_field_name} by boolean value'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=field_name.replace('__', '__'),
+                lookup_expr='isnull',
+                help_text=f'Filter {base_field_name} for null/empty values'
+            ),
+        }
 
     def _generate_text_filters(self, field_name: str) -> Dict[str, CharFilter]:
         """Generate text-specific filters: contains, icontains, startswith, endswith."""
         return {
+            f'{field_name}': CharFilter(
+                field_name=field_name,
+                help_text=f'Filter {field_name} with basic text matching'
+            ),
             f'{field_name}__contains': CharFilter(
                 field_name=field_name,
                 lookup_expr='contains',
@@ -147,6 +622,10 @@ class AdvancedFilterGenerator:
     def _generate_numeric_filters(self, field_name: str) -> Dict[str, NumberFilter]:
         """Generate numeric filters: gt, gte, lt, lte, range."""
         return {
+            f'{field_name}': NumberFilter(
+                field_name=field_name,
+                help_text=f'Filter {field_name} with basic numeric matching'
+            ),
             f'{field_name}__gt': NumberFilter(
                 field_name=field_name,
                 lookup_expr='gt',

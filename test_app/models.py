@@ -177,9 +177,10 @@ class Profile(models.Model):
 class Client(models.Model):
     raison = models.CharField("Nom", max_length=255)
     
-    @mutation
-    def ppppp(self):
-        return self.raison
+    @property
+    def aaaaaa(self)->str:
+        return "aaaa"
+
 
 class ClientInformation(models.Model):
     client = models.OneToOneField(Client, on_delete=models.CASCADE, verbose_name="Client",related_name="info")
@@ -188,4 +189,45 @@ class ClientInformation(models.Model):
     code_postal = models.CharField("Code postal", max_length=20)
     pays = models.CharField("Pays", max_length=255)
     paysx = models.CharField("Pays", max_length=255)
+
+
+# Additional models for nested field filtering tests
+class Country(models.Model):
+    name = models.CharField("Nom du pays", max_length=100)
+    code = models.CharField("Code du pays", max_length=3)
+    
+    class Meta:
+        verbose_name = "Pays"
+        verbose_name_plural = "Pays"
+    
+    def __str__(self):
+        return self.name
+
+
+class Brand(models.Model):
+    name = models.CharField("Nom de la marque", max_length=100)
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, verbose_name="Pays")
+    founded_year = models.IntegerField("Année de fondation")
+    
+    class Meta:
+        verbose_name = "Marque"
+        verbose_name_plural = "Marques"
+    
+    def __str__(self):
+        return self.name
+
+
+class Product(models.Model):
+    name = models.CharField("Nom du produit", max_length=200)
+    price = models.DecimalField("Prix", max_digits=10, decimal_places=2)
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
+    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, verbose_name="Marque")
+    is_active = models.BooleanField("Actif", default=True)
+    
+    class Meta:
+        verbose_name = "Produit"
+        verbose_name_plural = "Produits"
+    
+    def __str__(self):
+        return self.name
     

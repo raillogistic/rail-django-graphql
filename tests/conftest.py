@@ -156,7 +156,7 @@ def authenticated_user(test_user):
 @pytest.fixture
 def graphql_schema():
     """Crée un schéma GraphQL de test."""
-    return SchemaBuilder().build_schema()
+    return SchemaBuilder().get_schema()
 
 
 @pytest.fixture
