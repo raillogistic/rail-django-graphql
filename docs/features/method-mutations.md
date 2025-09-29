@@ -299,7 +299,9 @@ def ship_order(self, tracking_number: str):
     return self
 ```
 
-### GraphQL Error Response
+### Enhanced Error Response Format
+
+Method mutations now provide enhanced error responses with field-specific information:
 
 ```graphql
 mutation ShipOrder($id: ID!, $trackingNumber: String!) {
@@ -310,8 +312,83 @@ mutation ShipOrder($id: ID!, $trackingNumber: String!) {
       id
       status
     }
-    errors  # ["La commande doit être confirmée avant l'expédition"]
+    errors {
+      field       # Specific field that caused the error (e.g., "tracking_number")
+      message     # Human-readable error message
+      code        # Error code for programmatic handling
+    }
   }
+}
+```
+
+### Error Types and Field Extraction
+
+The system automatically extracts field information for various error types:
+
+#### Validation Errors
+```python
+def update_email(self, email: str):
+    """Mettre à jour l'email (Update email)"""
+    if not email or '@' not in email:
+        raise ValueError("Format d'email invalide")
+    
+    self.email = email
+    self.save()
+    return self
+```
+
+Response:
+```json
+{
+  "errors": [{
+    "field": "email",
+    "message": "Format d'email invalide",
+    "code": "VALIDATION_ERROR"
+  }]
+}
+```
+
+#### Database Constraint Errors
+```python
+def set_username(self, username: str):
+    """Définir le nom d'utilisateur (Set username)"""
+    self.username = username
+    self.save()  # May raise IntegrityError for duplicate username
+    return self
+```
+
+Response for duplicate username:
+```json
+{
+  "errors": [{
+    "field": "username",
+    "message": "Ce nom d'utilisateur existe déjà",
+    "code": "DUPLICATE_ENTRY"
+  }]
+}
+```
+
+#### Foreign Key Validation Errors
+```python
+def assign_category(self, category_id: int):
+    """Assigner une catégorie (Assign category)"""
+    try:
+        category = Category.objects.get(id=category_id)
+        self.category = category
+        self.save()
+        return self
+    except Category.DoesNotExist:
+        raise ValueError(f"Category with id '{category_id}' does not exist")
+```
+
+Response:
+```json
+{
+  "errors": [{
+    "field": "category",
+    "message": "La catégorie spécifiée n'existe pas",
+    "code": "FOREIGN_KEY_ERROR"
+  }]
 }
 ```
 

@@ -1175,7 +1175,7 @@ Standard GraphQL errors with extensions:
 ```
 
 #### Validation Errors
-Field-specific validation errors:
+Field-specific validation errors with enhanced field extraction:
 
 ```json
 {
@@ -1184,9 +1184,62 @@ Field-specific validation errors:
       "ok": false,
       "post": null,
       "errors": [
-        "Title is required",
-        "Content must be at least 10 characters long",
-        "Invalid category ID"
+        {
+          "field": "title",
+          "message": "This field is required."
+        },
+        {
+          "field": "content", 
+          "message": "Ensure this field has at least 10 characters."
+        },
+        {
+          "field": "category",
+          "message": "Invalid category: The selected category does not exist."
+        }
+      ]
+    }
+  }
+}
+```
+
+#### Database Constraint Errors
+Automatic field extraction for database constraint violations:
+
+```json
+{
+  "data": {
+    "createUser": {
+      "ok": false,
+      "user": null,
+      "errors": [
+        {
+          "field": "email",
+          "message": "A User with this email already exists."
+        }
+      ]
+    }
+  }
+}
+```
+
+#### Foreign Key Validation Errors
+Enhanced error messages for foreign key constraints:
+
+```json
+{
+  "data": {
+    "createPost": {
+      "ok": false,
+      "post": null,
+      "errors": [
+        {
+          "field": "author",
+          "message": "Invalid author: The selected user does not exist."
+        },
+        {
+          "field": "category",
+          "message": "Invalid category: The selected category does not exist."
+        }
       ]
     }
   }
@@ -1234,17 +1287,18 @@ Field-specific validation errors:
 
 ### Error Codes
 
-| Code | Description |
-|------|-------------|
-| `UNAUTHENTICATED` | User is not authenticated |
-| `PERMISSION_DENIED` | User lacks required permissions |
-| `VALIDATION_ERROR` | Input validation failed |
-| `RATE_LIMITED` | Rate limit exceeded |
-| `QUERY_COMPLEXITY_EXCEEDED` | Query too complex |
-| `QUERY_DEPTH_EXCEEDED` | Query too deep |
-| `OBJECT_NOT_FOUND` | Requested object doesn't exist |
-| `DUPLICATE_ENTRY` | Unique constraint violation |
-| `FOREIGN_KEY_ERROR` | Invalid foreign key reference |
+| Code | Description | Field Extraction |
+|------|-------------|------------------|
+| `UNAUTHENTICATED` | User is not authenticated | N/A |
+| `PERMISSION_DENIED` | User lacks required permissions | N/A |
+| `VALIDATION_ERROR` | Input validation failed | ✅ Automatic field detection |
+| `RATE_LIMITED` | Rate limit exceeded | N/A |
+| `QUERY_COMPLEXITY_EXCEEDED` | Query too complex | N/A |
+| `QUERY_DEPTH_EXCEEDED` | Query too deep | N/A |
+| `OBJECT_NOT_FOUND` | Requested object doesn't exist | N/A |
+| `DUPLICATE_ENTRY` | Unique constraint violation | ✅ Automatic field extraction |
+| `FOREIGN_KEY_ERROR` | Invalid foreign key reference | ✅ Enhanced field mapping |
+| `NOT_NULL_CONSTRAINT` | Required field missing | ✅ Automatic field detection |
 
 ## 📚 Usage Examples
 

@@ -8,6 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Enhanced Error Handling System**: Field-specific error extraction and reporting
+  - Automatic field detection for validation errors with enhanced mapping
+  - Database constraint error handling with field extraction
+  - Foreign key validation errors with specific field identification
+  - Comprehensive error codes for programmatic handling
+  - French error messages with field-specific context
+  - Enhanced error response format with `field`, `message`, and `code` properties
+  
+- **Error Handling Features**
+  - `VALIDATION_ERROR`: Field validation failures with automatic field extraction
+  - `DUPLICATE_ENTRY`: Unique constraint violations with enhanced field detection
+  - `NOT_NULL_CONSTRAINT`: Required field violations with field mapping
+  - `FOREIGN_KEY_ERROR`: Referenced object validation with field identification
+  - `PERMISSION_DENIED`: Access control errors with context
+  - `RATE_LIMIT_EXCEEDED`: API rate limiting with detailed information
+  
+- **Documentation Enhancements**
+  - Comprehensive error handling documentation (`docs/features/error-handling.md`)
+  - Detailed error handling examples (`docs/examples/error-handling-examples.md`)
+  - Updated API reference with new error response format
+  - Enhanced troubleshooting guide with common error scenarios
+  - Complete mutations API reference (`docs/api/mutations.md`)
+
 - **Phase 6: File Uploads & Media Management System**
   - Complete file upload system with GraphQL integration
   - Multi-file upload support with progress tracking

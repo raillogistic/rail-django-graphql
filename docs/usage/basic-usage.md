@@ -486,7 +486,7 @@ query {
 
 ### Mutation Errors
 
-The library provides consistent error handling across all mutations:
+The library provides consistent error handling across all mutations with enhanced field-specific error reporting:
 
 ```graphql
 # Example mutation with validation errors
@@ -501,19 +501,68 @@ mutation {
       id
       title
     }
-    errors  # Will contain validation error messages
+    errors {
+      field    # Field name where error occurred
+      message  # Human-readable error message
+    }
   }
 }
 
-# Response:
+# Response with field-specific errors:
 {
   "data": {
     "createPost": {
       "ok": false,
       "post": null,
       "errors": [
-        "Title cannot be empty",
-        "Author with id 999 does not exist"
+        {
+          "field": "title",
+          "message": "This field is required."
+        },
+        {
+          "field": "author",
+          "message": "Invalid author: The selected user does not exist."
+        }
+      ]
+    }
+  }
+}
+```
+
+### Database Constraint Errors
+
+The system automatically extracts field information from database constraint violations:
+
+```graphql
+# Attempting to create duplicate entry
+mutation {
+  createUser(input: {
+    email: "existing@example.com"  # Email already exists
+    username: "newuser"
+  }) {
+    ok
+    user {
+      id
+      email
+    }
+    errors {
+      field
+      message
+    }
+  }
+}
+
+# Response with automatic field extraction:
+{
+  "data": {
+    "createUser": {
+      "ok": false,
+      "user": null,
+      "errors": [
+        {
+          "field": "email",
+          "message": "A User with this email already exists."
+        }
       ]
     }
   }

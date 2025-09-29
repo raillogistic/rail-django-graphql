@@ -318,6 +318,109 @@ def resolve_your_models(self, info, **kwargs):
 - "Validation failed" errors
 - Required field errors
 - Data type conversion errors
+- Field-specific error information missing
+
+**Enhanced Error Handling:**
+
+The system now provides detailed field-specific error information for better debugging:
+
+```python
+# Example mutation with enhanced error response
+mutation CreatePost($input: CreatePostInput!) {
+  createPost(input: $input) {
+    ok
+    post {
+      id
+      title
+    }
+    errors {
+      field       # Specific field that caused the error
+      message     # Human-readable error message
+      code        # Error code for programmatic handling
+    }
+  }
+}
+```
+
+**Common Error Scenarios:**
+
+#### 1. Validation Errors with Field Extraction
+```python
+# Input with validation error
+{
+  "input": {
+    "title": "",  # Empty title
+    "content": "Some content"
+  }
+}
+
+# Enhanced error response
+{
+  "data": {
+    "createPost": {
+      "ok": false,
+      "post": null,
+      "errors": [{
+        "field": "title",
+        "message": "Ce champ ne peut pas être vide.",
+        "code": "VALIDATION_ERROR"
+      }]
+    }
+  }
+}
+```
+
+#### 2. Database Constraint Errors
+```python
+# Duplicate entry error
+{
+  "input": {
+    "username": "existing_user",  # Already exists
+    "email": "user@example.com"
+  }
+}
+
+# Enhanced error response
+{
+  "data": {
+    "createUser": {
+      "ok": false,
+      "user": null,
+      "errors": [{
+        "field": "username",
+        "message": "Ce nom d'utilisateur existe déjà",
+        "code": "DUPLICATE_ENTRY"
+      }]
+    }
+  }
+}
+```
+
+#### 3. Foreign Key Validation Errors
+```python
+# Invalid foreign key reference
+{
+  "input": {
+    "title": "New Post",
+    "category_id": 999  # Non-existent category
+  }
+}
+
+# Enhanced error response
+{
+  "data": {
+    "createPost": {
+      "ok": false,
+      "post": null,
+      "errors": [{
+        "field": "category",
+        "message": "La catégorie spécifiée n'existe pas",
+        "code": "FOREIGN_KEY_ERROR"
+      }]
+    }
+  }
+}
+```
 
 **Solutions:**
 
@@ -340,16 +443,21 @@ try:
 except Exception as e:
     print("Validation failed:", e)
 
-# 2. Custom validation
+# 2. Custom validation with enhanced error handling
 class YourModel(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, verbose_name="Nom")
+    email = models.EmailField(verbose_name="Adresse email")
     
     def clean(self):
         if not self.name:
-            raise ValidationError("Name is required")
+            raise ValidationError({
+                'name': "Le nom est requis"
+            })
         
         if len(self.name) < 3:
-            raise ValidationError("Name must be at least 3 characters")
+            raise ValidationError({
+                'name': "Le nom doit contenir au moins 3 caractères"
+            })
     
     class GraphQLMeta:
         # Enable model validation
@@ -357,6 +465,7 @@ class YourModel(models.Model):
 
 # 3. Handle validation errors in mutations
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django_graphql_auto.mutations import BaseMutation
 
 class CustomCreateMutation(BaseMutation):
@@ -369,10 +478,90 @@ class CustomCreateMutation(BaseMutation):
         try:
             return super().perform_mutation(root, info, **input_data)
         except ValidationError as e:
+            # Enhanced error handling with field extraction
+            errors = []
+            if hasattr(e, 'error_dict'):
+                for field, field_errors in e.error_dict.items():
+                    for error in field_errors:
+                        errors.append({
+                            'field': field,
+                            'message': str(error),
+                            'code': 'VALIDATION_ERROR'
+                        })
+            else:
+                errors.append({
+                    'field': None,
+                    'message': str(e),
+                    'code': 'VALIDATION_ERROR'
+                })
+            
             return cls(
                 ok=False,
-                errors=[str(error) for error in e.messages]
+                errors=errors
             )
+        except IntegrityError as e:
+            # Database constraint error handling
+            error_message = str(e)
+            field = None
+            code = 'INTEGRITY_ERROR'
+            
+            # Extract field from constraint error
+            if 'UNIQUE constraint failed' in error_message:
+                # Extract field name from error message
+                import re
+                match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                if match:
+                    field = match.group(1)
+                code = 'DUPLICATE_ENTRY'
+            
+            return cls(
+                ok=False,
+                errors=[{
+                    'field': field,
+                    'message': "Cette valeur existe déjà" if field else error_message,
+                    'code': code
+                }]
+            )
+
+# 4. Testing error scenarios
+def test_mutation_errors():
+    """Test various error scenarios with enhanced error handling"""
+    
+    # Test validation error
+    result = schema.execute('''
+        mutation {
+            createPost(input: { title: "" }) {
+                ok
+                errors {
+                    field
+                    message
+                    code
+                }
+            }
+        }
+    ''')
+    
+    assert not result.data['createPost']['ok']
+    assert result.data['createPost']['errors'][0]['field'] == 'title'
+    assert result.data['createPost']['errors'][0]['code'] == 'VALIDATION_ERROR'
+    
+    # Test duplicate entry error
+    result = schema.execute('''
+        mutation {
+            createUser(input: { username: "existing_user" }) {
+                ok
+                errors {
+                    field
+                    message
+                    code
+                }
+            }
+        }
+    ''')
+    
+    assert not result.data['createUser']['ok']
+    assert result.data['createUser']['errors'][0]['field'] == 'username'
+    assert result.data['createUser']['errors'][0]['code'] == 'DUPLICATE_ENTRY'
 ```
 
 ## 🔧 Filtering Issues
