@@ -353,6 +353,7 @@ DJANGO_GRAPHQL_AUTO = {
             # 'Post': True,     # Activer pour le modèle Post
             # 'Comment': False, # Désactiver pour le modèle Comment
             # 'User': True,     # Activer pour le modèle User
+            # 'Tags': True,     # Activer pour le modèle User
         },
         
         # Configuration granulaire par champ des relations imbriquées

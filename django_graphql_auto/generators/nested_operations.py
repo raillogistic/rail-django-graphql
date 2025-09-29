@@ -543,6 +543,32 @@ class NestedOperationHandler:
                                 if 'id' in item:
                                     related_instance = field.related_model.objects.get(pk=item['id'])
                                     self.handle_nested_update(field.related_model, item, related_instance)
+                
+                elif isinstance(value, list):
+                    # Handle simple list of strings/dicts for nested creation
+                    related_objects = []
+                    for item in value:
+                        if isinstance(item, dict):
+                            if 'id' in item:
+                                # Get existing object by ID
+                                related_obj = field.related_model.objects.get(pk=item['id'])
+                            else:
+                                # Create new object from dict data
+                                related_obj = self.handle_nested_create(field.related_model, item)
+                            related_objects.append(related_obj)
+                        elif isinstance(item, str):
+                            # Create new object with string as name
+                            # Assume the model has a 'name' field for string values
+                            name_field = getattr(field.related_model, '_nested_name_field', 'name')
+                            related_obj = self.handle_nested_create(field.related_model, {name_field: item})
+                            related_objects.append(related_obj)
+                        elif isinstance(item, int):
+                            # Get existing object by ID
+                            related_obj = field.related_model.objects.get(pk=item)
+                            related_objects.append(related_obj)
+                    
+                    # Replace all relationships with the new set
+                    m2m_manager.set(related_objects)
 
             return instance
 
