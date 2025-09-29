@@ -113,6 +113,99 @@ query {
 }
 ```
 
+## JSONString Format Requirement
+
+### Important: Filter Syntax
+
+The `filters` argument for subfield filtering uses `graphene.JSONString`, which means filters must be passed as **JSON strings**, not GraphQL objects.
+
+#### ❌ Incorrect Syntax (GraphQL Object)
+```graphql
+{
+  post_pages {
+    items {
+      comments(filters: {content: "test"}) {  # This will cause an error
+        content
+      }
+    }
+  }
+}
+```
+
+#### ✅ Correct Syntax (JSON String)
+```graphql
+{
+  post_pages {
+    items {
+      comments(filters: "{\"content\": \"test\"}") {  # Proper JSON string
+        content
+      }
+    }
+  }
+}
+```
+
+### JSON String Examples
+
+#### Single Filter
+```graphql
+{
+  authors {
+    livres_auteur(filters: "{\"genre_livre\": \"FICTION\"}") {
+      titre_livre
+      genre_livre
+    }
+  }
+}
+```
+
+#### Multiple Filters
+```graphql
+{
+  authors {
+    livres_auteur(filters: "{\"genre_livre\": \"FICTION\", \"prix_livre__gte\": 20.00}") {
+      titre_livre
+      prix_livre
+    }
+  }
+}
+```
+
+#### Complex Filters with Text Operations
+```graphql
+{
+  books {
+    avis_livre(filters: "{\"commentaire_avis__icontains\": \"excellent\", \"note_avis__gte\": 4}") {
+      nom_revieweur
+      commentaire_avis
+      note_avis
+    }
+  }
+}
+```
+
+### Using GraphQL Variables
+
+For cleaner queries, use GraphQL variables:
+
+```graphql
+query GetBooksWithReviews($reviewFilters: JSONString) {
+  books {
+    avis_livre(filters: $reviewFilters) {
+      nom_revieweur
+      commentaire_avis
+    }
+  }
+}
+```
+
+Variables:
+```json
+{
+  "reviewFilters": "{\"note_avis__gte\": 4, \"commentaire_avis__icontains\": \"great\"}"
+}
+```
+
 ## Configuration
 
 ### Generator Configuration
