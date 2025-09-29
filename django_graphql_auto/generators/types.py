@@ -245,9 +245,10 @@ class TypeGenerator:
                         return self.generate_object_type(model_ref)
                     return lazy_type
                 
-                # Override the field as a direct list
+                # Override the field as a direct list with filter arguments
                 type_attrs[field_name] = graphene.List(
                     make_lazy_type(related_model),
+                    filters=graphene.Argument(graphene.JSONString),
                     description=f"Related {related_model.__name__} objects"
                 )
                 
@@ -257,16 +258,34 @@ class TypeGenerator:
                     description=f"Count of related {related_model.__name__} objects"
                 )
                 
-                # Add resolver that handles different relationship types
-                def make_resolver(field_name, rel_info):
-                    def resolver(self, info):
+                # Add parameterized totalCount field with filters
+                total_count_field_name = f"{field_name}_total_count"
+                type_attrs[total_count_field_name] = graphene.Field(
+                    graphene.Int,
+                    filters=graphene.Argument(graphene.JSONString),
+                    description=f"Count of related {related_model.__name__} objects with optional filters"
+                )
+                
+                # Add resolver that handles different relationship types with filtering
+                def make_resolver(field_name, rel_info, related_model):
+                    def resolver(self, info, filters=None):
                         related_obj = getattr(self, field_name)
                         # For OneToOne fields, return the single object or None
                         if rel_info.relationship_type == 'OneToOneField':
                             return related_obj
-                        # For ForeignKey and ManyToMany, return queryset
+                        # For ForeignKey and ManyToMany, return queryset with optional filtering
                         else:
-                            return related_obj.all()
+                            queryset = related_obj.all()
+                            
+                            # Apply filters if provided
+                            if filters:
+                                from ..generators.filters import AdvancedFilterGenerator
+                                filter_generator = AdvancedFilterGenerator()
+                                filter_set_class = filter_generator.generate_filter_set(related_model)
+                                filter_set = filter_set_class(filters, queryset=queryset)
+                                queryset = filter_set.qs
+                            
+                            return queryset
                     return resolver
                 
                 # Add count resolver for ManyToMany relation
@@ -276,7 +295,24 @@ class TypeGenerator:
                         return related_obj.count()
                     return count_resolver
                 
-                type_attrs[f'resolve_{field_name}'] = make_resolver(field_name, rel_info)
+                # Add parameterized total count resolver with filters
+                def make_total_count_resolver(field_name, related_model):
+                    def total_count_resolver(self, info, filters=None):
+                        related_obj = getattr(self, field_name)
+                        queryset = related_obj.all()
+                        
+                        # Apply filters if provided
+                        if filters:
+                            from ..generators.filters import AdvancedFilterGenerator
+                            filter_generator = AdvancedFilterGenerator()
+                            filter_set_class = filter_generator.generate_filter_set(related_model)
+                            filter_set = filter_set_class(filters, queryset=queryset)
+                            queryset = filter_set.qs
+                        
+                        return queryset.count()
+                    return total_count_resolver
+                
+                type_attrs[f'resolve_{field_name}'] = make_resolver(field_name, rel_info, related_model)
                 type_attrs[f'resolve_{count_field_name}'] = make_count_resolver(field_name)
 
         # Add custom resolvers for ALL reverse relationships to return direct model lists
@@ -316,6 +352,7 @@ class TypeGenerator:
             else:
                 type_attrs[accessor_name] = graphene.List(
                     make_lazy_type(related_model),
+                    filters=graphene.Argument(graphene.JSONString),
                     description=f"Related {related_model.__name__} objects"
                 )
                 
@@ -325,16 +362,26 @@ class TypeGenerator:
                     description=f"Count of related {related_model.__name__} objects"
                 )
             
-            # Add resolver that handles different relationship types
-            def make_resolver(accessor_name, is_one_to_one):
-                def resolver(self, info):
+            # Add resolver that handles different relationship types with filtering
+            def make_resolver(accessor_name, is_one_to_one, related_model):
+                def resolver(self, info, filters=None):
                     related_obj = getattr(self, accessor_name)
                     # For OneToOne reverse relationships, return the single object or None
                     if is_one_to_one:
                         return related_obj
-                    # For other relationships, return queryset
+                    # For other relationships, return queryset with optional filtering
                     else:
-                        return related_obj.all()
+                        queryset = related_obj.all()
+                        
+                        # Apply filters if provided
+                        if filters:
+                            from ..generators.filters import AdvancedFilterGenerator
+                            filter_generator = AdvancedFilterGenerator()
+                            filter_set_class = filter_generator.generate_filter_set(related_model)
+                            filter_set = filter_set_class(filters, queryset=queryset)
+                            queryset = filter_set.qs
+                        
+                        return queryset
                 return resolver
             
             # Add count resolver for reverse ManyToOne relations
@@ -350,7 +397,7 @@ class TypeGenerator:
                         return related_obj.count()
                 return count_resolver
             
-            type_attrs[f'resolve_{accessor_name}'] = make_resolver(accessor_name, is_one_to_one_reverse)
+            type_attrs[f'resolve_{accessor_name}'] = make_resolver(accessor_name, is_one_to_one_reverse, related_model)
             
             # Add count resolver only for non-OneToOne relationships
             if not is_one_to_one_reverse:
