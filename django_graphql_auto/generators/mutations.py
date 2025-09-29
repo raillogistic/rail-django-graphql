@@ -9,9 +9,21 @@ from typing import Any, Dict, List, Optional, Type, Union, Callable
 import inspect
 
 import graphene
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError   
 from django.core.exceptions import ValidationError
 from graphene_django import DjangoObjectType
+
+
+class MutationError(graphene.ObjectType):
+    """
+    Structured error type for GraphQL mutations.
+    
+    Attributes:
+        field: The field name where the error occurred (optional)
+        message: The error message describing what went wrong
+    """
+    field = graphene.String(description="Le nom du champ où l'erreur s'est produite")
+    message = graphene.String(required=True, description="Le message d'erreur décrivant ce qui s'est mal passé")
 
 from ..core.settings import MutationGeneratorSettings
 from .types import TypeGenerator
@@ -48,7 +60,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             object = graphene.Field(model_type)
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -66,18 +78,80 @@ class MutationGenerator:
                     # Validate nested data before processing
                     validation_errors = nested_handler.validate_nested_data(model, input, 'create')
                     if validation_errors:
-                        return cls(ok=False, object=None, errors=validation_errors)
+                        # Convert string errors to structured error objects
+                        error_objects = [MutationError(field=None, message=error) for error in validation_errors]
+                        return cls(ok=False, object=None, errors=error_objects)
                     
                     # Handle nested create with comprehensive validation and transaction management
                     instance = nested_handler.handle_nested_create(model, input)
                     
                     return cls(ok=True, object=instance, errors=None)
 
-                except ValidationError as e:
-                    return cls(ok=False, object=None, errors=[str(e)])
+                except (ValidationError, IntegrityError) as e:
+                    # Create structured error objects for validation and integrity errors
+                    error_objects = []
+                    if hasattr(e, 'error_dict'):
+                        # Field-specific validation errors
+                        for field, errors in e.error_dict.items():
+                            for error in errors:
+                                error_objects.append(MutationError(field=field, message=str(error)))
+                    else:
+                        # General validation error or integrity error - check if it contains database constraint info
+                        error_message = str(e)
+                        field_name = None
+                        
+                        # Debug logging
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.info(f"ValidationError/IntegrityError: {error_message}")
+                        
+                        # Handle UNIQUE constraint failures in ValidationError or IntegrityError
+                        if "UNIQUE constraint failed" in error_message:
+                            # Extract field name from error like "UNIQUE constraint failed: table.field"
+                            import re
+                            match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                            if match:
+                                field_name = match.group(1)
+                                error_message = f"A {model_name} with this {field_name} already exists."
+                                logger.info(f"Extracted field name from ValidationError/IntegrityError: {field_name}")
+                        
+                        error_objects.append(MutationError(field=field_name, message=error_message))
+                    return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, object=None, errors=[f"Failed to create {model_name}: {str(e)}"])
+                    
+                    # Parse database constraint errors to extract field information
+                    error_message = str(e)
+                    field_name = None
+                    
+                    # Debug logging
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"CreateMutation exception: {type(e).__name__}: {error_message}")
+                    
+                    # Handle UNIQUE constraint failures
+                    if "UNIQUE constraint failed" in error_message:
+                        # Extract field name from error like "UNIQUE constraint failed: table.field"
+                        import re
+                        match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"A {model_name} with this {field_name} already exists."
+                            logger.info(f"Extracted field name: {field_name}")
+                    
+                    # Handle other database constraint errors
+                    elif "NOT NULL constraint failed" in error_message:
+                        match = re.search(r'NOT NULL constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"This field is required."
+                    
+                    # Handle foreign key constraint errors
+                    elif "FOREIGN KEY constraint failed" in error_message:
+                        error_message = "Invalid reference to related object."
+                    
+                    error_objects = [MutationError(field=field_name, message=error_message)]
+                    return cls(ok=False, object=None, errors=error_objects)
             
             @classmethod
             def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -252,7 +326,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             object = graphene.Field(model_type)
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -284,7 +358,9 @@ class MutationGenerator:
                     # Validate nested data before processing
                     validation_errors = nested_handler.validate_nested_data(model, input, 'update')
                     if validation_errors:
-                        return cls(ok=False, object=None, errors=validation_errors)
+                        # Convert string errors to structured error objects
+                        error_objects = [MutationError(field=None, message=error) for error in validation_errors]
+                        return cls(ok=False, object=None, errors=error_objects)
                     
                     # Handle nested update with comprehensive validation and transaction management
                     instance = nested_handler.handle_nested_update(model, input, instance)
@@ -292,12 +368,49 @@ class MutationGenerator:
                     return UpdateMutation(ok=True, object=instance, errors=[])
 
                 except model.DoesNotExist:
-                    return UpdateMutation(ok=False, object=None, errors=[f"{model_name} with id {id} does not exist"])
+                    error_objects = [MutationError(field=None, message=f"{model_name} with id {id} does not exist")]
+                    return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except ValidationError as e:
-                    return UpdateMutation(ok=False, object=None, errors=[str(e)])
+                    # Create structured error objects for validation errors
+                    error_objects = []
+                    if hasattr(e, 'error_dict'):
+                        # Field-specific validation errors
+                        for field, errors in e.error_dict.items():
+                            for error in errors:
+                                error_objects.append(MutationError(field=field, message=str(error)))
+                    else:
+                        # General validation error
+                        error_objects.append(MutationError(field=None, message=str(e)))
+                    return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return UpdateMutation(ok=False, object=None, errors=[f"Failed to update {model_name}: {str(e)}"])
+                    
+                    # Parse database constraint errors to extract field information
+                    error_message = str(e)
+                    field_name = None
+                    
+                    # Handle UNIQUE constraint failures
+                    if "UNIQUE constraint failed" in error_message:
+                        # Extract field name from error like "UNIQUE constraint failed: table.field"
+                        import re
+                        match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"A {model_name} with this {field_name} already exists."
+                    
+                    # Handle other database constraint errors
+                    elif "NOT NULL constraint failed" in error_message:
+                        match = re.search(r'NOT NULL constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"This field is required."
+                    
+                    # Handle foreign key constraint errors
+                    elif "FOREIGN KEY constraint failed" in error_message:
+                        error_message = "Invalid reference to related object."
+                    
+                    error_objects = [MutationError(field=field_name, message=error_message)]
+                    return UpdateMutation(ok=False, object=None, errors=error_objects)
             
             @classmethod
             def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -411,7 +524,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             object = graphene.Field(model_type)
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -423,10 +536,12 @@ class MutationGenerator:
                     return cls(ok=True, object=deleted_instance, errors=[])
 
                 except model.DoesNotExist:
-                    return cls(ok=False, object=None, errors=[f"{model_name} with id {id} does not exist"])
+                    error_objects = [MutationError(field=None, message=f"{model_name} with id {id} does not exist")]
+                    return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, object=None, errors=[f"Failed to delete {model_name}: {str(e)}"])
+                    error_objects = [MutationError(field=None, message=f"Failed to delete {model_name}: {str(e)}")]
+                    return cls(ok=False, object=None, errors=error_objects)
 
         return type(
             f'Delete{model_name}',
@@ -449,7 +564,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             objects = graphene.List(model_type)  # Using 'objects' for multiple items
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -463,10 +578,46 @@ class MutationGenerator:
                     return cls(ok=True, objects=instances, errors=[])
 
                 except ValidationError as e:
-                    return cls(ok=False, objects=[], errors=[str(e)])
+                    # Create structured error objects for validation errors
+                    error_objects = []
+                    if hasattr(e, 'error_dict'):
+                        # Field-specific validation errors
+                        for field, errors in e.error_dict.items():
+                            for error in errors:
+                                error_objects.append(MutationError(field=field, message=str(error)))
+                    else:
+                        # General validation error
+                        error_objects.append(MutationError(field=None, message=str(e)))
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, objects=[], errors=[f"Failed to bulk create {model_name}s: {str(e)}"])
+                    
+                    # Parse database constraint errors to extract field information
+                    error_message = str(e)
+                    field_name = None
+                    
+                    # Handle UNIQUE constraint failures
+                    if "UNIQUE constraint failed" in error_message:
+                        # Extract field name from error like "UNIQUE constraint failed: table.field"
+                        import re
+                        match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"A {model_name} with this {field_name} already exists."
+                    
+                    # Handle other database constraint errors
+                    elif "NOT NULL constraint failed" in error_message:
+                        match = re.search(r'NOT NULL constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"This field is required."
+                    
+                    # Handle foreign key constraint errors
+                    elif "FOREIGN KEY constraint failed" in error_message:
+                        error_message = "Invalid reference to related object."
+                    
+                    error_objects = [MutationError(field=field_name, message=error_message)]
+                    return cls(ok=False, objects=[], errors=error_objects)
 
         return type(
             f'BulkCreate{model_name}',
@@ -493,7 +644,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             objects = graphene.List(model_type)  # Using 'objects' for multiple items
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -511,12 +662,49 @@ class MutationGenerator:
                     return cls(ok=True, objects=instances, errors=[])
 
                 except model.DoesNotExist as e:
-                    return cls(ok=False, objects=[], errors=[f"{model_name} not found: {str(e)}"])
+                    error_objects = [MutationError(field=None, message=f"{model_name} not found: {str(e)}")]
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except ValidationError as e:
-                    return cls(ok=False, objects=[], errors=[str(e)])
+                    # Create structured error objects for validation errors
+                    error_objects = []
+                    if hasattr(e, 'error_dict'):
+                        # Field-specific validation errors
+                        for field, errors in e.error_dict.items():
+                            for error in errors:
+                                error_objects.append(MutationError(field=field, message=str(error)))
+                    else:
+                        # General validation error
+                        error_objects.append(MutationError(field=None, message=str(e)))
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, objects=[], errors=[f"Failed to bulk update {model_name}s: {str(e)}"])
+                    
+                    # Parse database constraint errors to extract field information
+                    error_message = str(e)
+                    field_name = None
+                    
+                    # Handle UNIQUE constraint failures
+                    if "UNIQUE constraint failed" in error_message:
+                        # Extract field name from error like "UNIQUE constraint failed: table.field"
+                        import re
+                        match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"A {model_name} with this {field_name} already exists."
+                    
+                    # Handle other database constraint errors
+                    elif "NOT NULL constraint failed" in error_message:
+                        match = re.search(r'NOT NULL constraint failed: \w+\.(\w+)', error_message)
+                        if match:
+                            field_name = match.group(1)
+                            error_message = f"This field is required."
+                    
+                    # Handle foreign key constraint errors
+                    elif "FOREIGN KEY constraint failed" in error_message:
+                        error_message = "Invalid reference to related object."
+                    
+                    error_objects = [MutationError(field=field_name, message=error_message)]
+                    return cls(ok=False, objects=[], errors=error_objects)
 
         return type(
             f'BulkUpdate{model_name}',
@@ -538,7 +726,7 @@ class MutationGenerator:
             # Standardized return type
             ok = graphene.Boolean()
             objects = graphene.List(model_type)  # Return deleted objects
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             @transaction.atomic
@@ -548,10 +736,11 @@ class MutationGenerator:
                     if len(instances) != len(ids):
                         found_ids = set(str(instance.pk) for instance in instances)
                         missing_ids = set(ids) - found_ids
+                        error_objects = [MutationError(field=None, message=f"Some {model_name} instances not found: {', '.join(missing_ids)}")]
                         return cls(
                             ok=False, 
                             objects=[], 
-                            errors=[f"Some {model_name} instances not found: {', '.join(missing_ids)}"]
+                            errors=error_objects
                         )
                     
                     deleted_instances = list(instances)  # Store before deletion
@@ -559,10 +748,12 @@ class MutationGenerator:
                     return cls(ok=True, objects=deleted_instances, errors=[])
 
                 except model.DoesNotExist as e:
-                    return cls(ok=False, objects=[], errors=[str(e)])
+                    error_objects = [MutationError(field=None, message=str(e))]
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, objects=[], errors=[f"Failed to bulk delete {model_name}s: {str(e)}"])
+                    error_objects = [MutationError(field=None, message=f"Failed to bulk delete {model_name}s: {str(e)}")]
+                    return cls(ok=False, objects=[], errors=error_objects)
 
         return type(
             f'BulkDelete{model_name}',
@@ -639,7 +830,7 @@ class MutationGenerator:
             # Standardized return format
             ok = graphene.Boolean()
             result = output_type()
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
             
             @classmethod
             @transaction.atomic
@@ -650,9 +841,11 @@ class MutationGenerator:
                         permission = method._requires_permission
                         if hasattr(info, 'context') and hasattr(info.context, 'user'):
                             if not info.context.user.has_perm(permission):
-                                return cls(ok=False, result=None, errors=["Permission denied"])
+                                error_objects = [MutationError(field=None, message="Permission denied")]
+                                return cls(ok=False, result=None, errors=error_objects)
                         else:
-                            return cls(ok=False, result=None, errors=["Authentication required"])
+                            error_objects = [MutationError(field=None, message="Authentication required")]
+                            return cls(ok=False, result=None, errors=error_objects)
                     
                     instance = model.objects.get(pk=id)
                     method_func = getattr(instance, method_name)
@@ -674,7 +867,8 @@ class MutationGenerator:
                     return cls(ok=False, result=None, errors=[f"{model_name} with id {id} does not exist"])
                 except Exception as e:
                     transaction.set_rollback(True)
-                    return cls(ok=False, result=None, errors=[f"Failed to execute {method_name}: {str(e)}"])
+                    error_objects = [MutationError(field=None, message=f"Failed to execute {method_name}: {str(e)}")]
+                    return cls(ok=False, result=None, errors=error_objects)
         
         # Add method parameters as individual arguments
         for param_name, param in signature.parameters.items():
@@ -805,14 +999,15 @@ class MutationGenerator:
             # Standardized return format
             ok = graphene.Boolean()
             result = output_type()
-            errors = graphene.List(graphene.String)
+            errors = graphene.List(MutationError)
 
             @classmethod
             def mutate(cls, root: Any, info: graphene.ResolveInfo, id: str, input: Dict[str, Any] = None):
                 # Permission check if required
                 if requires_permission and hasattr(info.context, 'user'):
                     if not info.context.user.has_perm(requires_permission):
-                        return cls(ok=False, result=None, errors=["Permission denied"])
+                        error_objects = [MutationError(field=None, message="Permission denied")]
+                        return cls(ok=False, result=None, errors=error_objects)
 
                 # Wrap in transaction if atomic is True
                 if atomic:
@@ -850,7 +1045,8 @@ class MutationGenerator:
                 except Exception as e:
                     if atomic:
                         transaction.set_rollback(True)
-                    return cls(ok=False, result=None, errors=[f"Failed to execute {method_name}: {str(e)}"])
+                    error_objects = [MutationError(field=None, message=f"Failed to execute {method_name}: {str(e)}")]
+                    return cls(ok=False, result=None, errors=error_objects)
 
         # Use custom name if provided
         mutation_name = custom_name or f'{model_name}{method_name.title()}'
