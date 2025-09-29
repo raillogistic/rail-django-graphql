@@ -1,3 +1,4 @@
+from re import I
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
@@ -192,12 +193,16 @@ class Profile(models.Model):
         return self.bio
 
 
-class Client(models.Model):
+from polymorphic.models import PolymorphicModel
+class Client(PolymorphicModel):
     raison = models.CharField("Nom", max_length=255)
     
     @property
     def uppercase_raison(self)->str:
         return self.raison.upper()
+
+class LocalClient(Client):
+    test = models.CharField("Test", max_length=255)
 
 
 class ClientInformation(models.Model):

@@ -80,6 +80,19 @@ class TypeGenerator:
         model_name = model.__name__
         excluded = set()
         
+        # Always exclude polymorphic model internal fields
+        # These fields are automatically managed by django-polymorphic and should not be exposed
+        polymorphic_fields = {'polymorphic_ctype'}
+        excluded.update(polymorphic_fields)
+        
+        # Also exclude any field ending with '_ptr' which are typically OneToOneField pointers in inheritance
+        from django_graphql_auto.generators.introspector import ModelIntrospector
+        introspector = ModelIntrospector(model)
+        all_fields = introspector.get_model_fields()
+        for field_name in all_fields.keys():
+            if field_name.endswith('_ptr'):
+                excluded.add(field_name)
+        
         # Check both exclude_fields and excluded_fields (alias)
         excluded.update(self.settings.exclude_fields.get(model_name, []))
         excluded.update(self.settings.excluded_fields.get(model_name, []))
@@ -129,6 +142,13 @@ class TypeGenerator:
 
     def _should_include_field(self, model: Type[models.Model], field_name: str) -> bool:
         """Determine if a field should be included in the schema."""
+        # Exclude polymorphic model internal fields
+        # These fields are automatically managed by django-polymorphic and should not be exposed in mutations
+        polymorphic_fields = {'polymorphic_ctype'}
+        # Also exclude any field ending with '_ptr' which are typically OneToOneField pointers in inheritance
+        if field_name in polymorphic_fields or field_name.endswith('_ptr'):
+            return False
+            
         excluded_fields = self._get_excluded_fields(model)
         if field_name in excluded_fields:
             return False
