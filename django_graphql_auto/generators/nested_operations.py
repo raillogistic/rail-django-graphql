@@ -550,8 +550,25 @@ class NestedOperationHandler:
                     for item in value:
                         if isinstance(item, dict):
                             if 'id' in item:
-                                # Get existing object by ID
-                                related_obj = field.related_model.objects.get(pk=item['id'])
+                                # Get existing object by ID - handle both regular and GraphQL IDs
+                                try:
+                                    # Try to use the ID as-is first (for integer IDs)
+                                    related_obj = field.related_model.objects.get(pk=item['id'])
+                                except (ValueError, field.related_model.DoesNotExist):
+                                    # If that fails, try to decode as GraphQL global ID
+                                    from graphql_relay import from_global_id
+                                    try:
+                                        decoded_type, decoded_id = from_global_id(item['id'])
+                                        related_obj = field.related_model.objects.get(pk=decoded_id)
+                                    except Exception:
+                                        # If all else fails, raise the original error
+                                        related_obj = field.related_model.objects.get(pk=item['id'])
+                                
+                                # If there are other fields besides 'id', update the object
+                                update_data = {k: v for k, v in item.items() if k != 'id'}
+                                if update_data:
+                                    # Update the existing object with new data
+                                    related_obj = self.handle_nested_update(field.related_model, item, related_obj)
                             else:
                                 # Create new object from dict data
                                 related_obj = self.handle_nested_create(field.related_model, item)
