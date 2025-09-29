@@ -137,7 +137,7 @@ class NestedOperationHandler:
                             value
                         )
                 elif isinstance(value, (str, int)):
-                    # Reference to existing object
+                    # Reference to existing object - convert ID to model instance
                     try:
                         related_instance = field.related_model.objects.get(pk=value)
                         regular_fields[field_name] = related_instance
@@ -145,6 +145,12 @@ class NestedOperationHandler:
                         raise ValidationError(
                             f"{field.related_model.__name__} with id '{value}' does not exist"
                         )
+                elif hasattr(value, 'pk'):
+                    # Already a model instance, use directly
+                    regular_fields[field_name] = value
+                else:
+                    # For other types, try direct assignment
+                    regular_fields[field_name] = value
 
             # Create the main instance
             instance = model.objects.create(**regular_fields)
@@ -288,10 +294,19 @@ class NestedOperationHandler:
             regular_fields = {}
             nested_fields = {}
             m2m_fields = {}
+            reverse_fields = {}
+
+            # Get reverse relationships for this model
+            reverse_relations = self._get_reverse_relations(model)
 
             for field_name, value in input_data.items():
                 if field_name == 'id':
                     continue  # Skip ID field
+                    
+                # Check if this is a reverse relationship field
+                if field_name in reverse_relations:
+                    reverse_fields[field_name] = (reverse_relations[field_name], value)
+                    continue
                     
                 if not hasattr(model, field_name):
                     continue
@@ -341,6 +356,130 @@ class NestedOperationHandler:
 
             # Save the instance
             instance.save()
+
+            # Handle reverse relationships (e.g., updating comments for a post)
+            for field_name, (related_field, value) in reverse_fields.items():
+                if value is None:
+                    continue
+                    
+                # Handle different types of reverse relationship data
+                if isinstance(value, list):
+                    # Get all existing related objects for this instance
+                    existing_objects = list(related_field.related_model.objects.filter(
+                        **{related_field.field.name: instance.pk}
+                    ))
+                    
+                    # Track which existing objects are being updated
+                    updated_object_ids = set()
+                    
+                    # Process each item in the nested field
+                    for item in value:
+                        if isinstance(item, dict):
+                            if 'id' in item:
+                                # Update existing object
+                                try:
+                                    existing_obj = related_field.related_model.objects.get(pk=item['id'])
+                                    # Ensure the object belongs to this instance
+                                    if getattr(existing_obj, related_field.field.name + '_id') != instance.pk:
+                                        # Set the foreign key to point to our instance
+                                        setattr(existing_obj, related_field.field.name, instance)
+                                    
+                                    # Update the existing object with new data
+                                    for key, val in item.items():
+                                        if key != 'id':
+                                            # Handle foreign key fields properly
+                                            try:
+                                                field = existing_obj._meta.get_field(key)
+                                                if isinstance(field, models.ForeignKey):
+                                                    if val is None:
+                                                        setattr(existing_obj, key, None)
+                                                    elif isinstance(val, (str, int)):
+                                                        # Convert ID to related object instance
+                                                        related_obj = field.related_model.objects.get(pk=val)
+                                                        setattr(existing_obj, key, related_obj)
+                                                    elif isinstance(val, dict):
+                                                        # Handle nested object creation/update
+                                                        if 'id' in val:
+                                                            related_obj = field.related_model.objects.get(pk=val['id'])
+                                                            updated_related = self.handle_nested_update(
+                                                                field.related_model, val, related_obj
+                                                            )
+                                                            setattr(existing_obj, key, updated_related)
+                                                        else:
+                                                            new_related = self.handle_nested_create(field.related_model, val)
+                                                            setattr(existing_obj, key, new_related)
+                                                    else:
+                                                        setattr(existing_obj, key, val)
+                                                else:
+                                                    setattr(existing_obj, key, val)
+                                            except:
+                                                # Fallback to direct assignment for non-model fields
+                                                setattr(existing_obj, key, val)
+                                    existing_obj.save()
+                                    updated_object_ids.add(int(item['id']))  # Convert to int for consistent comparison
+                                except related_field.related_model.DoesNotExist:
+                                    raise ValidationError(f"{related_field.related_model.__name__} with id {item['id']} does not exist")
+                            else:
+                                # Create new object and set the foreign key to point to our instance
+                                item[related_field.field.name] = instance.pk
+                                
+                                # Handle foreign key fields in the new object data
+                                processed_item = {}
+                                for key, val in item.items():
+                                    try:
+                                        field = related_field.related_model._meta.get_field(key)
+                                        if isinstance(field, models.ForeignKey):
+                                            if val is None:
+                                                processed_item[key] = None
+                                            elif isinstance(val, (str, int)):
+                                                # Convert ID to related object instance
+                                                related_obj = field.related_model.objects.get(pk=val)
+                                                processed_item[key] = related_obj
+                                            elif isinstance(val, dict):
+                                                # Handle nested object creation/update
+                                                if 'id' in val:
+                                                    related_obj = field.related_model.objects.get(pk=val['id'])
+                                                    updated_related = self.handle_nested_update(
+                                                        field.related_model, val, related_obj
+                                                    )
+                                                    processed_item[key] = updated_related
+                                                else:
+                                                    new_related = self.handle_nested_create(field.related_model, val)
+                                                    processed_item[key] = new_related
+                                            elif hasattr(val, 'pk'):
+                                                # Already a model instance, use directly
+                                                processed_item[key] = val
+                                            else:
+                                                processed_item[key] = val
+                                        else:
+                                            processed_item[key] = val
+                                    except:
+                                        # Fallback to direct assignment for non-model fields
+                                        processed_item[key] = val
+                                
+                                new_obj = self.handle_nested_create(related_field.related_model, processed_item)
+                                if hasattr(new_obj, 'pk'):
+                                    updated_object_ids.add(new_obj.pk)
+                        elif isinstance(item, (str, int)):
+                            # Connect existing object to this instance
+                            try:
+                                related_field.related_model.objects.filter(
+                                    pk=item
+                                ).update(**{related_field.field.name: instance})
+                                updated_object_ids.add(int(item))  # Convert to int for consistent comparison
+                            except Exception as e:
+                                raise ValidationError(
+                                    f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
+                                )
+                    
+                    # Delete old items that are not present in the new nested field data
+                    objects_to_delete = [
+                        obj for obj in existing_objects 
+                        if obj.pk not in updated_object_ids
+                    ]
+                    
+                    for obj_to_delete in objects_to_delete:
+                        obj_to_delete.delete()
 
             # Handle many-to-many relationships
             for field_name, (field, value) in m2m_fields.items():

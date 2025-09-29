@@ -53,7 +53,6 @@ class MutationGenerator:
             @classmethod
             @transaction.atomic
             def mutate(cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]) -> 'CreateMutation':
-                print("xxxxxxxxxx",cls)
                 try:
                     # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
@@ -229,74 +228,6 @@ class MutationGenerator:
                         processed_data[field_name] = processed_data.pop(nested_field_name)
                 
                 return processed_data
-            
-            @classmethod
-            def _get_nested_handler(cls, info: graphene.ResolveInfo) -> NestedOperationHandler:
-                """Get the nested operation handler from the mutation generator."""
-                # Access the mutation generator through the schema context
-                if hasattr(info.context, 'mutation_generator'):
-                    return info.context.mutation_generator.nested_handler
-                # Fallback to creating a new handler
-                return NestedOperationHandler()
-            
-            @classmethod
-            def _process_dual_fields(cls, input_data: Dict[str, Any], model: Type[models.Model]) -> Dict[str, Any]:
-                """
-                Process dual fields with automatic priority handling.
-                
-                For OneToManyRel (ForeignKey, OneToOneField):
-                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
-                
-                For ManyToManyRel:
-                - If nested_<field_name> is provided, create nested objects first and merge their IDs
-                  into the direct assign data (<field_name>: [ID])
-                
-                Args:
-                    input_data: The input data to process
-                    model: The Django model
-                    
-                Returns:
-                    Dict with processed dual fields
-                """
-                processed_data = input_data.copy()
-                
-                # Get model relationships
-                introspector = ModelIntrospector(model)
-                relationships = introspector.get_model_relationships()
-                
-                for field_name, rel_info in relationships.items():
-                    nested_field_name = f"nested_{field_name}"
-                    
-                    if rel_info.relationship_type in ['ForeignKey', 'OneToOneField']:
-                        # OneToManyRel: Prioritize nested field over direct ID field
-                        if nested_field_name in processed_data and field_name in processed_data:
-                            # Remove direct ID field, keep nested field
-                            processed_data.pop(field_name)
-                            # Transform nested field name to direct field name for processing
-                            processed_data[field_name] = processed_data.pop(nested_field_name)
-                        elif nested_field_name in processed_data:
-                            # Transform nested field name to direct field name
-                            processed_data[field_name] = processed_data.pop(nested_field_name)
-                    
-                    elif rel_info.relationship_type == 'ManyToManyField':
-                        # ManyToManyRel: Create nested objects first, then merge IDs
-                        if nested_field_name in processed_data:
-                            nested_data = processed_data.pop(nested_field_name)
-                            
-                            # For now, transform nested field to direct field for processing
-                            # The nested operation handler will handle the actual creation
-                            processed_data[field_name] = nested_data
-                
-                # Handle reverse relationships (e.g., comments for Post)
-                reverse_relations = introspector.get_reverse_relations()
-                for field_name, related_model in reverse_relations.items():
-                    nested_field_name = f"nested_{field_name}"
-                    
-                    if nested_field_name in processed_data:
-                        # Transform nested field name to direct field name
-                        processed_data[field_name] = processed_data.pop(nested_field_name)
-                
-                return processed_data
 
         return type(
             f'Create{model_name}',
@@ -333,63 +264,30 @@ class MutationGenerator:
                     # Process dual fields with automatic priority handling
                     input = cls._process_dual_fields(input, model)
                     
-                    instance = model.objects.get(pk=id)
+                    # Decode GraphQL ID to database ID if needed
+                    try:
+                        # Try to use the ID as-is first (for integer IDs)
+                        instance = model.objects.get(pk=id)
+                    except (ValueError, model.DoesNotExist):
+                        # If that fails, try to decode as GraphQL global ID
+                        from graphql_relay import from_global_id
+                        try:
+                            decoded_type, decoded_id = from_global_id(id)
+                            instance = model.objects.get(pk=decoded_id)
+                        except Exception:
+                            # If all else fails, raise the original error
+                            instance = model.objects.get(pk=id)
 
-                    # Handle nested updates for related fields
-                    for field_name, value in input.items():
-                        if field_name not in [f.name for f in model._meta.get_fields()]:
-                            continue
-                        field = model._meta.get_field(field_name)
-                        
-                        if isinstance(field, (models.ForeignKey, models.OneToOneField)) and isinstance(value, dict):
-                            if 'id' in value:
-                                # Update existing related object
-                                related_instance = field.related_model.objects.get(pk=value['id'])
-                                for k, v in value.items():
-                                    if k != 'id':
-                                        setattr(related_instance, k, v)
-                                related_instance.save()
-                                input[field_name] = related_instance
-                            else:
-                                # Create new related object
-                                related_instance = field.related_model.objects.create(**value)
-                                input[field_name] = related_instance
-
-                        elif isinstance(field, models.ManyToManyField) and value is not None:
-                            m2m_field = getattr(instance, field_name)
-                            
-                            if isinstance(value, dict):
-                                # Handle create, connect, disconnect, and delete operations
-                                if 'create' in value:
-                                    created_objects = [
-                                        field.related_model.objects.create(**item)
-                                        for item in value['create']
-                                    ]
-                                    m2m_field.add(*created_objects)
-                                
-                                if 'connect' in value:
-                                    m2m_field.add(*value['connect'])
-                                
-                                if 'disconnect' in value:
-                                    m2m_field.remove(*value['disconnect'])
-                                
-                                if 'delete' in value:
-                                    field.related_model.objects.filter(
-                                        pk__in=value['delete']
-                                    ).delete()
-                            
-                            elif isinstance(value, list):
-                                m2m_field.set(value)
-
-                            # Remove the field from input to prevent further processing
-                            input.pop(field_name)
-
-                    # Update the main instance
-                    for field_name, value in input.items():
-                        setattr(instance, field_name, value)
+                    # Use the nested operation handler for advanced nested operations
+                    nested_handler = cls._get_nested_handler(info)
                     
-                    instance.full_clean()
-                    instance.save()
+                    # Validate nested data before processing
+                    validation_errors = nested_handler.validate_nested_data(model, input, 'update')
+                    if validation_errors:
+                        return cls(ok=False, object=None, errors=validation_errors)
+                    
+                    # Handle nested update with comprehensive validation and transaction management
+                    instance = nested_handler.handle_nested_update(model, input, instance)
 
                     return UpdateMutation(ok=True, object=instance, errors=[])
 

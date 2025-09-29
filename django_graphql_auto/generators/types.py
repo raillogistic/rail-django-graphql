@@ -436,6 +436,7 @@ class TypeGenerator:
         self._type_registry[model] = model_type
         return model_type
     
+    
     def generate_input_type(self, model: Type[models.Model], partial: bool = False, 
                            mutation_type: str = 'create', include_reverse_relations: bool = True) -> Type[graphene.InputObjectType]:
         """
@@ -448,10 +449,11 @@ class TypeGenerator:
             mutation_type: Type of mutation ('create' or 'update') to determine field requirements
             include_reverse_relations: Whether to include reverse relationship fields for nested creation
         """
+        
         # Check if we already have this input type to prevent infinite recursion
         cache_key = (model, partial, mutation_type, include_reverse_relations)
-        if model in self._input_type_registry:
-            return self._input_type_registry[model]
+        if cache_key in self._input_type_registry:
+            return self._input_type_registry[cache_key]
 
         introspector = ModelIntrospector(model)
         fields = introspector.get_model_fields()
@@ -459,12 +461,14 @@ class TypeGenerator:
 
         # Create input fields
         input_fields = {}
+        
         for field_name, field_info in fields.items():
+
             if not self._should_include_field(model, field_name):
                 continue
 
-            # Skip id field for create mutations
-            if mutation_type == 'create' and field_name == 'id':
+            # Skip id field for create and update mutations (id is passed as separate argument for updates)
+            if field_name == 'id':
                 continue
 
             # Get field type, fallback to handle_custom_fields if not in mapping
@@ -477,7 +481,9 @@ class TypeGenerator:
             if mutation_type == 'create':
                 is_required = self._should_field_be_required_for_create(field_info, field_name) and not partial
             else:  # update
-                is_required = self._should_field_be_required_for_update(field_name, field_info) and not partial
+                # For updates, only id is required regardless of partial flag
+                # All other fields are optional for partial updates
+                is_required = self._should_field_be_required_for_update(field_name, field_info)
             
             input_fields[field_name] = field_type(
                 required=is_required,
@@ -508,9 +514,15 @@ class TypeGenerator:
             # Apply field requirement logic to relationship fields
             # For ManyToMany fields, use blank attribute instead of null
             if rel_info.relationship_type == 'ManyToManyField':
-                is_required = not django_field.blank
+                if mutation_type == 'create':
+                    is_required = not django_field.blank and not partial
+                else:  # update
+                    is_required = False  # All relationship fields are optional for updates
             else:
-                is_required = self._should_field_be_required_for_create(rel_field_info, field_name) if mutation_type == 'create' else self._should_field_be_required_for_update(field_name, rel_field_info)
+                if mutation_type == 'create':
+                    is_required = self._should_field_be_required_for_create(rel_field_info, field_name) and not partial
+                else:  # update
+                    is_required = self._should_field_be_required_for_update(field_name, rel_field_info)
 
             # Always generate both nested and direct ID fields for all relationships
             if rel_info.relationship_type in ('ForeignKey', 'OneToOneField'):
@@ -538,8 +550,8 @@ class TypeGenerator:
                 nested_input_type = self._get_or_create_nested_input_type(rel_info.related_model, mutation_type, exclude_parent_field=model)
                 input_fields[nested_field_name] = graphene.List(nested_input_type)
 
-        # Add reverse relationship fields with dual field generation for nested creation (e.g., comments for Post)
-        if include_reverse_relations and mutation_type == 'create':
+        # Add reverse relationship fields with dual field generation for nested operations (e.g., comments for Post)
+        if include_reverse_relations:
             reverse_relations = self._get_reverse_relations(model)
             for field_name, related_model in reverse_relations.items():
                 if not self._should_include_field(model, field_name):
@@ -551,11 +563,19 @@ class TypeGenerator:
                 
                 # 2. Add nested field: nested_<field_name>
                 nested_field_name = f"nested_{field_name}"
-                nested_input_type = self._get_or_create_nested_input_type(related_model, 'create', exclude_parent_field=model)
+                # Use the appropriate mutation type for nested input generation
+                nested_mutation_type = 'create' if mutation_type == 'create' else 'update'
+                nested_input_type = self._get_or_create_nested_input_type(related_model, nested_mutation_type, exclude_parent_field=model)
                 input_fields[nested_field_name] = graphene.List(nested_input_type)
 
         # Create the input type class
-        class_name = f"{model.__name__}Input"
+        # Generate different class names for different mutation types
+        if mutation_type == 'update' and partial:
+            class_name = f"Update{model.__name__}Input"
+        elif mutation_type == 'create':
+            class_name = f"Create{model.__name__}Input"
+        else:
+            class_name = f"{model.__name__}Input"
         input_type = type(
             class_name,
             (graphene.InputObjectType,),
@@ -565,7 +585,9 @@ class TypeGenerator:
             }
         )
 
-        self._input_type_registry[model] = input_type
+        # Store in registry with comprehensive cache key
+        cache_key = (model, partial, mutation_type, include_reverse_relations)
+        self._input_type_registry[cache_key] = input_type
         return input_type
 
     def generate_filter_type(self, model: Type[models.Model]) -> Type:
