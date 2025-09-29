@@ -115,6 +115,22 @@ class MutationGenerator:
                                 error_message = f"A {model_name} with this {field_name} already exists."
                                 logger.info(f"Extracted field name from ValidationError/IntegrityError: {field_name}")
                         
+                        # Handle foreign key validation errors
+                        elif "does not exist" in error_message:
+                            # Extract field name from error like "Category with id '80' does not exist"
+                            # or "Failed to create Post: [\"Category with id \\'80\\' does not exist\"]"
+                            import re
+                            
+                            # Try to match the model name in the error and map it to field
+                            for field in model._meta.get_fields():
+                                if hasattr(field, 'related_model') and field.related_model:
+                                    related_model_name = field.related_model.__name__
+                                    if related_model_name.lower() in error_message.lower():
+                                        field_name = field.name
+                                        error_message = f"Invalid {field.name}: The selected {related_model_name.lower()} does not exist."
+                                        logger.info(f"Extracted field name from foreign key error: {field_name}")
+                                        break
+                        
                         error_objects.append(MutationError(field=field_name, message=error_message))
                     return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
@@ -149,6 +165,22 @@ class MutationGenerator:
                     # Handle foreign key constraint errors
                     elif "FOREIGN KEY constraint failed" in error_message:
                         error_message = "Invalid reference to related object."
+                    
+                    # Handle foreign key validation errors (from nested operations)
+                    elif "does not exist" in error_message:
+                        # Extract field name from error like "Category with id '80' does not exist"
+                        # or "Failed to create Post: [\"Category with id \\'80\\' does not exist\"]"
+                        import re
+                        
+                        # Try to match the model name in the error and map it to field
+                        for field in model._meta.get_fields():
+                            if hasattr(field, 'related_model') and field.related_model:
+                                related_model_name = field.related_model.__name__
+                                if related_model_name.lower() in error_message.lower():
+                                    field_name = field.name
+                                    error_message = f"Invalid {field.name}: The selected {related_model_name.lower()} does not exist."
+                                    logger.info(f"Extracted field name from foreign key error: {field_name}")
+                                    break
                     
                     error_objects = [MutationError(field=field_name, message=error_message)]
                     return cls(ok=False, object=None, errors=error_objects)
