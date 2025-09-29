@@ -84,16 +84,23 @@ class AdvancedFilterGenerator:
         self._visited_models.add(model)
         
         try:
-            # Generate filters with nested support
+            # Generate filters for all fields
             filters = {}
             for field in model._meta.get_fields():
                 if hasattr(field, 'name'):  # Skip reverse relations without names
                     field_filters = self._generate_field_filters(field, current_depth, allow_nested=True)
                     filters.update(field_filters)
             
+            # Generate reverse relationship count filters
+            reverse_count_filters = self._generate_reverse_relationship_count_filters(model)
+            filters.update(reverse_count_filters)
+            
             # Generate property filters
             property_filters = self._generate_property_filters(model)
             filters.update(property_filters)
+            
+            # Generate dynamic filter methods for count filters
+            filter_methods = self._generate_count_filter_methods(model, filters)
             
             # Create FilterSet class
             filter_set_class = type(
@@ -101,6 +108,7 @@ class AdvancedFilterGenerator:
                 (FilterSet,),
                 {
                     **filters,
+                    **filter_methods,
                     'Meta': type('Meta', (), {
                         'model': model,
                         'fields': list(filters.keys()),
@@ -198,7 +206,178 @@ class AdvancedFilterGenerator:
                 current_depth < self.max_nested_depth and 
                 field.related_model not in self._visited_models):
                 filters.update(self._generate_nested_field_filters(field, current_depth))
+        elif isinstance(field, models.ManyToManyField):
+            # Generate ManyToMany filters
+            if self.enable_nested_filters:
+                filters.update(self._generate_many_to_many_filters(field_name, field.related_model))
+            
+            # Add nested field filters if enabled and within depth limits
+            if (self.enable_nested_filters and allow_nested and 
+                current_depth < self.max_nested_depth and 
+                field.related_model not in self._visited_models):
+                filters.update(self._generate_nested_field_filters(field, current_depth))
 
+        return filters
+
+    def _generate_count_filter_methods(self, model: Type[models.Model], filters: Dict[str, django_filters.Filter]) -> Dict[str, callable]:
+        """
+        Generate dynamic filter methods for count-based filtering.
+        
+        Args:
+            model: Django model
+            filters: Dictionary of filters that have been generated
+            
+        Returns:
+            Dictionary of method names to method implementations
+        """
+        methods = {}
+        
+        # Generate methods for ManyToMany count filters
+        for field in model._meta.get_fields():
+            if isinstance(field, models.ManyToManyField):
+                field_name = field.name
+                
+                # Generate count filter methods
+                methods[f'filter_{field_name}_count'] = self._create_count_filter_method(field_name, 'exact')
+                methods[f'filter_{field_name}_count_gt'] = self._create_count_filter_method(field_name, 'gt')
+                methods[f'filter_{field_name}_count_gte'] = self._create_count_filter_method(field_name, 'gte')
+                methods[f'filter_{field_name}_count_lt'] = self._create_count_filter_method(field_name, 'lt')
+                methods[f'filter_{field_name}_count_lte'] = self._create_count_filter_method(field_name, 'lte')
+        
+        # Generate methods for reverse ManyToOne count filters
+        if hasattr(model._meta, 'related_objects'):
+            for rel in model._meta.related_objects:
+                # Skip OneToOne reverse relationships
+                from django.db.models.fields.reverse_related import OneToOneRel
+                if isinstance(rel, OneToOneRel):
+                    continue
+                
+                accessor_name = rel.get_accessor_name()
+                if accessor_name:
+                    methods[f'filter_{accessor_name}_count'] = self._create_reverse_count_filter_method(accessor_name, 'exact')
+                    methods[f'filter_{accessor_name}_count_gt'] = self._create_reverse_count_filter_method(accessor_name, 'gt')
+                    methods[f'filter_{accessor_name}_count_gte'] = self._create_reverse_count_filter_method(accessor_name, 'gte')
+                    methods[f'filter_{accessor_name}_count_lt'] = self._create_reverse_count_filter_method(accessor_name, 'lt')
+                    methods[f'filter_{accessor_name}_count_lte'] = self._create_reverse_count_filter_method(accessor_name, 'lte')
+        
+        return methods
+
+    def _create_count_filter_method(self, field_name: str, lookup_type: str):
+        """
+        Create a filter method for ManyToMany count filtering.
+        
+        Args:
+            field_name: Name of the ManyToMany field
+            lookup_type: Type of lookup (exact, gt, gte, lt, lte)
+            
+        Returns:
+            Filter method function
+        """
+        def filter_method(self, queryset, name, value):
+            if value is None:
+                return queryset
+            
+            from django.db.models import Count
+            
+            # Annotate with count and filter
+            count_field = f'{field_name}_count_annotation'
+            queryset = queryset.annotate(**{count_field: Count(field_name)})
+            
+            if lookup_type == 'exact':
+                return queryset.filter(**{count_field: value})
+            elif lookup_type == 'gt':
+                return queryset.filter(**{f'{count_field}__gt': value})
+            elif lookup_type == 'gte':
+                return queryset.filter(**{f'{count_field}__gte': value})
+            elif lookup_type == 'lt':
+                return queryset.filter(**{f'{count_field}__lt': value})
+            elif lookup_type == 'lte':
+                return queryset.filter(**{f'{count_field}__lte': value})
+            
+            return queryset
+        
+        return filter_method
+
+    def _create_reverse_count_filter_method(self, accessor_name: str, lookup_type: str):
+        """
+        Create a filter method for reverse ManyToOne count filtering.
+        
+        Args:
+            accessor_name: Name of the reverse relationship accessor
+            lookup_type: Type of lookup (exact, gt, gte, lt, lte)
+            
+        Returns:
+            Filter method function
+        """
+        def filter_method(self, queryset, name, value):
+            if value is None:
+                return queryset
+            
+            from django.db.models import Count
+            
+            # Annotate with count and filter
+            count_field = f'{accessor_name}_count_annotation'
+            queryset = queryset.annotate(**{count_field: Count(accessor_name)})
+            
+            if lookup_type == 'exact':
+                return queryset.filter(**{count_field: value})
+            elif lookup_type == 'gt':
+                return queryset.filter(**{f'{count_field}__gt': value})
+            elif lookup_type == 'gte':
+                return queryset.filter(**{f'{count_field}__gte': value})
+            elif lookup_type == 'lt':
+                return queryset.filter(**{f'{count_field}__lt': value})
+            elif lookup_type == 'lte':
+                return queryset.filter(**{f'{count_field}__lte': value})
+            
+            return queryset
+        
+        return filter_method
+
+    def _generate_reverse_relationship_count_filters(self, model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+        """
+        Generate count filters for reverse ManyToOne relationships.
+        
+        Args:
+            model: Django model to generate reverse relationship count filters for
+            
+        Returns:
+            Dictionary of filter name to Filter instance mappings
+        """
+        filters = {}
+        
+        # Get reverse relationships from model meta
+        if hasattr(model._meta, 'related_objects'):
+            for rel in model._meta.related_objects:
+                # Skip OneToOne reverse relationships as they don't need count filters
+                from django.db.models.fields.reverse_related import OneToOneRel
+                if isinstance(rel, OneToOneRel):
+                    continue
+                
+                accessor_name = rel.get_accessor_name()
+                if accessor_name:
+                    # Add count filters for reverse ManyToOne relationships
+                    filters[f'{accessor_name}_count'] = NumberFilter(
+                        method=f'filter_{accessor_name}_count',
+                        help_text=f'Filter by count of {accessor_name} relationships'
+                    )
+                    filters[f'{accessor_name}_count__gt'] = NumberFilter(
+                        method=f'filter_{accessor_name}_count_gt',
+                        help_text=f'Filter by count of {accessor_name} relationships greater than'
+                    )
+                    filters[f'{accessor_name}_count__gte'] = NumberFilter(
+                        method=f'filter_{accessor_name}_count_gte',
+                        help_text=f'Filter by count of {accessor_name} relationships greater than or equal'
+                    )
+                    filters[f'{accessor_name}_count__lt'] = NumberFilter(
+                        method=f'filter_{accessor_name}_count_lt',
+                        help_text=f'Filter by count of {accessor_name} relationships less than'
+                    )
+                    filters[f'{accessor_name}_count__lte'] = NumberFilter(
+                        method=f'filter_{accessor_name}_count_lte',
+                        help_text=f'Filter by count of {accessor_name} relationships less than or equal'
+                    )
+        
         return filters
 
     def _create_property_filter_method(self, property_name: str, lookup_expr: str):
@@ -512,33 +691,33 @@ class AdvancedFilterGenerator:
         
         return queryset
         """Generate nested text-specific filters for related fields."""
-        return {
-            f'{field_name}__contains': CharFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='contains',
-                help_text=f'Filter {base_field_name} containing the specified text (case-sensitive)'
-            ),
-            f'{field_name}__icontains': CharFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='icontains',
-                help_text=f'Filter {base_field_name} containing the specified text (case-insensitive)'
-            ),
-            f'{field_name}__startswith': CharFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='startswith',
-                help_text=f'Filter {base_field_name} starting with the specified text'
-            ),
-            f'{field_name}__endswith': CharFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='endswith',
-                help_text=f'Filter {base_field_name} ending with the specified text'
-            ),
-            f'{field_name}__exact': CharFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='exact',
-                help_text=f'Filter {base_field_name} with exact match'
-            ),
-        }
+        # return {
+        #     f'{field_name}__contains': CharFilter(
+        #         field_name=field_name.replace('__', '__'),
+        #         lookup_expr='contains',
+        #         help_text=f'Filter {base_field_name} containing the specified text (case-sensitive)'
+        #     ),
+        #     f'{field_name}__icontains': CharFilter(
+        #         field_name=field_name.replace('__', '__'),
+        #         lookup_expr='icontains',
+        #         help_text=f'Filter {base_field_name} containing the specified text (case-insensitive)'
+        #     ),
+        #     f'{field_name}__startswith': CharFilter(
+        #         field_name=field_name.replace('__', '__'),
+        #         lookup_expr='startswith',
+        #         help_text=f'Filter {base_field_name} starting with the specified text'
+        #     ),
+        #     f'{field_name}__endswith': CharFilter(
+        #         field_name=field_name.replace('__', '__'),
+        #         lookup_expr='endswith',
+        #         help_text=f'Filter {base_field_name} ending with the specified text'
+        #     ),
+        #     f'{field_name}__exact': CharFilter(
+        #         field_name=field_name.replace('__', '__'),
+        #         lookup_expr='exact',
+        #         help_text=f'Filter {base_field_name} with exact match'
+        #     ),
+        # }
 
     def _generate_nested_text_filters(self, field_name: str, base_field_name: str) -> Dict[str, CharFilter]:
         """
@@ -853,6 +1032,54 @@ class AdvancedFilterGenerator:
                 to_field_name='pk',
                 help_text=f'Filter by multiple {field_name} IDs'
             )
+        
+        return filters
+
+    def _generate_many_to_many_filters(self, field_name: str, related_model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+        """
+        Generate ManyToMany field filters including count filters.
+        
+        Args:
+            field_name: Name of the ManyToMany field
+            related_model: Related model class
+            
+        Returns:
+            Dictionary of filter name to Filter instance mappings
+        """
+        filters = {
+            # Basic ManyToMany filters
+            f'{field_name}': NumberFilter(
+                field_name=field_name,
+                help_text=f'Filter by {field_name} ID'
+            ),
+            f'{field_name}__in': django_filters.ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                to_field_name='pk',
+                help_text=f'Filter by multiple {field_name} IDs'
+            ),
+            # Count filters for ManyToMany relationships
+            f'{field_name}_count': NumberFilter(
+                method=f'filter_{field_name}_count',
+                help_text=f'Filter by count of {field_name} relationships'
+            ),
+            f'{field_name}_count__gt': NumberFilter(
+                method=f'filter_{field_name}_count_gt',
+                help_text=f'Filter by count of {field_name} relationships greater than'
+            ),
+            f'{field_name}_count__gte': NumberFilter(
+                method=f'filter_{field_name}_count_gte',
+                help_text=f'Filter by count of {field_name} relationships greater than or equal'
+            ),
+            f'{field_name}_count__lt': NumberFilter(
+                method=f'filter_{field_name}_count_lt',
+                help_text=f'Filter by count of {field_name} relationships less than'
+            ),
+            f'{field_name}_count__lte': NumberFilter(
+                method=f'filter_{field_name}_count_lte',
+                help_text=f'Filter by count of {field_name} relationships less than or equal'
+            ),
+        }
         
         return filters
 

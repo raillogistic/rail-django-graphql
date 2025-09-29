@@ -251,6 +251,12 @@ class TypeGenerator:
                     description=f"Related {related_model.__name__} objects"
                 )
                 
+                # Add count field for ManyToMany relation
+                count_field_name = f"{field_name}_count"
+                type_attrs[count_field_name] = graphene.Int(
+                    description=f"Count of related {related_model.__name__} objects"
+                )
+                
                 # Add resolver that handles different relationship types
                 def make_resolver(field_name, rel_info):
                     def resolver(self, info):
@@ -263,7 +269,15 @@ class TypeGenerator:
                             return related_obj.all()
                     return resolver
                 
+                # Add count resolver for ManyToMany relation
+                def make_count_resolver(field_name):
+                    def count_resolver(self, info):
+                        related_obj = getattr(self, field_name)
+                        return related_obj.count()
+                    return count_resolver
+                
                 type_attrs[f'resolve_{field_name}'] = make_resolver(field_name, rel_info)
+                type_attrs[f'resolve_{count_field_name}'] = make_count_resolver(field_name)
 
         # Add custom resolvers for ALL reverse relationships to return direct model lists
         # instead of relay connections (including Django's default _set relationships)
@@ -304,6 +318,12 @@ class TypeGenerator:
                     make_lazy_type(related_model),
                     description=f"Related {related_model.__name__} objects"
                 )
+                
+                # Add count field for reverse ManyToOne relations (e.g., posts_count for User)
+                count_field_name = f"{accessor_name}_count"
+                type_attrs[count_field_name] = graphene.Int(
+                    description=f"Count of related {related_model.__name__} objects"
+                )
             
             # Add resolver that handles different relationship types
             def make_resolver(accessor_name, is_one_to_one):
@@ -317,7 +337,25 @@ class TypeGenerator:
                         return related_obj.all()
                 return resolver
             
+            # Add count resolver for reverse ManyToOne relations
+            def make_count_resolver(accessor_name, is_one_to_one):
+                def count_resolver(self, info):
+                    if is_one_to_one:
+                        # For OneToOne, return 1 if exists, 0 if not
+                        related_obj = getattr(self, accessor_name, None)
+                        return 1 if related_obj else 0
+                    else:
+                        # For ManyToOne reverse relations, count the related objects
+                        related_obj = getattr(self, accessor_name)
+                        return related_obj.count()
+                return count_resolver
+            
             type_attrs[f'resolve_{accessor_name}'] = make_resolver(accessor_name, is_one_to_one_reverse)
+            
+            # Add count resolver only for non-OneToOne relationships
+            if not is_one_to_one_reverse:
+                count_field_name = f"{accessor_name}_count"
+                type_attrs[f'resolve_{count_field_name}'] = make_count_resolver(accessor_name, is_one_to_one_reverse)
             
             # Add the accessor name to excluded fields to prevent Django from 
             # generating the default Connection field
