@@ -16,6 +16,8 @@ import django_filters
 from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter
 import logging
 
+from .introspector import ModelIntrospector
+
 logger = logging.getLogger(__name__)
 
 # Configuration constants for nested filtering
@@ -88,6 +90,10 @@ class AdvancedFilterGenerator:
                 if hasattr(field, 'name'):  # Skip reverse relations without names
                     field_filters = self._generate_field_filters(field, current_depth, allow_nested=True)
                     filters.update(field_filters)
+            
+            # Generate property filters
+            property_filters = self._generate_property_filters(model)
+            filters.update(property_filters)
             
             # Create FilterSet class
             filter_set_class = type(
@@ -194,6 +200,97 @@ class AdvancedFilterGenerator:
                 filters.update(self._generate_nested_field_filters(field, current_depth))
 
         return filters
+
+    def _create_property_filter_method(self, property_name: str, lookup_expr: str):
+        """
+        Create a custom filter method for property-based filtering.
+        
+        Args:
+            property_name: Name of the property to filter on
+            lookup_expr: Django lookup expression (e.g., 'exact', 'icontains', 'gt')
+            
+        Returns:
+            Filter method that can be used with django-filter
+        """
+        def filter_method(queryset, name, value):
+            """
+            Custom filter method for property-based filtering.
+            
+            Since properties are computed at runtime, we need to evaluate
+            them for each object and filter accordingly.
+            """
+            if value is None:
+                return queryset
+            
+            # Get all objects and evaluate the property
+            filtered_ids = []
+            
+            for obj in queryset:
+                try:
+                    # Get the property value
+                    property_value = getattr(obj, property_name)
+                    
+                    # Apply the lookup expression
+                    if self._property_matches_filter(property_value, value, lookup_expr):
+                        filtered_ids.append(obj.pk)
+                        
+                except (AttributeError, TypeError) as e:
+                    logger.warning(f"Error evaluating property {property_name} on {obj}: {e}")
+                    continue
+            
+            # Return filtered queryset
+            return queryset.filter(pk__in=filtered_ids)
+        
+        return filter_method
+
+    def _property_matches_filter(self, property_value: Any, filter_value: Any, lookup_expr: str) -> bool:
+        """
+        Check if a property value matches the filter criteria.
+        
+        Args:
+            property_value: The actual value of the property
+            filter_value: The value to filter by
+            lookup_expr: The lookup expression to apply
+            
+        Returns:
+            True if the property value matches the filter criteria
+        """
+        try:
+            if lookup_expr == 'exact':
+                return property_value == filter_value
+            elif lookup_expr == 'iexact':
+                return str(property_value).lower() == str(filter_value).lower()
+            elif lookup_expr == 'contains':
+                return str(filter_value) in str(property_value)
+            elif lookup_expr == 'icontains':
+                return str(filter_value).lower() in str(property_value).lower()
+            elif lookup_expr == 'startswith':
+                return str(property_value).startswith(str(filter_value))
+            elif lookup_expr == 'istartswith':
+                return str(property_value).lower().startswith(str(filter_value).lower())
+            elif lookup_expr == 'endswith':
+                return str(property_value).endswith(str(filter_value))
+            elif lookup_expr == 'iendswith':
+                return str(property_value).lower().endswith(str(filter_value).lower())
+            elif lookup_expr == 'gt':
+                return property_value > filter_value
+            elif lookup_expr == 'gte':
+                return property_value >= filter_value
+            elif lookup_expr == 'lt':
+                return property_value < filter_value
+            elif lookup_expr == 'lte':
+                return property_value <= filter_value
+            elif lookup_expr == 'in':
+                return property_value in filter_value
+            elif lookup_expr == 'isnull':
+                return (property_value is None) == filter_value
+            else:
+                # Default to exact match for unknown lookup expressions
+                return property_value == filter_value
+                
+        except (TypeError, ValueError) as e:
+            logger.warning(f"Error comparing property value {property_value} with filter {filter_value} using {lookup_expr}: {e}")
+            return False
 
     def _generate_nested_field_filters(self, field: models.Field, current_depth: int) -> Dict[str, django_filters.Filter]:
         """
@@ -892,3 +989,121 @@ class AdvancedFilterGenerator:
                 q_object &= Q(**{key: value})
         
         return q_object
+
+    def _generate_property_filters(self, model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+        """
+        Generate filters for @property methods on the model.
+        
+        Args:
+            model: Django model to generate property filters for
+            
+        Returns:
+            Dictionary of property filter name to Filter instance mappings
+        """
+        filters = {}
+        
+        # Use ModelIntrospector to detect properties
+        introspector = ModelIntrospector(model)
+        properties = introspector.properties
+        
+        for property_name, property_info in properties.items():
+            # Generate filters based on property return type
+            property_filters = self._generate_property_type_filters(property_name, property_info.return_type)
+            filters.update(property_filters)
+        
+        logger.debug(f"Generated {len(filters)} property filters for {model.__name__}")
+        return filters
+
+    def _generate_property_type_filters(self, property_name: str, return_type: Any) -> Dict[str, django_filters.Filter]:
+        """
+        Generate specific filters based on property return type.
+        
+        Args:
+            property_name: Name of the property
+            return_type: Return type annotation of the property
+            
+        Returns:
+            Dictionary of filter name to Filter instance mappings
+        """
+        filters = {}
+        
+        # Handle different return types
+        if return_type == str or return_type == 'str':
+            filters.update(self._generate_property_text_filters(property_name))
+        elif return_type == int or return_type == 'int':
+            filters.update(self._generate_property_numeric_filters(property_name))
+        elif return_type == float or return_type == 'float':
+            filters.update(self._generate_property_numeric_filters(property_name))
+        elif return_type == bool or return_type == 'bool':
+            filters.update(self._generate_property_boolean_filters(property_name))
+        elif return_type == list or return_type == 'list':
+            # For list properties, provide basic text filtering
+            filters.update(self._generate_property_text_filters(property_name))
+        else:
+            # Default to text filtering for unknown types
+            filters.update(self._generate_property_text_filters(property_name))
+        
+        return filters
+
+    def _generate_property_text_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+        """Generate text-specific filters for properties: contains, icontains, startswith, endswith."""
+        return {
+            f'{property_name}': CharFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property with exact text matching'
+            ),
+            f'{property_name}__contains': CharFilter(
+                method=self._create_property_filter_method(property_name, 'contains'),
+                help_text=f'Filter by {property_name} property containing the specified text (case-sensitive)'
+            ),
+            f'{property_name}__icontains': CharFilter(
+                method=self._create_property_filter_method(property_name, 'icontains'),
+                help_text=f'Filter by {property_name} property containing the specified text (case-insensitive)'
+            ),
+            f'{property_name}__startswith': CharFilter(
+                method=self._create_property_filter_method(property_name, 'startswith'),
+                help_text=f'Filter by {property_name} property starting with the specified text'
+            ),
+            f'{property_name}__endswith': CharFilter(
+                method=self._create_property_filter_method(property_name, 'endswith'),
+                help_text=f'Filter by {property_name} property ending with the specified text'
+            ),
+            f'{property_name}__exact': CharFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property with exact match'
+            ),
+        }
+
+    def _generate_property_numeric_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+        """Generate numeric filters for properties: gt, gte, lt, lte."""
+        return {
+            f'{property_name}': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property with exact numeric matching'
+            ),
+            f'{property_name}__gt': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'gt'),
+                help_text=f'Filter by {property_name} property greater than the specified value'
+            ),
+            f'{property_name}__gte': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'gte'),
+                help_text=f'Filter by {property_name} property greater than or equal to the specified value'
+            ),
+            f'{property_name}__lt': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'lt'),
+                help_text=f'Filter by {property_name} property less than the specified value'
+            ),
+            f'{property_name}__lte': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'lte'),
+                help_text=f'Filter by {property_name} property less than or equal to the specified value'
+            ),
+        }
+
+    def _generate_property_boolean_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+        """Generate boolean filters for properties."""
+        return {
+            f'{property_name}': BooleanFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property boolean value'
+            ),
+        }

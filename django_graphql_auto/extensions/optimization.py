@@ -119,11 +119,14 @@ class QueryAnalyzer:
     def _extract_requested_fields(self, info: GraphQLResolveInfo) -> Set[str]:
         """Extract requested fields from GraphQL query."""
         try:
+            # Use the correct collect_fields signature for graphql-core
+            # The function expects: schema, fragments, selection_set, variable_values, runtime_type
             fields = collect_fields(
                 info.schema,
                 info.fragments,
                 info.field_nodes[0].selection_set,
-                info.variable_values
+                info.variable_values,
+                info.parent_type  # Add the missing runtime_type parameter
             )
             return set(fields.keys())
         except Exception as e:
