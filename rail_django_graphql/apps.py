@@ -6,7 +6,8 @@ Ce module configure:
 - Configuration des signaux et hooks
 - Initialisation des composants principaux
 """
-
+from rail_django_graphql.middleware.performance import setup_performance_monitoring
+setup_performance_monitoring()
 from django.apps import AppConfig
 import logging
 

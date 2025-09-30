@@ -9,7 +9,7 @@ from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 from .schema import schema
 from .views.health_views import HealthDashboardView
-
+from rail_django_graphql.middleware.performance import GraphQLPerformanceView
 
 def health_check(request):
     """Simple health check endpoint."""
@@ -25,4 +25,5 @@ urlpatterns = [
     path("playground/", csrf_exempt(graphql_view), name="graphql_playground"),
     path("health/", health_check, name="health_check"),
     path("health/dashboard/", HealthDashboardView.as_view(), name="health_dashboard"),
+    path('graphql/performance/', GraphQLPerformanceView.as_view()),
 ]

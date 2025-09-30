@@ -60,6 +60,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "rail_django_graphql.middleware.performance.GraphQLPerformanceMiddleware",
     "cache_middleware.GraphQLCacheInvalidationMiddleware",  # Cache invalidation middleware
 ]
 

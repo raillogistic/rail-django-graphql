@@ -17,7 +17,7 @@ from ..extensions.performance_metrics import performance_collector
 
 logger = logging.getLogger(__name__)
 
-
+import django
 class GraphQLPerformanceMiddleware(MiddlewareMixin):
     """
     Middleware pour surveiller les performances des requêtes GraphQL.
@@ -36,12 +36,14 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
 
         # Configuration par défaut
         self.slow_query_threshold = getattr(
-            settings, "GRAPHQL_SLOW_QUERY_THRESHOLD", 1.0
+            django.conf.settings, "GRAPHQL_SLOW_QUERY_THRESHOLD", 1.0
         )
         self.enable_memory_tracking = getattr(
-            settings, "GRAPHQL_ENABLE_MEMORY_TRACKING", True
+            django.conf.settings, "GRAPHQL_ENABLE_MEMORY_TRACKING", True
         )
-        self.log_slow_queries = getattr(settings, "GRAPHQL_LOG_SLOW_QUERIES", True)
+        self.log_slow_queries = getattr(
+            django.conf.settings, "GRAPHQL_LOG_SLOW_QUERIES", True
+        )
 
     def process_request(self, request):
         """Initialise le suivi des performances au début de la requête."""
