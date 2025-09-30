@@ -6,7 +6,7 @@ The Django GraphQL Auto library was encountering a `NOT NULL constraint failed: 
 
 ## Root Cause Analysis
 
-The issue was located in the `handle_nested_create` method within `django_graphql_auto/generators/nested_operations.py`. The method was not properly handling foreign key fields when the value was already a model instance (as opposed to a string/integer ID).
+The issue was located in the `handle_nested_create` method within `rail_django_graphql/generators/nested_operations.py`. The method was not properly handling foreign key fields when the value was already a model instance (as opposed to a string/integer ID).
 
 ### Specific Issue
 
@@ -19,7 +19,7 @@ In the `handle_nested_create` method, when processing foreign key fields:
 
 ### Code Location
 
-File: `django_graphql_auto/generators/nested_operations.py`
+File: `rail_django_graphql/generators/nested_operations.py`
 Method: `handle_nested_create` (around lines 135-150)
 
 ## Solution Implemented
@@ -46,13 +46,13 @@ The fix ensures that when a foreign key field value is already a model instance 
 The fix was verified with multiple test scenarios:
 
 1. **Nested Comment Creation**: Creating comments within post updates ✓
-2. **Multiple Foreign Key Fields**: Handling multiple foreign key relationships ✓  
+2. **Multiple Foreign Key Fields**: Handling multiple foreign key relationships ✓
 3. **Direct Comment Creation**: Ensuring non-nested operations still work ✓
 4. **Nested Post Creation**: Creating posts with nested comments ✓
 
 ## Files Modified
 
-- `django_graphql_auto/generators/nested_operations.py`: Added missing foreign key instance handling
+- `rail_django_graphql/generators/nested_operations.py`: Added missing foreign key instance handling
 
 ## Impact
 

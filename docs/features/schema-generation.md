@@ -32,7 +32,7 @@ The schema generation process consists of several phases:
 The `ModelIntrospector` class is responsible for analyzing Django models and extracting all necessary metadata for GraphQL schema generation.
 
 ```python
-from django_graphql_auto.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.introspector import ModelIntrospector
 
 introspector = ModelIntrospector()
 field_info = introspector.get_model_fields(MyModel)
@@ -63,7 +63,7 @@ class FieldInfo:
     choices: Optional[List[Tuple]]
     default: Any
     help_text: str
-    
+
     # Enhanced attributes for smart requirements
     has_auto_now: bool          # auto_now=True
     has_auto_now_add: bool      # auto_now_add=True
@@ -106,7 +106,7 @@ class MethodInfo:
 The `TypeGenerator` creates GraphQL types from Django models with intelligent field mapping and requirement detection.
 
 ```python
-from django_graphql_auto.generators.types import TypeGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 generator = TypeGenerator()
 object_type = generator.generate_object_type(MyModel)
@@ -131,14 +131,14 @@ class PostType(DjangoObjectType):
     class Meta:
         model = Post
         fields = '__all__'
-    
+
     # Additional computed fields
     is_recent = graphene.Boolean()
     word_count = graphene.Int()
-    
+
     def resolve_is_recent(self, info):
         return (timezone.now() - self.created_at).days < 7
-    
+
     def resolve_word_count(self, info):
         return len(self.content.split())
 ```
@@ -176,23 +176,23 @@ The type generator implements intelligent field requirement logic:
 ```python
 def _should_field_be_required_for_create(self, field_info: FieldInfo, field_name: str) -> bool:
     """Determine if a field should be required for create mutations."""
-    
+
     # Primary key fields are never required
     if field_info.is_primary_key:
         return False
-    
+
     # Auto-generated fields are never required
     if field_info.has_auto_now or field_info.has_auto_now_add:
         return False
-    
+
     # Fields with defaults are not required
     if field_info.has_default:
         return False
-    
+
     # Blank fields are not required
     if field_info.blank:
         return False
-    
+
     # Field is required if it's not null and has no default
     return not field_info.null
 
@@ -208,7 +208,7 @@ def _should_field_be_required_for_update(self, field_info: FieldInfo) -> bool:
 The `QueryGenerator` creates comprehensive query operations for each model:
 
 ```python
-from django_graphql_auto.generators.queries import QueryGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
 
 generator = QueryGenerator()
 single_query = generator.generate_single_query(MyModel)
@@ -245,21 +245,21 @@ posts = graphene.List(
 
 def resolve_posts(self, info, filters=None, order_by=None, limit=None, offset=None):
     queryset = Post.objects.all()
-    
+
     # Apply filters
     if filters:
         queryset = self.apply_filters(queryset, filters)
-    
+
     # Apply ordering
     if order_by:
         queryset = queryset.order_by(*order_by)
-    
+
     # Apply pagination
     if offset:
         queryset = queryset[offset:]
     if limit:
         queryset = queryset[:limit]
-    
+
     return queryset
 ```
 
@@ -277,13 +277,13 @@ post_pages = graphene.Field(
 
 def resolve_post_pages(self, info, first=None, after=None, filters=None, order_by=None):
     queryset = Post.objects.all()
-    
+
     # Apply filters and ordering
     if filters:
         queryset = self.apply_filters(queryset, filters)
     if order_by:
         queryset = queryset.order_by(*order_by)
-    
+
     # Return paginated results
     return queryset
 ```
@@ -294,7 +294,7 @@ The library follows consistent naming conventions:
 
 - **Single queries**: `post`, `user`, `category` (singular, snake_case)
 - **List queries**: `posts`, `users`, `categories` (plural, snake_case)
-- **Paginated queries**: `post_pages`, `user_pages`, `category_pages` (plural + "_pages")
+- **Paginated queries**: `post_pages`, `user_pages`, `category_pages` (plural + "\_pages")
 
 ## ✏️ Mutation Generation
 
@@ -303,7 +303,7 @@ The library follows consistent naming conventions:
 The `MutationGenerator` creates CRUD mutations with standardized return types:
 
 ```python
-from django_graphql_auto.generators.mutations import MutationGenerator
+from rail_django_graphql.generators.mutations import MutationGenerator
 
 generator = MutationGenerator()
 create_mutation = generator.generate_create_mutation(MyModel)
@@ -324,21 +324,21 @@ class PostMutationResult(graphene.ObjectType):
 class CreatePost(graphene.Mutation):
     class Arguments:
         input = CreatePostInput(required=True)
-    
+
     Output = PostMutationResult
-    
+
     def mutate(self, info, input):
         try:
             # Validation
             errors = self.validate_input(input)
             if errors:
                 return PostMutationResult(ok=False, errors=errors)
-            
+
             # Create object
             post = Post.objects.create(**input)
-            
+
             return PostMutationResult(ok=True, post=post, errors=[])
-            
+
         except Exception as e:
             return PostMutationResult(ok=False, errors=[str(e)])
 ```
@@ -402,35 +402,37 @@ sanitized_data = {
     }
 }
 ```
-  createPost(input: {
-    title: "New Post"
-    content: "Content..."
-    category: {
-      name: "New Category"
-      description: "Created inline"
-    }
-    tags: [
-      { name: "tag1", color: "#ff0000" }
-      { name: "tag2", color: "#00ff00" }
-    ]
-  }) {
-    ok
-    post {
-      id
-      title
-      category {
-        id
-        name
-      }
-      tags {
-        id
-        name
-      }
-    }
-    errors
-  }
+
+createPost(input: {
+title: "New Post"
+content: "Content..."
+category: {
+name: "New Category"
+description: "Created inline"
 }
-```
+tags: [
+{ name: "tag1", color: "#ff0000" }
+{ name: "tag2", color: "#00ff00" }
+]
+}) {
+ok
+post {
+id
+title
+category {
+id
+name
+}
+tags {
+id
+name
+}
+}
+errors
+}
+}
+
+````
 
 ## 🎯 Method Mutations
 
@@ -439,13 +441,13 @@ sanitized_data = {
 The system automatically generates GraphQL mutations for Django model methods decorated with `@graphql_mutation`:
 
 ```python
-from django_graphql_auto.decorators import graphql_mutation
+from rail_django_graphql.decorators import graphql_mutation
 
 class Order(models.Model):
     status = models.CharField(max_length=20, default='pending', verbose_name="Statut de la commande")
     total = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Total de la commande")
     customer = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Client")
-    
+
     @graphql_mutation
     def confirm_order(self):
         """Confirmer la commande et mettre à jour le statut."""
@@ -454,7 +456,7 @@ class Order(models.Model):
             self.save()
             return True
         return False
-    
+
     @graphql_mutation
     def cancel_order(self, reason: str = "No reason provided"):
         """Annuler la commande avec une raison."""
@@ -464,7 +466,7 @@ class Order(models.Model):
             self.save()
             return True
         return False
-```
+````
 
 ### Generated Method Mutations
 
@@ -478,14 +480,14 @@ type Mutation {
 type OrderConfirmOrderPayload {
   ok: Boolean!
   order: OrderType
-  result: Boolean  # Method return value
+  result: Boolean # Method return value
   errors: [String]
 }
 
 type OrderCancelOrderPayload {
   ok: Boolean!
   order: OrderType
-  result: Boolean  # Method return value
+  result: Boolean # Method return value
   errors: [String]
 }
 ```
@@ -527,7 +529,7 @@ The system automatically generates bulk operations for efficient batch processin
 
 ```python
 # Configuration for bulk operations
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_bulk_operations': True,
         'bulk_batch_size': 100,
@@ -622,7 +624,7 @@ mutation BulkDeletePosts($input: BulkDeletePostInput!) {
 The `SchemaBuilder` combines all generated components into a unified GraphQL schema:
 
 ```python
-from django_graphql_auto.core.schema import SchemaBuilder
+from rail_django_graphql.core.schema import SchemaBuilder
 
 builder = SchemaBuilder()
 schema = builder.build_schema()
@@ -637,11 +639,11 @@ class Query(graphene.ObjectType):
     # Single object queries
     post = graphene.Field(PostType, id=graphene.ID(required=True))
     user = graphene.Field(UserType, id=graphene.ID(required=True))
-    
+
     # List queries
     posts = graphene.List(PostType, filters=PostFilterInput())
     users = graphene.List(UserType, filters=UserFilterInput())
-    
+
     # Paginated queries
     post_pages = graphene.Field(PostConnection, first=graphene.Int())
     user_pages = graphene.Field(UserConnection, first=graphene.Int())
@@ -651,7 +653,7 @@ class Mutation(graphene.ObjectType):
     create_post = CreatePost.Field()
     update_post = UpdatePost.Field()
     delete_post = DeletePost.Field()
-    
+
     create_user = CreateUser.Field()
     update_user = UpdateUser.Field()
     delete_user = DeleteUser.Field()
@@ -680,7 +682,7 @@ validation_errors = builder.validate_schema()
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_OUTPUT_DIR': 'generated_schema/',
     'AUTO_GENERATE_SCHEMA': True,
     'NAMING_CONVENTION': 'snake_case',
@@ -688,19 +690,19 @@ DJANGO_GRAPHQL_AUTO = {
     'ENABLE_SUBSCRIPTIONS': False,
     'PAGINATION_SIZE': 20,
     'MAX_QUERY_DEPTH': 10,
-    
+
     # Model inclusion/exclusion
     'APPS_TO_INCLUDE': [],  # Empty means all apps
     'APPS_TO_EXCLUDE': ['admin', 'auth', 'contenttypes'],
     'MODELS_TO_EXCLUDE': ['LogEntry', 'Session'],
-    
+
     # Feature toggles
     'ENABLE_FILTERS': True,
     'ENABLE_NESTED_OPERATIONS': True,
     'ENABLE_FILE_UPLOADS': True,
     'ENABLE_CUSTOM_SCALARS': True,
     'ENABLE_INHERITANCE': True,
-    
+
     # Mutation configuration
     'MUTATION_SETTINGS': {
         'enable_nested_relations': True,  # Global control over nested relations
@@ -730,8 +732,9 @@ DJANGO_GRAPHQL_AUTO = {
 The library provides three levels of control over nested relationship fields in mutations:
 
 #### 1. Global Control
+
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_nested_relations': False,  # Disable all nested relations globally
     }
@@ -739,8 +742,9 @@ DJANGO_GRAPHQL_AUTO = {
 ```
 
 #### 2. Per-Model Control
+
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_nested_relations': False,  # Global default: disabled
         'nested_relations_config': {
@@ -752,8 +756,9 @@ DJANGO_GRAPHQL_AUTO = {
 ```
 
 #### 3. Per-Field Control (Most Granular)
+
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'nested_field_config': {
             'Post': {
@@ -769,6 +774,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Configuration Priority
 
 The configuration follows this priority order (highest to lowest):
+
 1. **Per-field configuration** (`nested_field_config`)
 2. **Per-model configuration** (`nested_relations_config`)
 3. **Global configuration** (`enable_nested_relations`)
@@ -781,22 +787,22 @@ The configuration follows this priority order (highest to lowest):
 class Post(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
-    
+
     class GraphQLMeta:
         # Exclude specific fields
         exclude_fields = ['internal_notes']
-        
+
         # Custom field types
         field_overrides = {
             'content': 'String',  # Override TextField default
         }
-        
+
         # Custom resolvers
         extra_fields = {
             'word_count': 'Int',
             'is_recent': 'Boolean',
         }
-        
+
         # Mutation permissions
         create_permission = 'auth.add_post'
         update_permission = 'auth.change_post'
@@ -809,14 +815,14 @@ class Post(models.Model):
 
 ```python
 # custom_converters.py
-from django_graphql_auto.generators.types import FieldConverter
+from rail_django_graphql.generators.types import FieldConverter
 
 class CustomFieldConverter(FieldConverter):
     def convert_custom_field(self, field, registry=None):
         return graphene.String(description=field.help_text)
 
 # Register converter
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'FIELD_CONVERTERS': {
         'myapp.fields.CustomField': 'myapp.converters.CustomFieldConverter',
     }
@@ -827,27 +833,27 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```python
 # hooks.py
-from django_graphql_auto.core.hooks import SchemaHook
+from rail_django_graphql.core.hooks import SchemaHook
 
 class CustomSchemaHook(SchemaHook):
     def before_type_generation(self, model, introspector):
         """Called before generating GraphQL type for a model."""
         pass
-    
+
     def after_type_generation(self, model, graphql_type):
         """Called after generating GraphQL type for a model."""
         pass
-    
+
     def before_schema_assembly(self, components):
         """Called before assembling final schema."""
         pass
-    
+
     def after_schema_assembly(self, schema):
         """Called after assembling final schema."""
         pass
 
 # Register hook
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_HOOKS': [
         'myapp.hooks.CustomSchemaHook',
     ]
@@ -870,7 +876,7 @@ The schema generator includes several performance optimizations:
 Enable debug mode for detailed information:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'DEBUG_MODE': True,
     'VERBOSE_ERRORS': True,
 }
@@ -879,7 +885,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Schema Introspection
 
 ```python
-from django_graphql_auto.core.schema import get_schema_info
+from rail_django_graphql.core.schema import get_schema_info
 
 # Get detailed schema information
 schema_info = get_schema_info()

@@ -11,25 +11,25 @@ import django
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Set up Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django_graphql.settings")
 django.setup()
 
 from test_app.models import Client, LocalClient, ClientInformation
-from django_graphql_auto.schema import schema
+from rail_django_graphql.schema import schema
 import json
+
 
 def test_polymorphic_client_query():
     """Test querying a client that is actually a LocalClient instance."""
-    
+
     output_file = "test_polymorphic_output.txt"
-    
+
     with open(output_file, "w") as f:
         # Create a LocalClient instance
         local_client = LocalClient.objects.create(
-            raison="Test Local Client",
-            test="Test Value"
+            raison="Test Local Client", test="Test Value"
         )
-        
+
         # Create associated ClientInformation
         client_info = ClientInformation.objects.create(
             client=local_client,
@@ -37,15 +37,17 @@ def test_polymorphic_client_query():
             ville="Test City",
             code_postal="12345",
             pays="Test Country",
-            paysx="Test Country X"
+            paysx="Test Country X",
         )
-        
+
         f.write(f"Created LocalClient with ID: {local_client.id}\n")
         f.write(f"LocalClient type: {type(local_client)}\n")
-        f.write(f"LocalClient is instance of Client: {isinstance(local_client, Client)}\n")
-        
+        f.write(
+            f"LocalClient is instance of Client: {isinstance(local_client, Client)}\n"
+        )
+
         # Test GraphQL query using localclient instead of client
-        query = f'''
+        query = f"""
         {{
             localclient(id:"{local_client.id}") {{
                 id
@@ -56,41 +58,43 @@ def test_polymorphic_client_query():
                 }}
             }}
         }}
-        '''
-        
+        """
+
         f.write(f"\nExecuting GraphQL query:\n")
         f.write(query)
         f.write("\n")
-        
+
         try:
             result = schema.execute(query)
-            
+
             f.write(f"\nGraphQL execution completed\n")
             f.write(f"Has errors: {bool(result.errors)}\n")
-            
+
             if result.errors:
                 f.write("\nGraphQL Errors:\n")
                 for error in result.errors:
                     f.write(f"  - {error}\n")
                     f.write(f"    Type: {type(error)}\n")
-                    if hasattr(error, 'original_error'):
+                    if hasattr(error, "original_error"):
                         f.write(f"    Original: {error.original_error}\n")
             else:
                 f.write("\nGraphQL Result:\n")
                 f.write(json.dumps(result.data, indent=2))
                 f.write("\n")
-                
+
         except Exception as e:
             f.write(f"\nException during query execution: {e}\n")
             import traceback
+
             f.write(traceback.format_exc())
-        
+
         # Clean up
         client_info.delete()
         local_client.delete()
         f.write(f"\nCleaned up LocalClient {local_client.id}\n")
-    
+
     print(f"Test output written to {output_file}")
+
 
 if __name__ == "__main__":
     test_polymorphic_client_query()

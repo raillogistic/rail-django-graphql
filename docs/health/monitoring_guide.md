@@ -51,6 +51,7 @@ curl http://localhost:8000/health/api/
 ### System Metrics Monitoring
 
 #### CPU Usage Monitoring
+
 ```python
 # Automatic CPU monitoring with thresholds
 HEALTH_CHECK_SETTINGS = {
@@ -61,11 +62,13 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 **Alert Triggers:**
+
 - **Warning**: CPU usage > 75% for 5 minutes
 - **Critical**: CPU usage > 90% for 2 minutes
 - **Recovery**: CPU usage < 70% for 3 minutes
 
 #### Memory Usage Monitoring
+
 ```python
 # Memory monitoring configuration
 HEALTH_CHECK_SETTINGS = {
@@ -76,11 +79,13 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 **Alert Triggers:**
+
 - **Warning**: Memory usage > 80% for 5 minutes
 - **Critical**: Memory usage > 95% for 1 minute
 - **Recovery**: Memory usage < 75% for 3 minutes
 
 #### Disk Usage Monitoring
+
 ```python
 # Disk space monitoring
 HEALTH_CHECK_SETTINGS = {
@@ -93,6 +98,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Application Component Monitoring
 
 #### GraphQL Schema Health
+
 ```python
 # Schema monitoring configuration
 HEALTH_CHECK_SETTINGS = {
@@ -103,12 +109,14 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 **Monitored Metrics:**
+
 - Schema build time and success rate
 - Type count and complexity
 - Query/mutation availability
 - Schema validation errors
 
 #### Database Connection Monitoring
+
 ```python
 # Database monitoring settings
 HEALTH_CHECK_SETTINGS = {
@@ -120,12 +128,14 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 **Monitored Metrics:**
+
 - Connection pool status
 - Query response times
 - Connection failures
 - Database availability
 
 #### Cache System Monitoring
+
 ```python
 # Cache monitoring configuration
 HEALTH_CHECK_SETTINGS = {
@@ -136,6 +146,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 **Monitored Metrics:**
+
 - Cache hit/miss rates
 - Operation response times
 - Memory usage
@@ -146,6 +157,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Email Alerts Setup
 
 #### Basic Email Configuration
+
 ```python
 # settings.py
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -167,6 +179,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Advanced Email Configuration
+
 ```python
 # Custom email templates and formatting
 HEALTH_CHECK_SETTINGS = {
@@ -181,6 +194,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Alert Severity Levels
 
 #### Critical Alerts
+
 Immediate attention required - system functionality at risk.
 
 ```python
@@ -196,6 +210,7 @@ CRITICAL_THRESHOLDS = {
 ```
 
 #### Warning Alerts
+
 Performance degradation detected - monitoring required.
 
 ```python
@@ -211,6 +226,7 @@ WARNING_THRESHOLDS = {
 ```
 
 #### Info Alerts
+
 General system information and recommendations.
 
 ```python
@@ -226,50 +242,56 @@ INFO_THRESHOLDS = {
 ### Alert Customization
 
 #### Custom Alert Templates
+
 ```html
 <!-- health/alert_email.html -->
 <!DOCTYPE html>
 <html>
-<head>
+  <head>
     <title>Health Alert: {{ alert.severity|title }}</title>
     <style>
-        .critical { color: #d32f2f; }
-        .warning { color: #f57c00; }
-        .info { color: #1976d2; }
+      .critical {
+        color: #d32f2f;
+      }
+      .warning {
+        color: #f57c00;
+      }
+      .info {
+        color: #1976d2;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h2 class="{{ alert.severity }}">
-        {{ alert.severity|title }} Alert: {{ alert.component }}
+      {{ alert.severity|title }} Alert: {{ alert.component }}
     </h2>
-    
+
     <p><strong>Time:</strong> {{ alert.timestamp }}</p>
     <p><strong>Message:</strong> {{ alert.message }}</p>
-    
+
     {% if alert.metrics %}
     <h3>Current Metrics</h3>
     <ul>
-        <li>CPU Usage: {{ alert.metrics.cpu_usage_percent }}%</li>
-        <li>Memory Usage: {{ alert.metrics.memory_usage_percent }}%</li>
-        <li>Response Time: {{ alert.response_time_ms }}ms</li>
+      <li>CPU Usage: {{ alert.metrics.cpu_usage_percent }}%</li>
+      <li>Memory Usage: {{ alert.metrics.memory_usage_percent }}%</li>
+      <li>Response Time: {{ alert.response_time_ms }}ms</li>
     </ul>
-    {% endif %}
-    
-    {% if alert.recommendations %}
+    {% endif %} {% if alert.recommendations %}
     <h3>Recommended Actions</h3>
     <ul>
-        {% for recommendation in alert.recommendations %}
-        <li>{{ recommendation }}</li>
-        {% endfor %}
+      {% for recommendation in alert.recommendations %}
+      <li>{{ recommendation }}</li>
+      {% endfor %}
     </ul>
     {% endif %}
-    
+
     <p><a href="{{ dashboard_url }}">View Health Dashboard</a></p>
-</body>
+  </body>
 </html>
 ```
 
 #### Webhook Alerts
+
 ```python
 # Webhook integration for Slack, Discord, etc.
 HEALTH_CHECK_SETTINGS = {
@@ -288,6 +310,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Response Time Monitoring
 
 #### Endpoint Performance Tracking
+
 ```python
 # Monitor specific endpoint performance
 HEALTH_CHECK_SETTINGS = {
@@ -302,6 +325,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Database Query Performance
+
 ```python
 # Database query monitoring
 HEALTH_CHECK_SETTINGS = {
@@ -315,6 +339,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Resource Usage Trends
 
 #### Historical Data Collection
+
 ```python
 # Historical monitoring configuration
 HEALTH_CHECK_SETTINGS = {
@@ -326,6 +351,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Trend Analysis
+
 ```python
 # Automatic trend analysis
 HEALTH_CHECK_SETTINGS = {
@@ -346,16 +372,17 @@ HEALTH_CHECK_SETTINGS = {
 ### Custom Health Checks
 
 #### Creating Custom Checks
+
 ```python
 # custom_health_checks.py
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 class CustomHealthChecker(HealthChecker):
     def check_external_api_health(self):
         """Check external API dependency health."""
         import requests
         import time
-        
+
         start_time = time.time()
         try:
             response = requests.get(
@@ -363,7 +390,7 @@ class CustomHealthChecker(HealthChecker):
                 timeout=10
             )
             response_time = (time.time() - start_time) * 1000
-            
+
             if response.status_code == 200:
                 return {
                     'component': 'External API',
@@ -388,12 +415,12 @@ class CustomHealthChecker(HealthChecker):
                 'response_time_ms': (time.time() - start_time) * 1000,
                 'timestamp': time.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
-    
+
     def check_message_queue_health(self):
         """Check message queue health (Redis, RabbitMQ, etc.)."""
         # Implementation for message queue health check
         pass
-    
+
     def check_file_storage_health(self):
         """Check file storage system health (S3, local storage, etc.)."""
         # Implementation for file storage health check
@@ -401,6 +428,7 @@ class CustomHealthChecker(HealthChecker):
 ```
 
 #### Registering Custom Checks
+
 ```python
 # settings.py
 HEALTH_CHECK_SETTINGS = {
@@ -417,6 +445,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Multi-Environment Configuration
 
 #### Development Environment
+
 ```python
 # settings/development.py
 HEALTH_CHECK_SETTINGS = {
@@ -431,6 +460,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Staging Environment
+
 ```python
 # settings/staging.py
 HEALTH_CHECK_SETTINGS = {
@@ -444,6 +474,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Production Environment
+
 ```python
 # settings/production.py
 HEALTH_CHECK_SETTINGS = {
@@ -465,6 +496,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Self-Healing Procedures
 
 #### Automatic Cache Clearing
+
 ```python
 # Automatic cache clearing on cache health issues
 HEALTH_CHECK_SETTINGS = {
@@ -476,6 +508,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Database Connection Pool Reset
+
 ```python
 # Automatic connection pool reset
 HEALTH_CHECK_SETTINGS = {
@@ -486,6 +519,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Schema Rebuild Triggers
+
 ```python
 # Automatic schema rebuild on schema issues
 HEALTH_CHECK_SETTINGS = {
@@ -498,47 +532,48 @@ HEALTH_CHECK_SETTINGS = {
 ### Recovery Scripts
 
 #### Custom Recovery Actions
+
 ```python
 # custom_recovery.py
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 class RecoveryManager:
     def __init__(self):
         self.health_checker = HealthChecker()
-    
+
     def handle_memory_pressure(self):
         """Handle high memory usage."""
         # Clear unnecessary caches
         from django.core.cache import cache
         cache.clear()
-        
+
         # Force garbage collection
         import gc
         gc.collect()
-        
+
         # Log recovery action
         import logging
         logger = logging.getLogger('health_monitor')
         logger.info("Executed memory pressure recovery actions")
-    
+
     def handle_database_issues(self):
         """Handle database connectivity issues."""
         # Reset connection pool
         from django.db import connections
         for conn in connections.all():
             conn.close()
-        
+
         # Log recovery action
         import logging
         logger = logging.getLogger('health_monitor')
         logger.info("Reset database connection pool")
-    
+
     def handle_cache_issues(self):
         """Handle cache system issues."""
         # Clear cache and restart connections
         from django.core.cache import cache
         cache.clear()
-        
+
         # Log recovery action
         import logging
         logger = logging.getLogger('health_monitor')
@@ -550,6 +585,7 @@ class RecoveryManager:
 ### Dashboard Configuration
 
 #### Real-time Updates
+
 ```python
 # Dashboard settings
 HEALTH_CHECK_SETTINGS = {
@@ -565,58 +601,62 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Custom Dashboard Widgets
+
 ```html
 <!-- custom_dashboard_widget.html -->
 <div class="health-widget" id="custom-widget">
-    <h3>Custom Metrics</h3>
-    <div class="metric-row">
-        <span class="metric-label">API Calls/min:</span>
-        <span class="metric-value" id="api-calls-per-minute">--</span>
-    </div>
-    <div class="metric-row">
-        <span class="metric-label">Error Rate:</span>
-        <span class="metric-value" id="error-rate">--</span>
-    </div>
+  <h3>Custom Metrics</h3>
+  <div class="metric-row">
+    <span class="metric-label">API Calls/min:</span>
+    <span class="metric-value" id="api-calls-per-minute">--</span>
+  </div>
+  <div class="metric-row">
+    <span class="metric-label">Error Rate:</span>
+    <span class="metric-value" id="error-rate">--</span>
+  </div>
 </div>
 
 <script>
-function updateCustomMetrics() {
-    fetch('/health/custom-metrics/')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('api-calls-per-minute').textContent = data.api_calls_per_minute;
-            document.getElementById('error-rate').textContent = data.error_rate + '%';
-        });
-}
+  function updateCustomMetrics() {
+    fetch("/health/custom-metrics/")
+      .then((response) => response.json())
+      .then((data) => {
+        document.getElementById("api-calls-per-minute").textContent =
+          data.api_calls_per_minute;
+        document.getElementById("error-rate").textContent =
+          data.error_rate + "%";
+      });
+  }
 
-// Update every 30 seconds
-setInterval(updateCustomMetrics, 30000);
-updateCustomMetrics(); // Initial load
+  // Update every 30 seconds
+  setInterval(updateCustomMetrics, 30000);
+  updateCustomMetrics(); // Initial load
 </script>
 ```
 
 ### Mobile Dashboard
 
 #### Responsive Design
+
 ```css
 /* Mobile-friendly dashboard styles */
 @media (max-width: 768px) {
-    .health-dashboard {
-        padding: 10px;
-    }
-    
-    .metric-card {
-        width: 100%;
-        margin-bottom: 15px;
-    }
-    
-    .chart-container {
-        height: 200px; /* Smaller charts on mobile */
-    }
-    
-    .alert-list {
-        font-size: 14px;
-    }
+  .health-dashboard {
+    padding: 10px;
+  }
+
+  .metric-card {
+    width: 100%;
+    margin-bottom: 15px;
+  }
+
+  .chart-container {
+    height: 200px; /* Smaller charts on mobile */
+  }
+
+  .alert-list {
+    font-size: 14px;
+  }
 }
 ```
 
@@ -625,6 +665,7 @@ updateCustomMetrics(); // Initial load
 ### Common Monitoring Issues
 
 #### High False Positive Rate
+
 ```python
 # Adjust thresholds to reduce false positives
 HEALTH_CHECK_SETTINGS = {
@@ -636,6 +677,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Missing Alerts
+
 ```python
 # Ensure alerts are properly configured
 HEALTH_CHECK_SETTINGS = {
@@ -647,6 +689,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Performance Impact
+
 ```python
 # Optimize monitoring performance
 HEALTH_CHECK_SETTINGS = {
@@ -660,6 +703,7 @@ HEALTH_CHECK_SETTINGS = {
 ### Debug Mode
 
 #### Enable Detailed Logging
+
 ```python
 # settings.py
 LOGGING = {
@@ -689,9 +733,10 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 #### Manual Health Check Testing
+
 ```python
 # Test health checks manually
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 checker = HealthChecker()
 
@@ -707,6 +752,7 @@ print("Full Report:", checker.get_health_report())
 ## 🚀 Production Best Practices
 
 ### Monitoring Strategy
+
 1. **Layered Monitoring**: Combine application, system, and infrastructure monitoring
 2. **Proactive Alerting**: Alert on trends, not just current values
 3. **Alert Fatigue Prevention**: Use appropriate thresholds and cooldowns
@@ -714,12 +760,14 @@ print("Full Report:", checker.get_health_report())
 5. **Regular Review**: Periodically review and adjust monitoring configuration
 
 ### Security Considerations
+
 1. **Access Control**: Restrict access to detailed health information
 2. **Information Disclosure**: Avoid exposing sensitive system details
 3. **Rate Limiting**: Implement rate limiting on health endpoints
 4. **Audit Logging**: Log access to health monitoring systems
 
 ### Performance Optimization
+
 1. **Efficient Checks**: Design health checks to be lightweight and fast
 2. **Caching Strategy**: Use appropriate caching to reduce system load
 3. **Async Operations**: Use asynchronous monitoring where possible

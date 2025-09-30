@@ -15,7 +15,7 @@ graph TD
     C --> D[Object-Level Permissions]
     D --> E[Field-Level Permissions]
     E --> F[Execute Query/Mutation]
-    
+
     B -->|Unauthenticated| G[Public Access Only]
     C -->|No Permission| H[Access Denied]
     D -->|No Permission| I[Object Filtered]
@@ -75,6 +75,7 @@ query GetMyPermissions {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -142,11 +143,13 @@ query GetMyPermissions {
 ```graphql
 # User with 'add_post' permission
 mutation CreatePost {
-  createPost(data: {
-    title: "New Blog Post"
-    content: "This is the content of the new post"
-    status: "draft"
-  }) {
+  createPost(
+    data: {
+      title: "New Blog Post"
+      content: "This is the content of the new post"
+      status: "draft"
+    }
+  ) {
     ok
     post {
       id
@@ -163,6 +166,7 @@ mutation CreatePost {
 ```
 
 **Response (Success):**
+
 ```json
 {
   "data": {
@@ -184,15 +188,14 @@ mutation CreatePost {
 ```
 
 **Response (No Permission):**
+
 ```json
 {
   "data": {
     "createPost": {
       "ok": false,
       "post": null,
-      "errors": [
-        "You do not have permission to create posts"
-      ]
+      "errors": ["You do not have permission to create posts"]
     }
   }
 }
@@ -203,10 +206,10 @@ mutation CreatePost {
 ```graphql
 # User with 'change_post' permission
 mutation UpdatePost {
-  updatePost(id: "10", data: {
-    title: "Updated Blog Post Title"
-    status: "published"
-  }) {
+  updatePost(
+    id: "10"
+    data: { title: "Updated Blog Post Title", status: "published" }
+  ) {
     ok
     post {
       id
@@ -220,6 +223,7 @@ mutation UpdatePost {
 ```
 
 **Response (Success):**
+
 ```json
 {
   "data": {
@@ -250,14 +254,13 @@ mutation DeletePost {
 ```
 
 **Response (No Permission):**
+
 ```json
 {
   "data": {
     "deletePost": {
       "ok": false,
-      "errors": [
-        "You do not have permission to delete posts"
-      ]
+      "errors": ["You do not have permission to delete posts"]
     }
   }
 }
@@ -273,12 +276,12 @@ class IsOwnerOrReadOnly(BasePermission):
     """
     Permission permettant seulement aux propriétaires d'un objet de le modifier.
     """
-    
+
     def has_object_permission(self, request, view, obj):
         # Permissions de lecture pour tous
         if request.method in ['GET', 'HEAD', 'OPTIONS']:
             return True
-        
+
         # Permissions d'écriture seulement pour le propriétaire
         return obj.author == request.user
 ```
@@ -303,6 +306,7 @@ query GetMyPosts {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -342,14 +346,15 @@ query GetAllUsers {
   users {
     id
     username
-    email  # Only visible to staff
+    email # Only visible to staff
     isActive
-    dateJoined  # Only visible to staff
+    dateJoined # Only visible to staff
   }
 }
 ```
 
 **Response (Non-Staff User):**
+
 ```json
 {
   "data": {
@@ -367,6 +372,7 @@ query GetAllUsers {
 ```
 
 **Response (Staff User):**
+
 ```json
 {
   "data": {
@@ -396,15 +402,16 @@ query GetUserProfile {
     email
     firstName
     lastName
-    phoneNumber    # Requires 'view_phone' permission
-    socialSecurityNumber  # Requires 'view_ssn' permission
-    salary        # Requires 'view_salary' permission
+    phoneNumber # Requires 'view_phone' permission
+    socialSecurityNumber # Requires 'view_ssn' permission
+    salary # Requires 'view_salary' permission
     isActive
   }
 }
 ```
 
 **Response (Basic User):**
+
 ```json
 {
   "data": {
@@ -424,6 +431,7 @@ query GetUserProfile {
 ```
 
 **Response (HR User with permissions):**
+
 ```json
 {
   "data": {
@@ -457,9 +465,9 @@ query GetPostDetails($id: ID!) {
       username
     }
     # Admin-only fields
-    internalNotes     # Requires 'view_internal_notes'
-    moderationFlags   # Requires 'view_moderation'
-    analyticsData     # Requires 'view_analytics'
+    internalNotes # Requires 'view_internal_notes'
+    moderationFlags # Requires 'view_moderation'
+    analyticsData # Requires 'view_analytics'
   }
 }
 ```
@@ -474,18 +482,18 @@ class BusinessHoursPermission(BasePermission):
     """
     Permission qui n'autorise l'accès que pendant les heures ouvrables.
     """
-    
+
     def has_permission(self, request, view):
         from datetime import datetime
         now = datetime.now()
-        
+
         # Heures ouvrables: 9h-17h, lundi-vendredi
         if now.weekday() >= 5:  # Weekend
             return False
-        
+
         if now.hour < 9 or now.hour >= 17:  # En dehors des heures
             return False
-        
+
         return True
 
 # Department-based permission
@@ -493,14 +501,14 @@ class DepartmentPermission(BasePermission):
     """
     Permission basée sur le département de l'utilisateur.
     """
-    
+
     def has_object_permission(self, request, view, obj):
         if not hasattr(request.user, 'profile'):
             return False
-        
+
         if not hasattr(obj, 'department'):
             return True
-        
+
         # L'utilisateur peut accéder aux objets de son département
         return request.user.profile.department == obj.department
 
@@ -509,7 +517,7 @@ class RoleHierarchyPermission(BasePermission):
     """
     Permission basée sur la hiérarchie des rôles.
     """
-    
+
     ROLE_HIERARCHY = {
         'intern': 1,
         'employee': 2,
@@ -517,17 +525,17 @@ class RoleHierarchyPermission(BasePermission):
         'director': 4,
         'admin': 5
     }
-    
+
     def has_permission(self, request, view):
         if not hasattr(request.user, 'profile'):
             return False
-        
+
         user_role = request.user.profile.role
         required_role = getattr(view, 'required_role', 'employee')
-        
+
         user_level = self.ROLE_HIERARCHY.get(user_role, 0)
         required_level = self.ROLE_HIERARCHY.get(required_role, 0)
-        
+
         return user_level >= required_level
 ```
 
@@ -539,13 +547,13 @@ class PostMutations(graphene.ObjectType):
     create_post = CreatePostMutation.Field()
     update_post = UpdatePostMutation.Field()
     delete_post = DeletePostMutation.Field()
-    
+
     # Custom permission decorators
     @permission_required('blog.add_post')
     @business_hours_required
     def resolve_create_post(self, info, **kwargs):
         return CreatePostMutation()
-    
+
     @permission_required('blog.change_post')
     @department_permission_required
     def resolve_update_post(self, info, **kwargs):
@@ -569,6 +577,7 @@ query ValidatePermissions {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -617,12 +626,13 @@ query GetRestrictedData {
 ```
 
 **Response:**
+
 ```json
 {
   "errors": [
     {
       "message": "You do not have permission to access this resource",
-      "locations": [{"line": 2, "column": 3}],
+      "locations": [{ "line": 2, "column": 3 }],
       "path": ["adminOnlyData"],
       "extensions": {
         "code": "PERMISSION_DENIED",
@@ -644,12 +654,13 @@ query GetUserWithRestrictedFields {
   user(id: "1") {
     username
     email
-    salary  # Restricted field
+    salary # Restricted field
   }
 }
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -683,14 +694,14 @@ GRAPHQL_AUTO_SETTINGS = {
         'ENABLE_OBJECT_PERMISSIONS': True,
         'ENABLE_OPERATION_PERMISSIONS': True,
         'DEFAULT_PERMISSION_CLASSES': [
-            'django_graphql_auto.extensions.permissions.IsAuthenticated',
-            'django_graphql_auto.extensions.permissions.DjangoModelPermissions',
+            'rail_django_graphql.extensions.permissions.IsAuthenticated',
+            'rail_django_graphql.extensions.permissions.DjangoModelPermissions',
         ],
         'FIELD_PERMISSION_CLASSES': [
-            'django_graphql_auto.extensions.permissions.FieldPermissionMixin',
+            'rail_django_graphql.extensions.permissions.FieldPermissionMixin',
         ],
         'OBJECT_PERMISSION_CLASSES': [
-            'django_graphql_auto.extensions.permissions.DjangoObjectPermissions',
+            'rail_django_graphql.extensions.permissions.DjangoObjectPermissions',
         ],
         'PERMISSION_DENIED_MESSAGE': 'You do not have permission to access this resource',
         'FILTER_UNAUTHORIZED_FIELDS': True,
@@ -708,14 +719,14 @@ class Post(models.Model):
     content = models.TextField(verbose_name="Contenu")
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, verbose_name="Statut")
-    
+
     class Meta:
         permissions = [
             ('publish_post', 'Can publish posts'),
             ('feature_post', 'Can feature posts'),
             ('moderate_post', 'Can moderate posts'),
         ]
-        
+
     class GraphQLMeta:
         permissions = {
             'create': ['blog.add_post'],
@@ -745,7 +756,7 @@ from your_app.schema import schema
 class PermissionTestCase(TestCase):
     def setUp(self):
         self.client = Client(schema)
-        
+
         # Create test users
         self.admin_user = User.objects.create_user(
             username='admin',
@@ -754,22 +765,22 @@ class PermissionTestCase(TestCase):
             is_staff=True,
             is_superuser=True
         )
-        
+
         self.editor_user = User.objects.create_user(
             username='editor',
             email='editor@example.com',
             password='editorpass'
         )
-        
+
         self.regular_user = User.objects.create_user(
             username='user',
             email='user@example.com',
             password='userpass'
         )
-        
+
         # Create groups and permissions
         self.editors_group = Group.objects.create(name='Editors')
-        
+
         # Add permissions to group
         content_type = ContentType.objects.get_for_model(Post)
         add_permission = Permission.objects.get(
@@ -780,14 +791,14 @@ class PermissionTestCase(TestCase):
             codename='change_post',
             content_type=content_type
         )
-        
+
         self.editors_group.permissions.add(add_permission, change_permission)
         self.editor_user.groups.add(self.editors_group)
 
     def test_admin_can_access_all_data(self):
         # Simulate admin authentication
         self.client.context = type('Context', (), {'user': self.admin_user})()
-        
+
         query = """
         query GetAllUsers {
             users {
@@ -798,9 +809,9 @@ class PermissionTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(query)
-        
+
         assert 'errors' not in result
         assert len(result['data']['users']) > 0
         assert result['data']['users'][0]['email'] is not None
@@ -808,7 +819,7 @@ class PermissionTestCase(TestCase):
     def test_regular_user_filtered_data(self):
         # Simulate regular user authentication
         self.client.context = type('Context', (), {'user': self.regular_user})()
-        
+
         query = """
         query GetAllUsers {
             users {
@@ -819,9 +830,9 @@ class PermissionTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(query)
-        
+
         # Regular users should not see email addresses
         assert 'errors' not in result
         for user in result['data']['users']:
@@ -830,7 +841,7 @@ class PermissionTestCase(TestCase):
     def test_editor_can_create_post(self):
         # Simulate editor authentication
         self.client.context = type('Context', (), {'user': self.editor_user})()
-        
+
         mutation = """
         mutation CreatePost {
             createPost(data: {
@@ -847,16 +858,16 @@ class PermissionTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(mutation)
-        
+
         assert result['data']['createPost']['ok'] is True
         assert len(result['data']['createPost']['errors']) == 0
 
     def test_regular_user_cannot_create_post(self):
         # Simulate regular user authentication
         self.client.context = type('Context', (), {'user': self.regular_user})()
-        
+
         mutation = """
         mutation CreatePost {
             createPost(data: {
@@ -872,9 +883,9 @@ class PermissionTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(mutation)
-        
+
         assert result['data']['createPost']['ok'] is False
         assert 'permission' in result['data']['createPost']['errors'][0].lower()
 
@@ -886,10 +897,10 @@ class PermissionTestCase(TestCase):
             author=self.editor_user,
             status="published"
         )
-        
+
         # Regular user tries to update editor's post
         self.client.context = type('Context', (), {'user': self.regular_user})()
-        
+
         mutation = f"""
         mutation UpdatePost {{
             updatePost(id: "{post.id}", data: {{
@@ -900,9 +911,9 @@ class PermissionTestCase(TestCase):
             }}
         }}
         """
-        
+
         result = self.client.execute(mutation)
-        
+
         assert result['data']['updatePost']['ok'] is False
         assert 'permission' in result['data']['updatePost']['errors'][0].lower()
 ```

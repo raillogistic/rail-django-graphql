@@ -31,7 +31,7 @@ FROM python:3.11-slim
 # Définir les variables d'environnement
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DJANGO_SETTINGS_MODULE=django_graphql_auto.settings \
+    DJANGO_SETTINGS_MODULE=rail_django_graphql.settings \
     PORT=8000
 
 # Créer un utilisateur non-root pour la sécurité
@@ -81,14 +81,14 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 Complete orchestration with PostgreSQL, Redis, and Nginx:
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   # Base de données PostgreSQL
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: django_graphql_auto
+      POSTGRES_DB: rail_django_graphql
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -122,7 +122,7 @@ services:
     command: >
       sh -c "python manage.py migrate &&
              python manage.py collectstatic --noinput &&
-             gunicorn django_graphql_auto.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+             gunicorn rail_django_graphql.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
@@ -131,7 +131,7 @@ services:
       - "8000:8000"
     environment:
       - DEBUG=False
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rail_django_graphql
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,web
       - SECRET_KEY=your-secret-key-here
@@ -155,6 +155,7 @@ volumes:
 ### Usage Examples
 
 **Build and run locally:**
+
 ```bash
 # Build the Docker image
 docker build -t django-graphql-auto .
@@ -170,6 +171,7 @@ docker-compose up -d --scale web=3
 ```
 
 **Production deployment:**
+
 ```bash
 # Build for production
 docker build -f Dockerfile --target production -t django-graphql-auto:prod .
@@ -197,21 +199,21 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   release:
-    types: [ published ]
+    types: [published]
 
 env:
-  PYTHON_VERSION: '3.11'
-  NODE_VERSION: '18'
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "18"
 
 jobs:
   # Tests et validation du code
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -225,7 +227,7 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
-      
+
       redis:
         image: redis:7
         options: >-
@@ -237,78 +239,78 @@ jobs:
           - 6379:6379
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Cache pip dependencies
-      uses: actions/cache@v3
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install -r requirements-dev.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-    - name: Run linting
-      run: |
-        flake8 django_graphql_auto/ --count --select=E9,F63,F7,F82 --show-source --statistics
-        flake8 django_graphql_auto/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Run linting
+        run: |
+          flake8 rail_django_graphql/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 rail_django_graphql/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-    - name: Run type checking
-      run: |
-        mypy django_graphql_auto/
+      - name: Run type checking
+        run: |
+          mypy rail_django_graphql/
 
-    - name: Run security checks
-      run: |
-        bandit -r django_graphql_auto/ -f json -o bandit-report.json
-        safety check --json --output safety-report.json
+      - name: Run security checks
+        run: |
+          bandit -r rail_django_graphql/ -f json -o bandit-report.json
+          safety check --json --output safety-report.json
 
-    - name: Run tests with coverage
-      env:
-        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
-        REDIS_URL: redis://localhost:6379/0
-        SECRET_KEY: test-secret-key
-        DEBUG: True
-      run: |
-        coverage run -m pytest tests/ -v --tb=short
-        coverage xml
-        coverage report
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: test-secret-key
+          DEBUG: True
+        run: |
+          coverage run -m pytest tests/ -v --tb=short
+          coverage xml
+          coverage report
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
 
   # Build et déploiement
   deploy:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
-    
+
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Build Docker image
-      run: |
-        docker build -t ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:${{ github.sha }} .
-        docker build -t ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:latest .
-    
-    - name: Push to registry
-      run: |
-        echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-        docker push ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:${{ github.sha }}
-        docker push ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:latest
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:${{ github.sha }} .
+          docker build -t ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:latest .
+
+      - name: Push to registry
+        run: |
+          echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
+          docker push ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_REGISTRY }}/django-graphql-auto:latest
 ```
 
 ### Usage Examples
@@ -316,12 +318,14 @@ jobs:
 **Setting up GitHub Actions:**
 
 1. **Create workflow file:**
+
 ```bash
 mkdir -p .github/workflows
 cp ci.yml .github/workflows/
 ```
 
 2. **Configure secrets in GitHub:**
+
 ```bash
 # Required secrets:
 DOCKER_REGISTRY=your-registry.com
@@ -332,6 +336,7 @@ SECRET_KEY=your-production-secret-key
 ```
 
 3. **Trigger deployment:**
+
 ```bash
 # Push to main branch triggers deployment
 git push origin main
@@ -368,61 +373,62 @@ from typing import Dict, List, Optional, Tuple
 
 class DeploymentManager:
     """Gestionnaire de déploiement avec migrations et vérifications de sécurité."""
-    
+
     def __init__(self, environment: str = 'production'):
         self.environment = environment
         self.backup_dir = Path('backups')
         self.backup_dir.mkdir(exist_ok=True)
         self.deployment_config = self._load_deployment_config()
-    
+
     def deploy(self) -> bool:
         """Exécute le processus de déploiement complet."""
         try:
             logger.info(f"Début du déploiement pour l'environnement: {self.environment}")
-            
+
             # 1. Vérifications pré-déploiement
             self.pre_deployment_checks()
-            
+
             # 2. Sauvegarde de la base de données
             backup_file = self.create_database_backup()
-            
+
             # 3. Mode maintenance
             if self.deployment_config.get('maintenance_mode', True):
                 self.enable_maintenance_mode()
-            
+
             # 4. Migrations de base de données
             self.run_database_migrations()
-            
+
             # 5. Collecte des fichiers statiques
             if self.deployment_config.get('static_files', True):
                 self.collect_static_files()
-            
+
             # 6. Redémarrage des services
             self.restart_services()
-            
+
             # 7. Vérifications post-déploiement
             self.post_deployment_checks()
-            
+
             # 8. Désactivation du mode maintenance
             if self.deployment_config.get('maintenance_mode', True):
                 self.disable_maintenance_mode()
-            
+
             logger.info("Déploiement terminé avec succès!")
             return True
-            
+
         except Exception as e:
             logger.error(f"Erreur lors du déploiement: {e}")
-            
+
             # Rollback en cas d'erreur
             if self.deployment_config.get('rollback_on_failure', True):
                 self.rollback_deployment(backup_file)
-            
+
             return False
 ```
 
 ### Usage Examples
 
 **Basic deployment:**
+
 ```bash
 # Deploy to production
 python scripts/deploy.py --environment production
@@ -435,6 +441,7 @@ python scripts/deploy.py --config deployment-custom.json
 ```
 
 **Advanced deployment options:**
+
 ```bash
 # Deploy without database backup
 python scripts/deploy.py --no-backup
@@ -450,6 +457,7 @@ python scripts/deploy.py --dry-run
 ```
 
 **Configuration file example (`deployment-production.json`):**
+
 ```json
 {
   "database_backup": true,
@@ -460,11 +468,7 @@ python scripts/deploy.py --dry-run
   "static_files": true,
   "cache_clear": true,
   "services": ["web", "worker", "scheduler"],
-  "health_checks": [
-    "database",
-    "redis",
-    "graphql_endpoint"
-  ]
+  "health_checks": ["database", "redis", "graphql_endpoint"]
 }
 ```
 
@@ -477,7 +481,7 @@ python scripts/deploy.py --dry-run
 The system includes comprehensive GraphQL schema versioning with the `core/schema_versioning.py` module:
 
 ```python
-from django_graphql_auto.core.schema_versioning import SchemaVersionManager
+from rail_django_graphql.core.schema_versioning import SchemaVersionManager
 
 # Initialize the schema version manager
 manager = SchemaVersionManager()
@@ -534,6 +538,7 @@ python manage.py manage_schema_versions history
 ### Usage Examples
 
 **Automated schema versioning in CI/CD:**
+
 ```yaml
 # In your GitHub Actions workflow
 - name: Create schema version
@@ -549,6 +554,7 @@ python manage.py manage_schema_versions history
 ```
 
 **Schema migration script:**
+
 ```bash
 #!/bin/bash
 # schema_migration.sh
@@ -591,48 +597,48 @@ Gère les rollbacks de base de données, fichiers statiques, et schémas GraphQL
 
 class RollbackManager:
     """Gestionnaire de rollback avec vérifications de sécurité."""
-    
+
     def __init__(self, config_file: str = 'rollback_config.json'):
         self.config = self._load_config(config_file)
         self.backup_dir = Path(self.config['backup_directory'])
-        
+
     def rollback_to_backup(self, backup_name: str) -> bool:
         """Effectue un rollback complet vers une sauvegarde spécifique."""
         try:
             logger.info(f"Début du rollback vers: {backup_name}")
-            
+
             # 1. Vérifications de sécurité
             if not self._verify_backup_integrity(backup_name):
                 raise RollbackError("Intégrité de la sauvegarde compromise")
-            
+
             # 2. Arrêt des services
             self._stop_services()
-            
+
             # 3. Sauvegarde pré-rollback
             if self.config['safety_checks']['pre_rollback_backup']:
                 self._create_pre_rollback_backup()
-            
+
             # 4. Restauration de la base de données
             self._restore_database(backup_name)
-            
+
             # 5. Restauration des fichiers statiques
             self._restore_static_files(backup_name)
-            
+
             # 6. Restauration des fichiers média
             self._restore_media_files(backup_name)
-            
+
             # 7. Restauration du schéma GraphQL
             self._restore_schema_version(backup_name)
-            
+
             # 8. Redémarrage des services
             self._start_services()
-            
+
             # 9. Vérification post-rollback
             self._verify_rollback_success()
-            
+
             logger.info("Rollback terminé avec succès!")
             return True
-            
+
         except Exception as e:
             logger.error(f"Erreur lors du rollback: {e}")
             self._send_rollback_notification(False, str(e))
@@ -642,6 +648,7 @@ class RollbackManager:
 ### Usage Examples
 
 **List available backups:**
+
 ```bash
 # List all available backups
 python scripts/rollback.py list
@@ -654,6 +661,7 @@ python scripts/rollback.py list --recent 7
 ```
 
 **Perform rollback:**
+
 ```bash
 # Rollback to specific backup
 python scripts/rollback.py rollback backup_20240115_143022
@@ -669,6 +677,7 @@ python scripts/rollback.py rollback backup_20240115_143022 --emergency
 ```
 
 **Verify rollback:**
+
 ```bash
 # Verify rollback success
 python scripts/rollback.py verify
@@ -683,12 +692,13 @@ python scripts/health_check.py --comprehensive
 ### Rollback Configuration
 
 **Configuration file (`rollback_config.json`):**
+
 ```json
 {
   "database": {
     "host": "localhost",
     "port": 5432,
-    "name": "django_graphql_auto",
+    "name": "rail_django_graphql",
     "user": "postgres",
     "password": "postgres"
   },
@@ -751,11 +761,11 @@ Conçu pour la sécurité de déploiement et la surveillance
 
 class HealthChecker:
     """Vérificateur de santé avec surveillance complète."""
-    
+
     def __init__(self, config_file: str = 'health_check_config.json'):
         self.config = self._load_config(config_file)
         self.results = []
-    
+
     def run_all_checks(self) -> Dict[str, Any]:
         """Exécute toutes les vérifications de santé."""
         checks = [
@@ -766,7 +776,7 @@ class HealthChecker:
             ('filesystem', self.check_filesystem),
             ('performance', self.check_performance)
         ]
-        
+
         results = {}
         for name, check_func in checks:
             try:
@@ -782,13 +792,14 @@ class HealthChecker:
                 )
                 results[name] = error_result
                 self.results.append(error_result)
-        
+
         return results
 ```
 
 ### Usage Examples
 
 **Basic health checks:**
+
 ```bash
 # Run all health checks
 python scripts/health_check.py
@@ -804,6 +815,7 @@ python scripts/health_check.py --verbose
 ```
 
 **Advanced health monitoring:**
+
 ```bash
 # Continuous monitoring
 python scripts/health_check.py --monitor --interval 30
@@ -825,6 +837,7 @@ python scripts/health_check.py --prometheus-endpoint http://localhost:9090
 ### Environment-Specific Configurations
 
 **Production Environment (`.env.production`):**
+
 ```bash
 # Django Settings
 DEBUG=False
@@ -858,6 +871,7 @@ ENABLE_PERFORMANCE_MONITORING=True
 ```
 
 **Staging Environment (`.env.staging`):**
+
 ```bash
 # Django Settings
 DEBUG=True
@@ -931,6 +945,7 @@ ENABLE_DEBUG_TOOLBAR=True
 ### Common Issues and Solutions
 
 **1. Database Migration Failures:**
+
 ```bash
 # Check migration status
 python manage.py showmigrations
@@ -943,6 +958,7 @@ python manage.py migrate app_name zero
 ```
 
 **2. Docker Build Issues:**
+
 ```bash
 # Clear Docker cache
 docker system prune -a
@@ -955,6 +971,7 @@ docker logs container_name
 ```
 
 **3. Health Check Failures:**
+
 ```bash
 # Detailed health check
 python scripts/health_check.py --verbose
@@ -967,6 +984,7 @@ tail -f /app/logs/health_check.log
 ```
 
 **4. Schema Version Issues:**
+
 ```bash
 # Check schema version status
 python manage.py manage_schema_versions list

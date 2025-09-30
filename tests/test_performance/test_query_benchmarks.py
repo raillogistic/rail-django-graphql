@@ -27,14 +27,14 @@ import graphene
 from graphene import Schema
 from graphene.test import Client
 
-from django_graphql_auto.core.schema import SchemaBuilder
-from django_graphql_auto.generators.introspector import ModelIntrospector
-from django_graphql_auto.generators.types import TypeGenerator
-from django_graphql_auto.generators.queries import QueryGenerator
-from django_graphql_auto.generators.mutations import MutationGenerator
-from django_graphql_auto.decorators.business_logic import business_method
-from django_graphql_auto.extensions.optimization import QueryOptimizer
-from django_graphql_auto.extensions.caching import QueryCache
+from rail_django_graphql.core.schema import SchemaBuilder
+from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.types import TypeGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.mutations import MutationGenerator
+from rail_django_graphql.decorators.business_logic import business_method
+from rail_django_graphql.extensions.optimization import QueryOptimizer
+from rail_django_graphql.extensions.caching import QueryCache
 from tests.models import BenchmarkTestAuthor, BenchmarkTestBook, BenchmarkTestReview
 
 

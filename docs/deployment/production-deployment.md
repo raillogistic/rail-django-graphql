@@ -20,6 +20,7 @@ This guide covers deploying the Django GraphQL Auto-Generation System to product
 ## Pre-Deployment Checklist
 
 ### Code Quality
+
 - [ ] All tests pass (unit, integration, security)
 - [ ] Code review completed
 - [ ] Security audit performed
@@ -27,12 +28,14 @@ This guide covers deploying the Django GraphQL Auto-Generation System to product
 - [ ] Documentation updated
 
 ### Dependencies
+
 - [ ] All dependencies pinned to specific versions
 - [ ] Security vulnerabilities checked (`pip audit`)
 - [ ] Unused dependencies removed
 - [ ] Production requirements.txt created
 
 ### Configuration
+
 - [ ] Environment variables configured
 - [ ] Secret keys generated and secured
 - [ ] Database migrations tested
@@ -209,7 +212,7 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
-        'django_graphql_auto': {
+        'rail_django_graphql': {
             'handlers': ['console', 'file'],
             'level': 'INFO',
             'propagate': False,
@@ -256,8 +259,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'django_graphql_auto.middleware.SecurityMiddleware',
-    'django_graphql_auto.middleware.RateLimitMiddleware',
+    'rail_django_graphql.middleware.SecurityMiddleware',
+    'rail_django_graphql.middleware.RateLimitMiddleware',
 ]
 
 # Content Security Policy
@@ -621,7 +624,7 @@ def health_check(request):
         'timestamp': timezone.now().isoformat(),
         'services': {}
     }
-    
+
     # Database check
     try:
         with connection.cursor() as cursor:
@@ -630,7 +633,7 @@ def health_check(request):
     except Exception as e:
         status['services']['database'] = f'unhealthy: {str(e)}'
         status['status'] = 'unhealthy'
-    
+
     # Cache check
     try:
         cache.set('health_check', 'ok', 10)
@@ -639,7 +642,7 @@ def health_check(request):
     except Exception as e:
         status['services']['cache'] = f'unhealthy: {str(e)}'
         status['status'] = 'unhealthy'
-    
+
     return JsonResponse(status)
 ```
 
@@ -738,18 +741,18 @@ DEPLOY_DIR="/var/www/myproject"
 
 for server in "${SERVERS[@]}"; do
     echo "Deploying to $server..."
-    
+
     # Remove from load balancer
     ssh $server "sudo nginx -s reload"
-    
+
     # Deploy
     ssh $server "cd $DEPLOY_DIR && git pull && pip install -r requirements.txt"
     ssh $server "cd $DEPLOY_DIR && python manage.py migrate && python manage.py collectstatic --noinput"
     ssh $server "sudo systemctl restart uwsgi"
-    
+
     # Add back to load balancer
     ssh $server "sudo nginx -s reload"
-    
+
     # Wait before next server
     sleep 30
 done
@@ -770,7 +773,7 @@ class TestDeployment:
         response = requests.get('https://yourdomain.com/health/')
         assert response.status_code == 200
         assert response.json()['status'] == 'healthy'
-    
+
     def test_graphql_endpoint(self):
         """Test GraphQL endpoint availability"""
         query = """
@@ -788,18 +791,18 @@ class TestDeployment:
         )
         assert response.status_code == 200
         assert 'data' in response.json()
-    
+
     def test_ssl_certificate(self):
         """Test SSL certificate validity"""
         response = requests.get('https://yourdomain.com/')
         assert response.status_code == 200
         assert response.url.startswith('https://')
-    
+
     def test_security_headers(self):
         """Test security headers"""
         response = requests.get('https://yourdomain.com/')
         headers = response.headers
-        
+
         assert 'Strict-Transport-Security' in headers
         assert 'X-Content-Type-Options' in headers
         assert 'X-Frame-Options' in headers
@@ -888,17 +891,17 @@ def check_system_health():
     cpu_percent = psutil.cpu_percent(interval=1)
     if cpu_percent > 80:
         send_alert(f"High CPU usage: {cpu_percent}%")
-    
+
     # Memory usage
     memory = psutil.virtual_memory()
     if memory.percent > 85:
         send_alert(f"High memory usage: {memory.percent}%")
-    
+
     # Disk usage
     disk = psutil.disk_usage('/')
     if disk.percent > 90:
         send_alert(f"High disk usage: {disk.percent}%")
-    
+
     # GraphQL response time
     start_time = time.time()
     response = requests.post(
@@ -906,7 +909,7 @@ def check_system_health():
         json={'query': '{ __schema { types { name } } }'}
     )
     response_time = time.time() - start_time
-    
+
     if response_time > 5:
         send_alert(f"Slow GraphQL response: {response_time}s")
 
@@ -926,29 +929,32 @@ def send_alert(message):
 ### Common Issues
 
 1. **High Memory Usage**
+
    ```bash
    # Check memory usage
    free -h
    ps aux --sort=-%mem | head
-   
+
    # Restart services
    sudo systemctl restart uwsgi
    ```
 
 2. **Database Connection Issues**
+
    ```bash
    # Check PostgreSQL status
    sudo systemctl status postgresql
-   
+
    # Check connections
    sudo -u postgres psql -c "SELECT * FROM pg_stat_activity;"
    ```
 
 3. **SSL Certificate Issues**
+
    ```bash
    # Check certificate expiry
    openssl x509 -in /path/to/cert.pem -text -noout | grep "Not After"
-   
+
    # Renew certificate
    sudo certbot renew
    ```
@@ -956,6 +962,7 @@ def send_alert(message):
 ### Performance Optimization
 
 1. **Database Query Optimization**
+
    ```python
    # Enable query logging
    LOGGING['loggers']['django.db.backends'] = {
@@ -965,6 +972,7 @@ def send_alert(message):
    ```
 
 2. **Cache Optimization**
+
    ```bash
    # Monitor Redis
    redis-cli info memory

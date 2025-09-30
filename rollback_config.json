@@ -2,7 +2,7 @@
   "database": {
     "host": "localhost",
     "port": 5432,
-    "name": "django_graphql_auto",
+    "name": "rail_django_graphql",
     "user": "postgres",
     "password": ""
   },

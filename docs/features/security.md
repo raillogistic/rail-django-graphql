@@ -37,22 +37,26 @@ GRAPHQL_SECURITY = {
 ### 1. Authentication System
 
 #### JWT Token Management
+
 - Secure token generation with configurable expiration
 - Automatic token refresh mechanism
 - Secure token storage and validation
 - Session-based authentication support
 
 #### Available Authentication Mutations
+
 ```graphql
 # User Registration
 mutation RegisterUser {
-  register(userData: {
-    username: "newuser"
-    email: "user@example.com"
-    password: "securepassword"
-    firstName: "John"
-    lastName: "Doe"
-  }) {
+  register(
+    userData: {
+      username: "newuser"
+      email: "user@example.com"
+      password: "securepassword"
+      firstName: "John"
+      lastName: "Doe"
+    }
+  ) {
     ok
     user {
       id
@@ -100,6 +104,7 @@ mutation LogoutUser {
 ```
 
 #### Authentication Queries
+
 ```graphql
 # Get Current User Information
 query CurrentUser {
@@ -118,12 +123,14 @@ query CurrentUser {
 ### 2. Permission System
 
 #### Multi-Level Authorization
+
 - **Field-Level Permissions**: Control access to specific GraphQL fields
 - **Object-Level Permissions**: Django model-based permissions
 - **Operation-Level Permissions**: CRUD operation restrictions
 - **Role-Based Access Control**: User groups and custom roles
 
 #### Permission Queries
+
 ```graphql
 # Get User Permissions
 query UserPermissions {
@@ -137,6 +144,7 @@ query UserPermissions {
 ```
 
 #### Permission Configuration
+
 ```python
 # Field-level permission example
 @permission_required('app.view_model')
@@ -152,12 +160,14 @@ def resolve_update_mutation(self, info, **kwargs):
 ### 3. Input Validation & Security
 
 #### Comprehensive Input Protection
+
 - **XSS Prevention**: HTML tag stripping and encoding
 - **SQL Injection Prevention**: Parameterized queries and input sanitization
 - **Input Sanitization**: Field-specific validation and cleaning
 - **Custom Validators**: Extensible validation system
 
 #### Validation Queries
+
 ```graphql
 # Validate Field Input
 query ValidateField {
@@ -171,6 +181,7 @@ query ValidateField {
 ```
 
 #### Available Validators
+
 - Email validation with format checking
 - URL validation with protocol verification
 - Password strength validation
@@ -180,12 +191,14 @@ query ValidateField {
 ### 4. Rate Limiting
 
 #### Configurable Rate Limiting
+
 - Per-user rate limiting with JWT token identification
 - Per-IP rate limiting for anonymous requests
 - Configurable time windows and request limits
 - Automatic cleanup of expired entries
 
 #### Rate Limiting Configuration
+
 ```python
 GRAPHQL_SECURITY = {
     'RATE_LIMITING': {
@@ -198,6 +211,7 @@ GRAPHQL_SECURITY = {
 ```
 
 #### Rate Limiting Behavior
+
 - Requests are tracked per user/IP within the configured time window
 - When limit is exceeded, requests return rate limit error
 - Rate limit information is included in response headers
@@ -206,18 +220,21 @@ GRAPHQL_SECURITY = {
 ### 5. Query Analysis
 
 #### Query Complexity Analysis
+
 - Assigns complexity scores to GraphQL operations
 - Prevents expensive queries from overwhelming the system
 - Configurable complexity limits per operation type
 - Real-time complexity calculation and enforcement
 
 #### Query Depth Analysis
+
 - Analyzes nested query depth to prevent deeply nested attacks
 - Configurable maximum depth limits
 - Protection against circular reference exploitation
 - Efficient depth calculation algorithm
 
 #### Query Analysis Configuration
+
 ```python
 GRAPHQL_SECURITY = {
     'QUERY_ANALYSIS': {
@@ -232,18 +249,21 @@ GRAPHQL_SECURITY = {
 ### 6. File Upload Security
 
 #### Comprehensive File Validation
+
 - **File Type Validation**: Whitelist-based MIME type and extension checking
 - **File Size Limits**: Configurable maximum file size restrictions
 - **Content Validation**: Deep file content analysis beyond extension checking
 - **Malicious File Detection**: Advanced pattern matching for suspicious content
 
 #### Virus Scanning Integration
+
 - **ClamAV Integration**: Real-time antivirus scanning using ClamAV engine
 - **Quarantine System**: Automatic isolation of infected or suspicious files
 - **Scan Result Logging**: Comprehensive audit trail of all scan results
 - **Configurable Scan Timeout**: Prevents hanging on large files
 
 #### File Upload Security Configuration
+
 ```python
 GRAPHQL_SECURITY = {
     'FILE_UPLOAD_SECURITY': {
@@ -266,22 +286,25 @@ GRAPHQL_SECURITY = {
 ```
 
 #### File Upload Security Mutations
+
 ```graphql
 # Secure File Upload with Validation
 mutation SecureFileUpload {
-  uploadFile(input: {
-    file: "base64EncodedContent"
-    filename: "document.pdf"
-    mimeType: "application/pdf"
-    validateVirus: true
-    validateContent: true
-  }) {
+  uploadFile(
+    input: {
+      file: "base64EncodedContent"
+      filename: "document.pdf"
+      mimeType: "application/pdf"
+      validateVirus: true
+      validateContent: true
+    }
+  ) {
     ok
     file {
       id
       filename
       scanResult {
-        status  # CLEAN, INFECTED, SUSPICIOUS, ERROR
+        status # CLEAN, INFECTED, SUSPICIOUS, ERROR
         scanTime
         threats
       }
@@ -308,6 +331,7 @@ query FileScanStatus($fileId: ID!) {
 ```
 
 #### Security Monitoring for File Uploads
+
 ```graphql
 # File Upload Security Statistics
 query FileUploadSecurityStats {
@@ -329,6 +353,7 @@ query FileUploadSecurityStats {
 ### 7. Security Monitoring
 
 #### Real-Time Security Information
+
 ```graphql
 # Get Security Status
 query SecurityInfo {
@@ -355,20 +380,21 @@ query QueryStats {
 ## 🔧 Configuration Options
 
 ### Security Settings
+
 ```python
-# django_graphql_auto/settings.py
+# rail_django_graphql/settings.py
 GRAPHQL_SECURITY = {
     # Authentication Settings
     'ENABLE_AUTHENTICATION': True,
     'JWT_SECRET_KEY': 'your-secret-key',
     'JWT_EXPIRATION_DELTA': timedelta(hours=24),
     'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
-    
+
     # Permission Settings
     'ENABLE_PERMISSIONS': True,
     'REQUIRE_AUTHENTICATION_FOR_MUTATIONS': True,
     'REQUIRE_AUTHENTICATION_FOR_QUERIES': False,
-    
+
     # Rate Limiting Settings
     'RATE_LIMITING': {
         'ENABLE': True,
@@ -376,7 +402,7 @@ GRAPHQL_SECURITY = {
         'WINDOW_SECONDS': 3600,
         'CACHE_PREFIX': 'graphql_rate_limit',
     },
-    
+
     # Query Analysis Settings
     'QUERY_ANALYSIS': {
         'ENABLE_COMPLEXITY_ANALYSIS': True,
@@ -384,7 +410,7 @@ GRAPHQL_SECURITY = {
         'MAX_QUERY_COMPLEXITY': 1000,
         'MAX_QUERY_DEPTH': 10,
     },
-    
+
     # Input Validation Settings
     'INPUT_VALIDATION': {
         'ENABLE_XSS_PROTECTION': True,
@@ -392,7 +418,7 @@ GRAPHQL_SECURITY = {
         'STRIP_HTML_TAGS': True,
         'CUSTOM_VALIDATORS': {},
     },
-    
+
     # File Upload Security Settings
     'FILE_UPLOAD_SECURITY': {
         'ENABLE_VIRUS_SCANNING': True,
@@ -416,28 +442,30 @@ GRAPHQL_SECURITY = {
 ## 🚀 Getting Started
 
 ### 1. Enable Security Features
+
 Add security configuration to your Django settings:
 
 ```python
 # settings.py
 INSTALLED_APPS = [
     # ... other apps
-    'django_graphql_auto.extensions.auth',
-    'django_graphql_auto.extensions.permissions',
-    'django_graphql_auto.extensions.validation',
-    'django_graphql_auto.extensions.rate_limiting',
+    'rail_django_graphql.extensions.auth',
+    'rail_django_graphql.extensions.permissions',
+    'rail_django_graphql.extensions.validation',
+    'rail_django_graphql.extensions.rate_limiting',
 ]
 
 # Enable security middleware
 GRAPHQL_MIDDLEWARE = [
-    'django_graphql_auto.extensions.auth.AuthenticationMiddleware',
-    'django_graphql_auto.extensions.permissions.PermissionMiddleware',
-    'django_graphql_auto.extensions.rate_limiting.RateLimitingMiddleware',
-    'django_graphql_auto.extensions.validation.ValidationMiddleware',
+    'rail_django_graphql.extensions.auth.AuthenticationMiddleware',
+    'rail_django_graphql.extensions.permissions.PermissionMiddleware',
+    'rail_django_graphql.extensions.rate_limiting.RateLimitingMiddleware',
+    'rail_django_graphql.extensions.validation.ValidationMiddleware',
 ]
 ```
 
 ### 2. Configure Security Settings
+
 Customize security settings based on your requirements:
 
 ```python
@@ -453,6 +481,7 @@ GRAPHQL_SECURITY = {
 ```
 
 ### 3. Test Security Features
+
 Use the GraphQL endpoint to test security features:
 
 ```bash
@@ -465,30 +494,35 @@ curl -X POST http://localhost:8000/graphql/ \
 ## 🔍 Security Best Practices
 
 ### 1. Authentication
+
 - Use strong JWT secret keys
 - Implement proper token rotation
 - Set appropriate token expiration times
 - Use HTTPS in production
 
 ### 2. Authorization
+
 - Follow principle of least privilege
 - Implement field-level permissions for sensitive data
 - Use Django's built-in permission system
 - Regular permission audits
 
 ### 3. Input Validation
+
 - Validate all user inputs
 - Use parameterized queries
 - Implement custom validators for business logic
 - Regular security testing
 
 ### 4. Rate Limiting
+
 - Set appropriate rate limits based on usage patterns
 - Monitor rate limit violations
 - Implement different limits for different user types
 - Use distributed rate limiting for scaled deployments
 
 ### 5. Query Analysis
+
 - Set reasonable complexity and depth limits
 - Monitor query patterns for anomalies
 - Implement query whitelisting for critical operations
@@ -497,7 +531,9 @@ curl -X POST http://localhost:8000/graphql/ \
 ## 📊 Security Monitoring
 
 ### Logging and Monitoring
+
 The security system provides comprehensive logging for:
+
 - Authentication attempts (success/failure)
 - Permission violations
 - Rate limit violations
@@ -505,7 +541,9 @@ The security system provides comprehensive logging for:
 - Input validation failures
 
 ### Security Metrics
+
 Monitor these key security metrics:
+
 - Authentication success/failure rates
 - Permission violation frequency
 - Rate limit hit rates
@@ -517,6 +555,7 @@ Monitor these key security metrics:
 ### Common Issues
 
 #### Authentication Issues
+
 ```python
 # Check JWT configuration
 GRAPHQL_SECURITY = {
@@ -526,14 +565,16 @@ GRAPHQL_SECURITY = {
 ```
 
 #### Permission Issues
+
 ```python
 # Verify permission middleware is enabled
 GRAPHQL_MIDDLEWARE = [
-    'django_graphql_auto.extensions.permissions.PermissionMiddleware',
+    'rail_django_graphql.extensions.permissions.PermissionMiddleware',
 ]
 ```
 
 #### Rate Limiting Issues
+
 ```python
 # Check cache configuration
 CACHES = {
@@ -545,6 +586,7 @@ CACHES = {
 ```
 
 ### Debug Mode
+
 Enable debug mode for detailed security information:
 
 ```python

@@ -7,24 +7,28 @@ This document outlines the comprehensive release process for the Django GraphQL 
 ## 📋 Release Types
 
 ### Major Releases (X.0.0)
+
 - **Frequency**: Every 6-12 months
 - **Content**: Breaking changes, major new features, architecture updates
 - **Planning**: 3-month development cycle with beta releases
 - **Support**: Long-term support (LTS) for enterprise users
 
 ### Minor Releases (X.Y.0)
+
 - **Frequency**: Every 2-3 months
 - **Content**: New features, enhancements, non-breaking changes
 - **Planning**: 6-week development cycle
 - **Support**: Standard support until next minor release
 
 ### Patch Releases (X.Y.Z)
+
 - **Frequency**: As needed (typically bi-weekly)
 - **Content**: Bug fixes, security updates, minor improvements
 - **Planning**: 1-2 week development cycle
 - **Support**: Immediate deployment for critical issues
 
 ### Pre-releases
+
 - **Alpha**: Early development versions for internal testing
 - **Beta**: Feature-complete versions for community testing
 - **Release Candidate (RC)**: Final testing before stable release
@@ -34,10 +38,12 @@ This document outlines the comprehensive release process for the Django GraphQL 
 ### Phase 1: Planning and Preparation
 
 #### 1.1 Release Planning Meeting
+
 ```markdown
 **Participants**: Core team, product owner, security team
 **Duration**: 2 hours
 **Agenda**:
+
 - Review roadmap and feature requests
 - Prioritize features for upcoming release
 - Identify breaking changes and migration requirements
@@ -46,6 +52,7 @@ This document outlines the comprehensive release process for the Django GraphQL 
 ```
 
 #### 1.2 Feature Freeze
+
 ```bash
 # Create release branch
 git checkout -b release/v1.2.0
@@ -57,6 +64,7 @@ python setup.py --version  # Verify version update
 ```
 
 #### 1.3 Pre-Release Checklist
+
 - [ ] All planned features implemented and merged
 - [ ] Breaking changes documented with migration guides
 - [ ] Security review completed
@@ -67,6 +75,7 @@ python setup.py --version  # Verify version update
 ### Phase 2: Quality Assurance
 
 #### 2.1 Automated Testing
+
 ```yaml
 # GitHub Actions workflow for release testing
 name: Release Testing
@@ -81,16 +90,17 @@ jobs:
       matrix:
         python-version: [3.9, 3.10, 3.11, 3.12]
         django-version: [4.1, 4.2, 5.0]
-    
+
     steps:
-    - name: Run full test suite
-      run: |
-        pytest tests/ --cov=django_graphql_auto --cov-fail-under=95
-        pytest tests/security/ --strict
-        pytest tests/performance/ --benchmark-only
+      - name: Run full test suite
+        run: |
+          pytest tests/ --cov=rail_django_graphql --cov-fail-under=95
+          pytest tests/security/ --strict
+          pytest tests/performance/ --benchmark-only
 ```
 
 #### 2.2 Manual Testing Checklist
+
 - [ ] **Core Functionality**: Schema generation, queries, mutations
 - [ ] **Security Features**: Authentication, authorization, input validation
 - [ ] **Performance**: Load testing, memory usage, response times
@@ -99,6 +109,7 @@ jobs:
 - [ ] **Migration**: Upgrade path from previous version
 
 #### 2.3 Security Review
+
 ```python
 # Security checklist
 SECURITY_CHECKLIST = [
@@ -118,6 +129,7 @@ SECURITY_CHECKLIST = [
 ### Phase 3: Documentation and Communication
 
 #### 3.1 Documentation Updates
+
 ```bash
 # Documentation update checklist
 docs/
@@ -130,45 +142,55 @@ docs/
 ```
 
 #### 3.2 Release Notes Preparation
+
 ```markdown
 # Release Notes Template
+
 ## Django GraphQL Auto-Generation System v1.2.0
 
 ### 🎉 Highlights
+
 - Major new feature summary
 - Performance improvements
 - Security enhancements
 
 ### 📦 What's New
+
 - Detailed feature descriptions
 - Usage examples
 - Configuration changes
 
 ### 🔧 Improvements
+
 - Bug fixes
 - Performance optimizations
 - Developer experience enhancements
 
 ### ⚠️ Breaking Changes
+
 - Migration instructions
 - Deprecated features
 - Timeline for removal
 
 ### 📊 Statistics
+
 - Lines of code changed
 - Test coverage percentage
 - Performance benchmarks
 ```
 
 #### 3.3 Communication Plan
+
 ```markdown
 **Pre-Release Communication** (1 week before):
+
 - Blog post announcing upcoming release
 - Social media teasers
 - Community forum announcement
 - Email to enterprise customers
 
 **Release Day Communication**:
+
 - GitHub release with detailed notes
 - Blog post with highlights and examples
 - Social media announcement
@@ -176,6 +198,7 @@ docs/
 - PyPI package publication
 
 **Post-Release Communication** (1 week after):
+
 - Community feedback collection
 - Bug report monitoring
 - Performance metrics analysis
@@ -185,6 +208,7 @@ docs/
 ### Phase 4: Release Execution
 
 #### 4.1 Pre-Release Build
+
 ```bash
 #!/bin/bash
 # build-release.sh
@@ -199,7 +223,7 @@ fi
 
 # Run final tests
 echo "Running final test suite..."
-pytest tests/ --cov=django_graphql_auto --cov-fail-under=95
+pytest tests/ --cov=rail_django_graphql --cov-fail-under=95
 
 # Build distribution packages
 echo "Building distribution packages..."
@@ -213,6 +237,7 @@ echo "Release build completed successfully!"
 ```
 
 #### 4.2 Version Tagging
+
 ```bash
 # Create and push release tag
 VERSION="1.2.0"
@@ -225,22 +250,26 @@ git show "v${VERSION}"
 ```
 
 #### 4.3 Package Publication
+
 ```bash
 # Publish to PyPI
 twine upload dist/*
 
 # Verify publication
 pip install django-graphql-auto-generation==${VERSION}
-python -c "import django_graphql_auto; print(django_graphql_auto.__version__)"
+python -c "import rail_django_graphql; print(rail_django_graphql.__version__)"
 ```
 
 #### 4.4 GitHub Release
+
 ```markdown
 # GitHub Release Creation
+
 **Title**: Django GraphQL Auto-Generation System v1.2.0
 **Tag**: v1.2.0
 **Description**: [Include release notes from Phase 3.2]
-**Assets**: 
+**Assets**:
+
 - Source code (zip)
 - Source code (tar.gz)
 - Wheel distribution
@@ -250,6 +279,7 @@ python -c "import django_graphql_auto; print(django_graphql_auto.__version__)"
 ### Phase 5: Post-Release Activities
 
 #### 5.1 Monitoring and Metrics
+
 ```python
 # Release metrics tracking
 RELEASE_METRICS = {
@@ -263,23 +293,24 @@ RELEASE_METRICS = {
 ```
 
 #### 5.2 Hotfix Process
+
 ```bash
 # Emergency hotfix workflow
 if [[ "$SEVERITY" == "critical" ]]; then
     # Create hotfix branch from release tag
     git checkout -b hotfix/v1.2.1 v1.2.0
-    
+
     # Apply minimal fix
     # ... make necessary changes ...
-    
+
     # Test fix
     pytest tests/security/ tests/critical/
-    
+
     # Create patch release
     echo "1.2.1" > VERSION
     git commit -am "Hotfix v1.2.1: Critical security fix"
     git tag -a "v1.2.1" -m "Hotfix release v1.2.1"
-    
+
     # Merge back to main branches
     git checkout main
     git merge hotfix/v1.2.1
@@ -289,14 +320,17 @@ fi
 ```
 
 #### 5.3 Support and Maintenance
+
 ```markdown
 **Support Timeline**:
+
 - **Major Releases**: 18 months of support
 - **Minor Releases**: 6 months of support
 - **Patch Releases**: Until next patch release
 - **LTS Releases**: 3 years of extended support
 
 **Support Activities**:
+
 - Bug fix backporting
 - Security patch application
 - Documentation updates
@@ -307,55 +341,57 @@ fi
 ## 🛠️ Release Tools and Automation
 
 ### Automated Release Pipeline
+
 ```yaml
 # .github/workflows/release.yml
 name: Automated Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-    
-    - name: Install dependencies
-      run: |
-        pip install build twine
-        pip install -r requirements.txt
-    
-    - name: Run tests
-      run: pytest tests/ --cov=django_graphql_auto
-    
-    - name: Build package
-      run: python -m build
-    
-    - name: Publish to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload dist/*
-    
-    - name: Create GitHub Release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install build twine
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest tests/ --cov=rail_django_graphql
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/*
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
 ```
 
 ### Release Scripts
+
 ```python
 #!/usr/bin/env python3
 # scripts/release.py
@@ -369,54 +405,54 @@ class ReleaseManager:
     def __init__(self, version):
         self.version = version
         self.validate_version()
-    
+
     def validate_version(self):
         """Validate semantic version format."""
         pattern = r'^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z0-9]+))?$'
         if not re.match(pattern, self.version):
             raise ValueError(f"Invalid version format: {self.version}")
-    
+
     def update_version_files(self):
         """Update version in all relevant files."""
         files_to_update = [
             'VERSION',
-            'django_graphql_auto/__init__.py',
+            'rail_django_graphql/__init__.py',
             'setup.py',
             'docs/conf.py'
         ]
-        
+
         for file_path in files_to_update:
             self.update_version_in_file(file_path)
-    
+
     def run_tests(self):
         """Run comprehensive test suite."""
-        result = subprocess.run(['pytest', 'tests/', '--cov=django_graphql_auto'], 
+        result = subprocess.run(['pytest', 'tests/', '--cov=rail_django_graphql'],
                               capture_output=True, text=True)
         if result.returncode != 0:
             print("Tests failed!")
             print(result.stdout)
             print(result.stderr)
             sys.exit(1)
-    
+
     def build_package(self):
         """Build distribution packages."""
         subprocess.run(['python', '-m', 'build'], check=True)
-    
+
     def create_release(self):
         """Execute complete release process."""
         print(f"Creating release {self.version}...")
-        
+
         self.update_version_files()
         self.run_tests()
         self.build_package()
-        
+
         print(f"Release {self.version} created successfully!")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Usage: python release.py <version>")
         sys.exit(1)
-    
+
     version = sys.argv[1]
     manager = ReleaseManager(version)
     manager.create_release()
@@ -425,16 +461,18 @@ if __name__ == "__main__":
 ## 📊 Release Metrics and KPIs
 
 ### Success Metrics
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| Release Frequency | Monthly minor releases | Calendar tracking |
-| Test Coverage | >95% | Automated reporting |
-| Documentation Coverage | 100% of public APIs | Manual review |
-| Security Issues | 0 critical, <2 high | Security scanning |
-| Performance Regression | <5% degradation | Benchmark comparison |
-| User Adoption | >80% upgrade within 3 months | Download statistics |
+
+| Metric                 | Target                       | Measurement          |
+| ---------------------- | ---------------------------- | -------------------- |
+| Release Frequency      | Monthly minor releases       | Calendar tracking    |
+| Test Coverage          | >95%                         | Automated reporting  |
+| Documentation Coverage | 100% of public APIs          | Manual review        |
+| Security Issues        | 0 critical, <2 high          | Security scanning    |
+| Performance Regression | <5% degradation              | Benchmark comparison |
+| User Adoption          | >80% upgrade within 3 months | Download statistics  |
 
 ### Quality Gates
+
 ```python
 # Quality gates that must pass before release
 QUALITY_GATES = {
@@ -450,13 +488,16 @@ QUALITY_GATES = {
 ## 🔒 Security Release Process
 
 ### Security Patch Releases
+
 ```markdown
-**Timeline**: 
+**Timeline**:
+
 - **Critical**: Within 24 hours
 - **High**: Within 1 week
 - **Medium**: Next scheduled release
 
 **Process**:
+
 1. Security team assessment
 2. Patch development in private repository
 3. Limited testing with security team
@@ -467,6 +508,7 @@ QUALITY_GATES = {
 ```
 
 ### Security Advisory Template
+
 ```markdown
 # Security Advisory: [CVE-ID] - [Title]
 
@@ -476,25 +518,32 @@ QUALITY_GATES = {
 **Fixed in Version**: [Version]
 
 ## Summary
+
 Brief description of the vulnerability.
 
 ## Impact
+
 Description of potential impact and attack scenarios.
 
 ## Affected Components
+
 - Component 1
 - Component 2
 
 ## Mitigation
+
 Immediate steps users can take to mitigate the issue.
 
 ## Fix
+
 Description of the fix implemented.
 
 ## Upgrade Instructions
+
 Step-by-step upgrade instructions.
 
 ## Credits
+
 Recognition of security researchers who reported the issue.
 ```
 

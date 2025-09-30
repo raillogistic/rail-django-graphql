@@ -21,7 +21,7 @@ The main configuration is done in your Django project's `settings.py` file:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         # Mutation configuration
     },
@@ -45,7 +45,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Complete Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         # Nested relations by model
         'nested_relations_config': {
@@ -53,7 +53,7 @@ DJANGO_GRAPHQL_AUTO = {
             'Order': True,
             'Product': False,
         },
-        
+
         # Nested fields by model
         'nested_field_config': {
             'User': {
@@ -65,12 +65,12 @@ DJANGO_GRAPHQL_AUTO = {
                 'customer': True,
             }
         },
-        
+
         # Mutation type control
         'enable_create_mutations': True,
         'enable_update_mutations': True,
         'enable_delete_mutations': True,
-        
+
         # Security limits
         'max_nested_depth': 3,
         'batch_size_limit': 100,
@@ -80,15 +80,15 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Detailed Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `nested_relations_config` | `dict` | `{}` | Enable/disable nested relations by model |
-| `nested_field_config` | `dict` | `{}` | Enable/disable specific nested fields |
-| `enable_create_mutations` | `bool` | `True` | Enable creation mutations |
-| `enable_update_mutations` | `bool` | `True` | Enable update mutations |
-| `enable_delete_mutations` | `bool` | `True` | Enable deletion mutations |
-| `max_nested_depth` | `int` | `3` | Maximum depth for nested relations (1-10) |
-| `batch_size_limit` | `int` | `100` | Limit for batch operations (1-1000) |
+| Option                    | Type   | Default | Description                               |
+| ------------------------- | ------ | ------- | ----------------------------------------- |
+| `nested_relations_config` | `dict` | `{}`    | Enable/disable nested relations by model  |
+| `nested_field_config`     | `dict` | `{}`    | Enable/disable specific nested fields     |
+| `enable_create_mutations` | `bool` | `True`  | Enable creation mutations                 |
+| `enable_update_mutations` | `bool` | `True`  | Enable update mutations                   |
+| `enable_delete_mutations` | `bool` | `True`  | Enable deletion mutations                 |
+| `max_nested_depth`        | `int`  | `3`     | Maximum depth for nested relations (1-10) |
+| `batch_size_limit`        | `int`  | `100`   | Limit for batch operations (1-1000)       |
 
 ### Usage Examples
 
@@ -108,7 +108,7 @@ DJANGO_GRAPHQL_AUTO = {
         # Models with complex relations
         'User': True,
         'Company': True,
-        
+
         # Simple models without nested relations
         'Category': False,
         'Tag': False,
@@ -121,14 +121,14 @@ DJANGO_GRAPHQL_AUTO = {
 ### Complete Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'TYPE_SETTINGS': {
         # GraphQL features
         'enable_relay_connections': False,
         'enable_filtering': True,
         'enable_ordering': True,
         'enable_pagination': True,
-        
+
         # Pagination settings
         'default_page_size': 20,
         'max_page_size': 100,
@@ -138,14 +138,14 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Detailed Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
+| Option                     | Type   | Default | Description                             |
+| -------------------------- | ------ | ------- | --------------------------------------- |
 | `enable_relay_connections` | `bool` | `False` | Enable Relay connections for pagination |
-| `enable_filtering` | `bool` | `True` | Enable query filtering |
-| `enable_ordering` | `bool` | `True` | Enable result ordering |
-| `enable_pagination` | `bool` | `True` | Enable pagination |
-| `default_page_size` | `int` | `20` | Default page size (1-1000) |
-| `max_page_size` | `int` | `100` | Maximum page size (1-10000) |
+| `enable_filtering`         | `bool` | `True`  | Enable query filtering                  |
+| `enable_ordering`          | `bool` | `True`  | Enable result ordering                  |
+| `enable_pagination`        | `bool` | `True`  | Enable pagination                       |
+| `default_page_size`        | `int`  | `20`    | Default page size (1-1000)              |
+| `max_page_size`            | `int`  | `100`   | Maximum page size (1-10000)             |
 
 ### Usage Examples
 
@@ -176,7 +176,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Complete Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_SETTINGS': {
         'enable_introspection': True,
         'enable_playground': True,
@@ -188,18 +188,18 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Detailed Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable_introspection` | `bool` | `True` | Enable schema introspection |
-| `enable_playground` | `bool` | `True` | Enable GraphQL Playground |
-| `schema_name` | `str` | `'Auto Generated Schema'` | GraphQL schema name |
-| `schema_description` | `str` | `'Automatically generated GraphQL schema'` | Schema description |
+| Option                 | Type   | Default                                    | Description                 |
+| ---------------------- | ------ | ------------------------------------------ | --------------------------- |
+| `enable_introspection` | `bool` | `True`                                     | Enable schema introspection |
+| `enable_playground`    | `bool` | `True`                                     | Enable GraphQL Playground   |
+| `schema_name`          | `str`  | `'Auto Generated Schema'`                  | GraphQL schema name         |
+| `schema_description`   | `str`  | `'Automatically generated GraphQL schema'` | Schema description          |
 
 ### Environment-based Configuration
 
 ```python
 # settings/development.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_SETTINGS': {
         'enable_introspection': True,
         'enable_playground': True,
@@ -207,7 +207,7 @@ DJANGO_GRAPHQL_AUTO = {
 }
 
 # settings/production.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_SETTINGS': {
         'enable_introspection': False,  # Security in production
         'enable_playground': False,     # No public interface
@@ -220,16 +220,16 @@ DJANGO_GRAPHQL_AUTO = {
 ### Complete Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SECURITY_SETTINGS': {
         # Depth analysis
         'enable_query_depth_analysis': True,
         'max_query_depth': 10,
-        
+
         # Complexity analysis
         'enable_query_complexity_analysis': True,
         'max_query_complexity': 1000,
-        
+
         # Rate limiting
         'enable_rate_limiting': True,
         'rate_limit_per_minute': 60,
@@ -239,14 +239,14 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Detailed Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable_query_depth_analysis` | `bool` | `True` | Enable query depth analysis |
-| `max_query_depth` | `int` | `10` | Maximum query depth (1-50) |
-| `enable_query_complexity_analysis` | `bool` | `True` | Enable complexity analysis |
-| `max_query_complexity` | `int` | `1000` | Maximum query complexity (1-10000) |
-| `enable_rate_limiting` | `bool` | `False` | Enable rate limiting |
-| `rate_limit_per_minute` | `int` | `60` | Request limit per minute (1-10000) |
+| Option                             | Type   | Default | Description                        |
+| ---------------------------------- | ------ | ------- | ---------------------------------- |
+| `enable_query_depth_analysis`      | `bool` | `True`  | Enable query depth analysis        |
+| `max_query_depth`                  | `int`  | `10`    | Maximum query depth (1-50)         |
+| `enable_query_complexity_analysis` | `bool` | `True`  | Enable complexity analysis         |
+| `max_query_complexity`             | `int`  | `1000`  | Maximum query complexity (1-10000) |
+| `enable_rate_limiting`             | `bool` | `False` | Enable rate limiting               |
+| `rate_limit_per_minute`            | `int`  | `60`    | Request limit per minute (1-10000) |
 
 ### Security Configuration Examples
 
@@ -278,12 +278,12 @@ DJANGO_GRAPHQL_AUTO = {
 ### Complete Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'PERFORMANCE_SETTINGS': {
         # Query caching
         'enable_query_caching': True,
         'cache_timeout': 300,  # 5 minutes
-        
+
         # Optimizations
         'enable_dataloader': True,
         'enable_query_optimization': True,
@@ -293,12 +293,12 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Detailed Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable_query_caching` | `bool` | `False` | Enable query caching |
-| `cache_timeout` | `int` | `300` | Cache timeout in seconds (1-86400) |
-| `enable_dataloader` | `bool` | `True` | Enable DataLoader for query optimization |
-| `enable_query_optimization` | `bool` | `True` | Enable automatic query optimization |
+| Option                      | Type   | Default | Description                              |
+| --------------------------- | ------ | ------- | ---------------------------------------- |
+| `enable_query_caching`      | `bool` | `False` | Enable query caching                     |
+| `cache_timeout`             | `int`  | `300`   | Cache timeout in seconds (1-86400)       |
+| `enable_dataloader`         | `bool` | `True`  | Enable DataLoader for query optimization |
+| `enable_query_optimization` | `bool` | `True`  | Enable automatic query optimization      |
 
 ### Load-based Configuration
 
@@ -333,7 +333,7 @@ FEATURE_FLAGS = {
     # Simple configuration (boolean)
     'enable_advanced_filtering': True,
     'enable_bulk_operations': False,
-    
+
     # Advanced configuration
     'new_mutation_system': {
         'description': 'New mutation system with advanced validation',
@@ -354,7 +354,7 @@ FEATURE_FLAGS = {
 ### Using Feature Flags
 
 ```python
-from django_graphql_auto.core.feature_flags import is_feature_enabled, get_feature_value
+from rail_django_graphql.core.feature_flags import is_feature_enabled, get_feature_value
 
 # In your views or resolvers
 def my_resolver(self, info):
@@ -366,7 +366,7 @@ def my_resolver(self, info):
         return standard_logic()
 
 # Decorator for views
-from django_graphql_auto.core.feature_flags import feature_flag_required
+from rail_django_graphql.core.feature_flags import feature_flag_required
 
 @feature_flag_required('enable_bulk_operations')
 def bulk_update_view(request):
@@ -379,13 +379,13 @@ def bulk_update_view(request):
 ### Configuration Updates Without Restart
 
 ```python
-from django_graphql_auto.core.runtime_config import set_runtime_config, get_runtime_config
+from rail_django_graphql.core.runtime_config import set_runtime_config, get_runtime_config
 
 # Update a configuration
 set_runtime_config(
-    'SECURITY_SETTINGS.max_query_depth', 
-    15, 
-    user='admin', 
+    'SECURITY_SETTINGS.max_query_depth',
+    15,
+    user='admin',
     reason='Temporary increase for testing'
 )
 
@@ -396,7 +396,7 @@ max_depth = get_runtime_config('SECURITY_SETTINGS.max_query_depth', default=10)
 ### Change Callbacks
 
 ```python
-from django_graphql_auto.core.runtime_config import runtime_config
+from rail_django_graphql.core.runtime_config import runtime_config
 
 def on_security_change(key, old_value, new_value):
     print(f"Security setting changed: {key} = {new_value}")
@@ -411,7 +411,7 @@ runtime_config.register_change_callback('SECURITY_SETTINGS.max_query_depth', on_
 ### E-commerce Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'nested_relations_config': {
             'User': True,
@@ -447,7 +447,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Internal API Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'nested_relations_config': {
             # All relations enabled for flexibility
@@ -477,7 +477,7 @@ DJANGO_GRAPHQL_AUTO = {
 ### Microservice Configuration
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_create_mutations': True,
         'enable_update_mutations': True,
@@ -514,6 +514,7 @@ ImproperlyConfigured: MUTATION_SETTINGS.max_nested_depth must be >= 1
 **Symptoms:** Slow queries, timeouts
 
 **Solutions:**
+
 - Enable `enable_query_caching`
 - Reduce `max_page_size`
 - Enable `enable_dataloader`
@@ -526,6 +527,7 @@ Query depth limit exceeded: 15 > 10
 ```
 
 **Solutions:**
+
 - Increase `max_query_depth` if legitimate
 - Optimize query structure
 - Use pagination
@@ -533,11 +535,11 @@ Query depth limit exceeded: 15 > 10
 ### Configuration Validation
 
 ```python
-from django_graphql_auto.core.config_loader import validate_configuration
+from rail_django_graphql.core.config_loader import validate_configuration
 
 # Validate current configuration
 try:
-    config = validate_configuration(settings.DJANGO_GRAPHQL_AUTO)
+    config = validate_configuration(settings.rail_django_graphql)
     print("Configuration is valid")
 except ImproperlyConfigured as e:
     print(f"Configuration errors: {e}")
@@ -546,7 +548,7 @@ except ImproperlyConfigured as e:
 ### Configuration Debugging
 
 ```python
-from django_graphql_auto.core.config_loader import debug_configuration
+from rail_django_graphql.core.config_loader import debug_configuration
 
 # Display current configuration
 debug_configuration()
@@ -555,7 +557,7 @@ debug_configuration()
 ### Feature Flags Monitoring
 
 ```python
-from django_graphql_auto.core.feature_flags import feature_flags
+from rail_django_graphql.core.feature_flags import feature_flags
 
 # Get all flags
 all_flags = feature_flags.get_all_flags()
@@ -563,7 +565,7 @@ for name, flag in all_flags.items():
     print(f"{name}: {'✓' if flag.enabled else '✗'}")
 
 # Change history
-from django_graphql_auto.core.runtime_config import runtime_config
+from rail_django_graphql.core.runtime_config import runtime_config
 history = runtime_config.get_change_history(limit=10)
 for change in history:
     print(f"{change.timestamp}: {change.key} = {change.new_value}")
@@ -577,7 +579,7 @@ Use separate settings files:
 
 ```python
 # settings/base.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'max_nested_depth': 3,
     }
@@ -586,7 +588,7 @@ DJANGO_GRAPHQL_AUTO = {
 # settings/production.py
 from .base import *
 
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'SECURITY_SETTINGS': {
         'enable_rate_limiting': True,
         'rate_limit_per_minute': 30,
@@ -611,7 +613,7 @@ runtime_config.register_change_callback('SECURITY_SETTINGS.*', monitor_config_ch
 ```python
 # tests/test_config.py
 from django.test import TestCase
-from django_graphql_auto.core.config_loader import validate_configuration
+from rail_django_graphql.core.config_loader import validate_configuration
 
 class ConfigurationTest(TestCase):
     def test_valid_configuration(self):
@@ -622,7 +624,7 @@ class ConfigurationTest(TestCase):
         }
         validated = validate_configuration(config)
         self.assertEqual(validated['MUTATION_SETTINGS']['max_nested_depth'], 5)
-    
+
     def test_invalid_configuration(self):
         config = {
             'MUTATION_SETTINGS': {

@@ -1,7 +1,7 @@
 import graphene
-from django_graphql_auto.schema import schema
+from rail_django_graphql.schema import schema
 
-query = '''
+query = """
 query {
   comment_pages(page: 1, per_page: 5, is_approved: true, order_by: ["-created_at"]) {
     items {
@@ -18,10 +18,10 @@ query {
     }
   }
 }
-'''
+"""
 
 result = schema.execute(query)
 if result.errors:
-    print('Errors:', result.errors)
+    print("Errors:", result.errors)
 else:
-    print('Success:', result.data)
+    print("Success:", result.data)

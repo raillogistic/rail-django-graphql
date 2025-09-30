@@ -9,6 +9,7 @@ A Django system that automatically generates GraphQL schema (queries, mutations,
 ### ✅ **Phase 1: Foundation & Setup**
 
 #### 1.1 Dependencies & Environment Setup
+
 - [x] Install core dependencies:
   - `graphene-django>=3.0.0`
   - `django-filter>=22.1`
@@ -19,8 +20,9 @@ A Django system that automatically generates GraphQL schema (queries, mutations,
 - [x] Set up development tools (black, flake8, mypy)
 
 #### 1.2 Project Structure Creation
+
 ```
-django_graphql_auto/
+rail_django_graphql/
 ├── core/
 │   ├── __init__.py
 │   ├── schema.py          # Main schema assembly
@@ -48,6 +50,7 @@ django_graphql_auto/
 ```
 
 #### 1.3 Django Settings Configuration
+
 - [x] Create base configuration class
 - [x] Add GraphQL settings to Django settings
 - [x] Configure CORS for GraphQL endpoint
@@ -56,6 +59,7 @@ django_graphql_auto/
 ### ✅ **Phase 2: Auto-Generation Engine**
 
 #### 2.1 Model Introspection System
+
 - [x] **ModelIntrospector Class**
   - Extract model fields with types and constraints
   - Identify relationships (ForeignKey, ManyToMany, OneToOne)
@@ -65,6 +69,7 @@ django_graphql_auto/
   - **Enhanced field analysis**: Added support for `auto_now`, `auto_now_add`, `blank`, and `has_default` attributes for accurate field requirement determination
 
 #### 2.2 GraphQL Type Generation
+
 - [x] **TypeGenerator Class**
   - Convert Django fields to GraphQL types
   - Handle custom field types and validators
@@ -76,17 +81,19 @@ django_graphql_auto/
     - Update mutations: Only `id` field is required, all other fields are optional
 
 #### 2.3 Query Generation System
+
 - [x] **QueryGenerator Class**
   - Single object queries (by ID, slug, etc.)
   - List queries with filtering capabilities
   - Paginated queries with cursor/offset pagination
   - Search functionality integration
   - Nested relationship queries
-  - **Improved naming conventions**: 
+  - **Improved naming conventions**:
     - List queries use 's' suffix (e.g., `users` instead of `user_list`)
-    - Paginated queries use '_pages' suffix (e.g., `user_pages` instead of `user_paginated`)
+    - Paginated queries use '\_pages' suffix (e.g., `user_pages` instead of `user_paginated`)
 
 #### 2.4 Mutation Generation System
+
 - [x] **MutationGenerator Class**
   - CRUD operations (Create, Read, Update, Delete)
   - Method-to-mutation conversion
@@ -100,6 +107,7 @@ django_graphql_auto/
   - **Enhanced error handling**: Graceful error handling with detailed error messages
 
 #### 2.5 Schema Assembly & Memory Management
+
 - [x] **SchemaBuilder Class**
   - Combine all app schemas into unified schema
   - Live schema updates without restart
@@ -108,6 +116,7 @@ django_graphql_auto/
   - Auto-refresh on model changes
 
 #### 2.6 File Generation System
+
 - [x] **FileGenerator Class**
   - Generate per-app schema files
   - Create types.py, queries.py, mutations.py, filters.py
@@ -118,6 +127,7 @@ django_graphql_auto/
 ### ✅ **Phase 3: Advanced Features**
 
 #### 3.1 Advanced Filtering System
+
 - [x] **AdvancedFilterGenerator Class**
   - Auto-generate filters by field type:
     - Text fields: contains, icontains, startswith, endswith, exact, iexact
@@ -131,6 +141,7 @@ django_graphql_auto/
   - **Integration with queries**: Seamless integration with list queries for advanced filtering
 
 #### 3.2 Nested Operations
+
 - [x] **NestedOperationHandler Class**
   - **Nested create operations**: Full support for creating objects with nested relationships
     - Foreign key relationships: Create new or reference existing objects
@@ -145,8 +156,9 @@ django_graphql_auto/
   - **Cascade delete handling**: Configurable cascade rules (CASCADE, PROTECT, SET_NULL)
 
 #### 3.3 Complex Return Types & Custom Scalars
+
 - [x] **CustomScalarRegistry & MethodReturnTypeAnalyzer Classes**
-  - **Custom scalar types**: 
+  - **Custom scalar types**:
     - JSONScalar for complex nested data structures
     - DateTimeScalar with timezone support
     - DecimalScalar for high-precision numbers
@@ -160,6 +172,7 @@ django_graphql_auto/
   - **Django field mapping**: Custom scalars for Django field types (JSONField, UUIDField, etc.)
 
 #### 3.4 Inheritance Support
+
 - [x] **InheritanceHandler Class**
   - **Abstract model support**: GraphQL interfaces for abstract Django models
     - Field inheritance from abstract parents
@@ -179,6 +192,7 @@ django_graphql_auto/
 ### ✅ **Phase 3.5: Method Mutations & Bulk Operations**
 
 #### 3.5.1 Method Mutation System
+
 - [x] **MethodMutationGenerator Class**
   - Convert Django model methods to GraphQL mutations
   - Automatic detection of mutation-worthy methods
@@ -187,7 +201,7 @@ django_graphql_auto/
   - Support for custom business logic methods
   - **Method filtering**: Enhanced filtering to exclude framework methods:
     - Django Model built-in methods (save, delete, clean, full_clean)
-    - Auto-generated methods (get_next_by_*, get_previous_by_*, get_*_display)
+    - Auto-generated methods (get*next_by*_, get*previous_by*_, get\_\*\_display)
     - PolymorphicModel methods
     - Methods from Django's Model class hierarchy
   - **Permission integration**: Method mutations respect Django permissions
@@ -196,6 +210,7 @@ django_graphql_auto/
   - **Metadata preservation**: Method docstrings and signatures preserved in GraphQL schema
 
 #### 3.5.2 Bulk Operations System
+
 - [x] **BulkOperationGenerator Class**
   - Bulk create operations with batch processing
   - Bulk update operations with selective field updates
@@ -215,6 +230,7 @@ django_graphql_auto/
   - **Response format**: Consistent response structure with success/error indicators
 
 #### 3.5.3 Enhanced Configuration System
+
 - [x] **Advanced Settings Management**
   - Method mutation configuration: `enable_method_mutations`
   - Bulk operation configuration: `enable_bulk_operations`, `bulk_batch_size`
@@ -226,6 +242,7 @@ django_graphql_auto/
 ### ✅ **Phase 4: Security Implementation**
 
 #### 4.1 Authentication System
+
 - [x] Built-in auth queries and mutations:
   - [x] `login(username, password)` → AuthPayload
   - [x] `register(userData)` → User
@@ -236,6 +253,7 @@ django_graphql_auto/
 - [x] Session-based authentication support with Django integration
 
 #### 4.2 Permission System
+
 - [x] Field-level permissions with GraphQL integration
 - [x] Object-level permissions with Django permission system
 - [x] Operation-level permissions (CRUD) with role validation
@@ -244,6 +262,7 @@ django_graphql_auto/
 - [x] Permission queries (`my_permissions`) for user authorization info
 
 #### 4.3 Input Validation & Security
+
 - [x] Input sanitization for all mutations (XSS prevention)
 - [x] SQL injection prevention with parameterized queries
 - [x] XSS protection with comprehensive input sanitization
@@ -256,6 +275,7 @@ django_graphql_auto/
 ### ✅ **Phase 5: Performance Optimization**
 
 #### 5.1 N+1 Query Prevention
+
 - [x] Automatic select_related detection
 - [x] Smart prefetch_related usage
 - [x] Query optimization hints
@@ -263,6 +283,7 @@ django_graphql_auto/
 - [x] Query analysis and warnings
 
 #### 5.2 Caching Strategies
+
 - [x] Schema caching in memory
 - [x] Query result caching
 - [x] Field-level caching
@@ -270,6 +291,7 @@ django_graphql_auto/
 - [x] Redis integration for distributed caching
 
 #### 5.3 Query Optimization
+
 - [x] Query complexity limits
 - [x] Timeout handling
 - [x] Resource usage monitoring
@@ -279,6 +301,7 @@ django_graphql_auto/
 ### ✅ **Phase 6: File Uploads & Media**
 
 #### 6.1 File Upload System
+
 - [x] Auto-generated file upload mutations
 - [x] Multiple file upload support
 - [x] File type validation
@@ -294,6 +317,7 @@ django_graphql_auto/
   - [x] **100% Test Pass Rate**: All 21 file upload tests passing successfully
 
 #### 6.2 Media Management
+
 - [x] Media URL generation
 - [x] Image processing pipeline
 - [x] Thumbnail generation
@@ -303,6 +327,7 @@ django_graphql_auto/
 ### ✅ **Phase 7: Documentation & Testing**
 
 #### 7.1 Documentation
+
 - [x] **Setup Guide**
   - [x] Installation instructions
   - [x] Configuration examples
@@ -317,6 +342,7 @@ django_graphql_auto/
   - [x] Migration strategies
 
 #### 7.2 Testing Framework
+
 - [x] **Unit Tests** (Target: 95% coverage - ACHIEVED)
   - [x] Generator component tests
   - [x] Schema validation tests
@@ -349,6 +375,7 @@ django_graphql_auto/
 ### ⏳ **Phase 8: Deployment & Monitoring**
 
 #### 8.1 Error Handling & Logging
+
 - [x] Sentry integration for error tracking
 - [x] Structured logging implementation
 - [x] Performance monitoring (GraphQLPerformanceMiddleware, PerformanceMonitor, benchmarks)
@@ -356,6 +383,7 @@ django_graphql_auto/
 - [x] Debug mode enhancements
 
 #### 8.2 Health Checks & Diagnostics
+
 - [x] Schema health check endpoints (HealthChecker with GraphQL schema validation)
 - [x] Database connection monitoring (Database health checks with response time tracking)
 - [x] Cache system status checks (Redis/Cache health verification with performance metrics)
@@ -374,13 +402,12 @@ django_graphql_auto/
 - [x] Settings documentation
 
 #### 8.4 Deployment Tools
+
 - [x] Docker configuration
 - [x] CI/CD pipeline setup
 - [x] Database migration scripts
 - [x] Schema versioning system
 - [x] Rollback procedures
-
-
 
 ## 📊 Success Metrics
 

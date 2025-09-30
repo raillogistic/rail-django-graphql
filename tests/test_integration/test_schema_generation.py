@@ -21,13 +21,13 @@ from graphene import ObjectType, Schema
 from graphene.test import Client
 from graphene_django import DjangoObjectType
 
-from django_graphql_auto.schema_generator import AutoSchemaGenerator
-from django_graphql_auto.generators.introspector import ModelIntrospector
-from django_graphql_auto.generators.types import TypeGenerator
-from django_graphql_auto.generators.queries import QueryGenerator
-from django_graphql_auto.generators.mutations import MutationGenerator
-from django_graphql_auto.generators.filters import AdvancedFilterGenerator
-from django_graphql_auto.decorators.business_logic import business_method
+from rail_django_graphql.schema_generator import AutoSchemaGenerator
+from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.types import TypeGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.mutations import MutationGenerator
+from rail_django_graphql.generators.filters import AdvancedFilterGenerator
+from rail_django_graphql.decorators.business_logic import business_method
 
 from tests.models import (
     TestCompany, TestEmployee, TestSkill, TestSkillCategory,

@@ -2,16 +2,16 @@
 -- pour Django GraphQL Auto System
 
 -- Créer la base de données principale si elle n'existe pas
-SELECT 'CREATE DATABASE django_graphql_auto'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'django_graphql_auto')\gexec
+SELECT 'CREATE DATABASE rail_django_graphql'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rail_django_graphql')\gexec
 
 -- Créer la base de données de test si elle n'existe pas
-SELECT 'CREATE DATABASE django_graphql_auto_test'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'django_graphql_auto_test')\gexec
+SELECT 'CREATE DATABASE rail_django_graphql_test'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rail_django_graphql_test')\gexec
 
 -- Créer la base de données de développement si elle n'existe pas
-SELECT 'CREATE DATABASE django_graphql_auto_dev'
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'django_graphql_auto_dev')\gexec
+SELECT 'CREATE DATABASE rail_django_graphql_dev'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'rail_django_graphql_dev')\gexec
 
 -- Créer un utilisateur pour l'application si il n'existe pas
 DO
@@ -27,12 +27,12 @@ END
 $do$;
 
 -- Accorder les privilèges nécessaires
-GRANT ALL PRIVILEGES ON DATABASE django_graphql_auto TO django_user;
-GRANT ALL PRIVILEGES ON DATABASE django_graphql_auto_test TO django_user;
-GRANT ALL PRIVILEGES ON DATABASE django_graphql_auto_dev TO django_user;
+GRANT ALL PRIVILEGES ON DATABASE rail_django_graphql TO django_user;
+GRANT ALL PRIVILEGES ON DATABASE rail_django_graphql_test TO django_user;
+GRANT ALL PRIVILEGES ON DATABASE rail_django_graphql_dev TO django_user;
 
 -- Se connecter à la base de données principale
-\c django_graphql_auto;
+\c rail_django_graphql;
 
 -- Créer les extensions nécessaires
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -40,10 +40,10 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 CREATE EXTENSION IF NOT EXISTS "unaccent";
 
 -- Créer un schéma pour les fonctions personnalisées
-CREATE SCHEMA IF NOT EXISTS django_graphql_auto;
+CREATE SCHEMA IF NOT EXISTS rail_django_graphql;
 
 -- Fonction pour générer des slugs
-CREATE OR REPLACE FUNCTION django_graphql_auto.generate_slug(input_text TEXT)
+CREATE OR REPLACE FUNCTION rail_django_graphql.generate_slug(input_text TEXT)
 RETURNS TEXT AS $$
 BEGIN
     RETURN lower(
@@ -59,7 +59,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
 -- Fonction pour la recherche full-text
-CREATE OR REPLACE FUNCTION django_graphql_auto.search_text(
+CREATE OR REPLACE FUNCTION rail_django_graphql.search_text(
     search_query TEXT,
     search_fields TEXT[]
 )
@@ -82,7 +82,7 @@ ALTER SYSTEM SET log_min_duration_statement = 1000;
 SELECT pg_reload_conf();
 
 -- Créer une table pour le suivi des versions de schéma
-CREATE TABLE IF NOT EXISTS django_graphql_auto.schema_versions (
+CREATE TABLE IF NOT EXISTS rail_django_graphql.schema_versions (
     id SERIAL PRIMARY KEY,
     version VARCHAR(50) NOT NULL UNIQUE,
     description TEXT,
@@ -93,12 +93,12 @@ CREATE TABLE IF NOT EXISTS django_graphql_auto.schema_versions (
 );
 
 -- Insérer la version initiale
-INSERT INTO django_graphql_auto.schema_versions (version, description, migration_files)
+INSERT INTO rail_django_graphql.schema_versions (version, description, migration_files)
 VALUES ('1.0.0', 'Version initiale du schéma Django GraphQL Auto', ARRAY['0001_initial'])
 ON CONFLICT (version) DO NOTHING;
 
 -- Créer une fonction pour enregistrer les versions de schéma
-CREATE OR REPLACE FUNCTION django_graphql_auto.register_schema_version(
+CREATE OR REPLACE FUNCTION rail_django_graphql.register_schema_version(
     p_version VARCHAR(50),
     p_description TEXT DEFAULT NULL,
     p_migration_files TEXT[] DEFAULT NULL,
@@ -106,7 +106,7 @@ CREATE OR REPLACE FUNCTION django_graphql_auto.register_schema_version(
 )
 RETURNS VOID AS $$
 BEGIN
-    INSERT INTO django_graphql_auto.schema_versions (
+    INSERT INTO rail_django_graphql.schema_versions (
         version, description, migration_files, rollback_sql
     )
     VALUES (p_version, p_description, p_migration_files, p_rollback_sql)
@@ -119,7 +119,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Créer une vue pour les statistiques de performance
-CREATE OR REPLACE VIEW django_graphql_auto.performance_stats AS
+CREATE OR REPLACE VIEW rail_django_graphql.performance_stats AS
 SELECT
     schemaname,
     tablename,
@@ -131,7 +131,7 @@ WHERE schemaname = 'public'
 ORDER BY schemaname, tablename, attname;
 
 -- Créer une fonction pour nettoyer les anciennes données de log
-CREATE OR REPLACE FUNCTION django_graphql_auto.cleanup_old_logs(days_to_keep INTEGER DEFAULT 30)
+CREATE OR REPLACE FUNCTION rail_django_graphql.cleanup_old_logs(days_to_keep INTEGER DEFAULT 30)
 RETURNS INTEGER AS $$
 DECLARE
     deleted_count INTEGER;
@@ -164,15 +164,15 @@ END
 $do$;
 
 -- Accorder les privilèges de lecture seule
-GRANT CONNECT ON DATABASE django_graphql_auto TO django_readonly;
+GRANT CONNECT ON DATABASE rail_django_graphql TO django_readonly;
 GRANT USAGE ON SCHEMA public TO django_readonly;
-GRANT USAGE ON SCHEMA django_graphql_auto TO django_readonly;
+GRANT USAGE ON SCHEMA rail_django_graphql TO django_readonly;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO django_readonly;
-GRANT SELECT ON ALL TABLES IN SCHEMA django_graphql_auto TO django_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA rail_django_graphql TO django_readonly;
 
 -- Accorder automatiquement les privilèges sur les nouvelles tables
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO django_readonly;
-ALTER DEFAULT PRIVILEGES IN SCHEMA django_graphql_auto GRANT SELECT ON TABLES TO django_readonly;
+ALTER DEFAULT PRIVILEGES IN SCHEMA rail_django_graphql GRANT SELECT ON TABLES TO django_readonly;
 
 -- Message de confirmation
 DO $$
@@ -180,5 +180,5 @@ BEGIN
     RAISE NOTICE 'Base de données Django GraphQL Auto initialisée avec succès!';
     RAISE NOTICE 'Utilisateurs créés: django_user (lecture/écriture), django_readonly (lecture seule)';
     RAISE NOTICE 'Extensions installées: uuid-ossp, pg_trgm, unaccent';
-    RAISE NOTICE 'Schéma personnalisé: django_graphql_auto';
+    RAISE NOTICE 'Schéma personnalisé: rail_django_graphql';
 END $$;

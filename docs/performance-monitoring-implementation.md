@@ -8,9 +8,10 @@ This document details the comprehensive performance monitoring system implemente
 
 ### 1. GraphQLPerformanceMiddleware
 
-**Location**: `django_graphql_auto/middleware/performance.py`
+**Location**: `rail_django_graphql/middleware/performance.py`
 
 **Features**:
+
 - Real-time GraphQL request tracking
 - Query execution time measurement
 - Database query count monitoring
@@ -19,15 +20,17 @@ This document details the comprehensive performance monitoring system implemente
 - Configurable performance thresholds
 
 **Key Methods**:
+
 - `process_request()`: Initializes performance tracking
 - `process_response()`: Collects and logs performance metrics
 - `setup_performance_monitoring()`: Configures default thresholds
 
 ### 2. PerformanceMonitor Class
 
-**Location**: `django_graphql_auto/extensions/optimization.py`
+**Location**: `rail_django_graphql/extensions/optimization.py`
 
 **Features**:
+
 - Query performance analysis
 - Complexity scoring
 - Memory optimization tracking
@@ -35,6 +38,7 @@ This document details the comprehensive performance monitoring system implemente
 - Integration with QueryOptimizationConfig
 
 **Capabilities**:
+
 - Tracks query execution patterns
 - Identifies performance bottlenecks
 - Provides optimization recommendations
@@ -45,6 +49,7 @@ This document details the comprehensive performance monitoring system implemente
 **Location**: `benchmarks/performance_benchmarks.py`
 
 **Benchmark Categories**:
+
 - N+1 query prevention testing
 - Cache efficiency measurement
 - Load testing scenarios
@@ -52,6 +57,7 @@ This document details the comprehensive performance monitoring system implemente
 - Memory usage optimization
 
 **Key Features**:
+
 - Automated benchmark execution
 - Performance regression detection
 - Comparative analysis tools
@@ -62,6 +68,7 @@ This document details the comprehensive performance monitoring system implemente
 **Location**: `tests/test_performance_optimization.py`
 
 **Test Coverage**:
+
 - N+1 query prevention validation
 - Cache efficiency testing
 - Performance monitoring accuracy
@@ -75,6 +82,7 @@ This document details the comprehensive performance monitoring system implemente
 **Location**: `docs/development/performance.md`
 
 **Components**:
+
 - `MemoryOptimizedGraphQLView`: Optimized GraphQL view with memory monitoring
 - `MemoryMonitor`: Real-time memory usage tracking
 - `GraphQLPerformanceMonitor`: Comprehensive performance tracking
@@ -83,6 +91,7 @@ This document details the comprehensive performance monitoring system implemente
 ### 6. Monitoring Integration
 
 **Features Implemented**:
+
 - Sentry integration for performance tracking
 - GraphQL-specific error monitoring
 - Slow query detection and alerting
@@ -109,13 +118,14 @@ PERFORMANCE_THRESHOLDS = {
 # Django settings.py
 MIDDLEWARE = [
     # ... other middleware
-    'django_graphql_auto.middleware.performance.GraphQLPerformanceMiddleware',
+    'rail_django_graphql.middleware.performance.GraphQLPerformanceMiddleware',
 ]
 ```
 
 ## Monitoring Capabilities
 
 ### Real-time Metrics
+
 - Query execution time
 - Database query count
 - Memory usage per request
@@ -123,6 +133,7 @@ MIDDLEWARE = [
 - Error rates and types
 
 ### Performance Alerts
+
 - Slow query detection
 - High complexity query warnings
 - Memory usage alerts
@@ -130,6 +141,7 @@ MIDDLEWARE = [
 - Cache performance degradation
 
 ### Reporting Features
+
 - Performance trend analysis
 - Bottleneck identification
 - Optimization recommendations
@@ -139,18 +151,21 @@ MIDDLEWARE = [
 ## Integration with Other Systems
 
 ### Sentry Integration
+
 - Automatic error tracking
 - Performance monitoring
 - Custom performance events
 - Alert notifications
 
 ### Cache System Integration
+
 - Cache performance monitoring
 - Hit rate optimization
 - Invalidation tracking
 - Multi-level cache analysis
 
 ### Database Monitoring
+
 - Query optimization tracking
 - N+1 prevention validation
 - Connection pool monitoring
@@ -159,21 +174,27 @@ MIDDLEWARE = [
 ## Documentation Coverage
 
 ### Performance Optimization Guide
+
 **Location**: `docs/performance-optimization.md`
+
 - Comprehensive performance optimization strategies
 - N+1 query prevention techniques
 - Multi-level caching implementation
 - Performance monitoring setup
 
 ### Development Performance Guide
+
 **Location**: `docs/development/performance.md`
+
 - Memory optimization techniques
 - Performance monitoring tools
 - Development best practices
 - Troubleshooting guides
 
 ### Performance Testing Documentation
+
 **Location**: `docs/testing/performance-testing.md`
+
 - Performance testing strategies
 - Benchmark execution guides
 - Test metrics collection
@@ -182,6 +203,7 @@ MIDDLEWARE = [
 ## Completion Status
 
 ### ✅ Completed Features
+
 - [x] GraphQLPerformanceMiddleware implementation
 - [x] PerformanceMonitor class with comprehensive tracking
 - [x] Performance benchmarks and testing suite
@@ -193,6 +215,7 @@ MIDDLEWARE = [
 - [x] Integration with existing optimization systems
 
 ### 📊 Performance Metrics
+
 - **Test Coverage**: 100% for performance monitoring components
 - **Benchmark Coverage**: N+1 prevention, caching, load testing, memory optimization
 - **Documentation**: Complete performance monitoring documentation

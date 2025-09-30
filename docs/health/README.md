@@ -7,6 +7,7 @@ The Health Checks & Diagnostics system provides comprehensive monitoring and dia
 ## 🚀 Features
 
 ### Core Health Monitoring
+
 - **Schema Health Checks**: Validates GraphQL schema integrity and build status
 - **Database Monitoring**: Tracks database connection health and response times
 - **Cache System Checks**: Monitors Redis/cache performance and availability
@@ -14,6 +15,7 @@ The Health Checks & Diagnostics system provides comprehensive monitoring and dia
 - **Performance Analytics**: Request timing, query optimization, and bottleneck detection
 
 ### Interactive Dashboard
+
 - **Real-time Metrics**: Live updating charts and graphs
 - **Component Status**: Visual health indicators for all system components
 - **Historical Trends**: Performance data over time with trend analysis
@@ -21,12 +23,14 @@ The Health Checks & Diagnostics system provides comprehensive monitoring and dia
 - **Auto-refresh**: Configurable automatic data refresh intervals
 
 ### API Endpoints
+
 - **REST API**: JSON endpoints for health data integration
 - **GraphQL API**: Native GraphQL queries for health information
 - **Simple Health Check**: Load balancer-friendly health endpoints
 - **Detailed Metrics**: Comprehensive system metrics for monitoring tools
 
 ### Monitoring & Alerting
+
 - **Continuous Monitoring**: Background health monitoring with configurable intervals
 - **Email Alerts**: Automated notifications for system issues
 - **Recovery Suggestions**: Intelligent recommendations for resolving issues
@@ -35,7 +39,7 @@ The Health Checks & Diagnostics system provides comprehensive monitoring and dia
 ## 📁 System Architecture
 
 ```
-django_graphql_auto/
+rail_django_graphql/
 ├── extensions/
 │   └── health.py                    # Core health checking logic
 ├── management/commands/
@@ -58,7 +62,7 @@ django_graphql_auto/
 # settings.py
 INSTALLED_APPS = [
     # ... your apps
-    'django_graphql_auto',
+    'rail_django_graphql',
 ]
 
 # Health monitoring configuration
@@ -85,7 +89,7 @@ EMAIL_HOST_PASSWORD = 'your-password'
 ```python
 # urls.py
 from django.urls import path, include
-from django_graphql_auto.urls.health_urls import get_health_urlpatterns
+from rail_django_graphql.urls.health_urls import get_health_urlpatterns
 
 urlpatterns = [
     # ... your URLs
@@ -102,10 +106,12 @@ python manage.py migrate
 ## 🌐 Available Endpoints
 
 ### Dashboard & UI
+
 - **`/health/`** - Interactive health dashboard
 - **`/health/dashboard/`** - Alternative dashboard URL
 
 ### API Endpoints
+
 - **`/health/api/`** - Complete health data (JSON/GraphQL)
 - **`/health/check/`** - Simple health check (for load balancers)
 - **`/health/metrics/`** - System metrics only
@@ -113,6 +119,7 @@ python manage.py migrate
 - **`/health/history/`** - Historical health data
 
 ### GraphQL Integration
+
 ```graphql
 query {
   healthStatus {
@@ -123,7 +130,7 @@ query {
     recommendations
     timestamp
   }
-  
+
   systemMetrics {
     cpuUsagePercent
     memoryUsagePercent
@@ -140,18 +147,21 @@ query {
 ## 🖥️ Dashboard Features
 
 ### Real-time Monitoring
+
 - **System Overview**: CPU, memory, disk usage with live updates
 - **Component Health**: Visual status indicators for all components
 - **Performance Charts**: Interactive charts showing trends over time
 - **Alert Center**: Recent alerts and recommendations
 
 ### Interactive Elements
+
 - **Auto-refresh Toggle**: Enable/disable automatic data updates
 - **Refresh Controls**: Manual refresh and interval configuration
 - **Historical Views**: View performance data over different time periods
 - **Export Options**: Download health reports and metrics
 
 ### Visual Indicators
+
 - **🟢 Healthy**: All systems operating normally
 - **🟡 Degraded**: Some performance issues detected
 - **🔴 Unhealthy**: Critical issues requiring attention
@@ -159,6 +169,7 @@ query {
 ## 🔍 Health Check Components
 
 ### Schema Health
+
 ```python
 # Validates GraphQL schema integrity
 {
@@ -171,11 +182,12 @@ query {
 ```
 
 ### Database Health
+
 ```python
 # Tests database connectivity and performance
 {
     "component": "Database",
-    "status": "healthy", 
+    "status": "healthy",
     "message": "Connection successful",
     "response_time_ms": 12.8,
     "timestamp": "2024-01-15T10:30:00Z"
@@ -183,6 +195,7 @@ query {
 ```
 
 ### Cache Health
+
 ```python
 # Monitors cache system performance
 {
@@ -197,6 +210,7 @@ query {
 ## 📊 System Metrics
 
 ### Performance Metrics
+
 - **CPU Usage**: Current processor utilization percentage
 - **Memory Usage**: RAM consumption and availability
 - **Disk Usage**: Storage utilization across mounted drives
@@ -204,6 +218,7 @@ query {
 - **Cache Performance**: Hit rates and response times
 
 ### Application Metrics
+
 - **GraphQL Performance**: Query execution times and complexity
 - **Database Queries**: Query count, duration, and optimization
 - **Error Rates**: Exception frequency and error patterns
@@ -212,6 +227,7 @@ query {
 ## 🚨 Monitoring & Alerts
 
 ### Continuous Monitoring
+
 Start the health monitoring daemon:
 
 ```bash
@@ -229,12 +245,15 @@ python manage.py health_monitor --verbose
 ```
 
 ### Alert Types
+
 - **Critical**: System failures requiring immediate attention
 - **Warning**: Performance degradation or resource constraints
 - **Info**: General system information and recommendations
 
 ### Email Notifications
+
 Automated email alerts include:
+
 - **Issue Description**: Clear explanation of the problem
 - **Affected Components**: Which parts of the system are impacted
 - **Severity Level**: Critical, warning, or informational
@@ -244,21 +263,24 @@ Automated email alerts include:
 ## 🧪 Testing
 
 ### Run Health System Tests
+
 ```bash
 # Run all health system tests
-python manage.py test django_graphql_auto.tests.test_health_system
+python manage.py test rail_django_graphql.tests.test_health_system
 
 # Run specific test classes
-python manage.py test django_graphql_auto.tests.test_health_system.HealthCheckerTestCase
-python manage.py test django_graphql_auto.tests.test_health_system.HealthViewsTestCase
+python manage.py test rail_django_graphql.tests.test_health_system.HealthCheckerTestCase
+python manage.py test rail_django_graphql.tests.test_health_system.HealthViewsTestCase
 
 # Run with coverage
-coverage run --source='.' manage.py test django_graphql_auto.tests.test_health_system
+coverage run --source='.' manage.py test rail_django_graphql.tests.test_health_system
 coverage report
 ```
 
 ### Test Coverage
+
 The health system includes comprehensive tests covering:
+
 - ✅ Health checker functionality
 - ✅ All API endpoints
 - ✅ Dashboard rendering
@@ -270,22 +292,23 @@ The health system includes comprehensive tests covering:
 ## 🔧 Configuration Options
 
 ### Health Check Settings
+
 ```python
 HEALTH_CHECK_SETTINGS = {
     # Cache settings
     'CACHE_TIMEOUT': 300,  # Health data cache duration (seconds)
     'CACHE_KEY_PREFIX': 'health_check',  # Cache key prefix
-    
+
     # Monitoring settings
     'MONITORING_INTERVAL': 60,  # Monitoring check interval (seconds)
     'HISTORY_RETENTION_DAYS': 30,  # How long to keep historical data
-    
+
     # Performance thresholds
     'PERFORMANCE_THRESHOLD_MS': 1000,  # Max acceptable response time
     'MEMORY_THRESHOLD_PERCENT': 80,    # Memory usage alert threshold
     'CPU_THRESHOLD_PERCENT': 75,       # CPU usage alert threshold
     'DISK_THRESHOLD_PERCENT': 85,      # Disk usage alert threshold
-    
+
     # Alert settings
     'ALERT_EMAIL_RECIPIENTS': [
         'admin@example.com',
@@ -293,11 +316,11 @@ HEALTH_CHECK_SETTINGS = {
     ],
     'ALERT_EMAIL_SUBJECT_PREFIX': '[Health Alert]',
     'ALERT_COOLDOWN_MINUTES': 15,  # Minimum time between duplicate alerts
-    
+
     # Dashboard settings
     'DASHBOARD_REFRESH_INTERVAL': 30,  # Auto-refresh interval (seconds)
     'DASHBOARD_HISTORY_POINTS': 20,    # Number of historical points to show
-    
+
     # Component-specific settings
     'SCHEMA_BUILD_TIMEOUT': 30,        # Schema build timeout (seconds)
     'DATABASE_QUERY_TIMEOUT': 10,      # Database health check timeout
@@ -306,6 +329,7 @@ HEALTH_CHECK_SETTINGS = {
 ```
 
 ### Environment Variables
+
 ```bash
 # Override settings via environment variables
 export HEALTH_MONITORING_INTERVAL=30
@@ -317,6 +341,7 @@ export HEALTH_DASHBOARD_REFRESH=15
 ## 🚀 Production Deployment
 
 ### Load Balancer Integration
+
 Use the simple health check endpoint for load balancer health checks:
 
 ```bash
@@ -328,16 +353,17 @@ curl http://your-app.com/health/check/
 ```
 
 ### Monitoring Integration
+
 Integrate with monitoring tools like Prometheus, Grafana, or New Relic:
 
 ```python
 # Custom metrics export
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 def export_metrics():
     checker = HealthChecker()
     metrics = checker.get_system_metrics()
-    
+
     # Export to your monitoring system
     prometheus_client.gauge('cpu_usage', metrics['cpu_usage_percent'])
     prometheus_client.gauge('memory_usage', metrics['memory_usage_percent'])
@@ -345,6 +371,7 @@ def export_metrics():
 ```
 
 ### Docker Health Checks
+
 ```dockerfile
 # Dockerfile
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
@@ -356,15 +383,17 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 ### Common Issues
 
 #### Schema Build Failures
+
 ```python
 # Check schema health manually
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 checker = HealthChecker()
 result = checker.check_schema_health()
 print(result)
 ```
 
 #### Database Connection Issues
+
 ```python
 # Test database connectivity
 from django.db import connection
@@ -377,6 +406,7 @@ except Exception as e:
 ```
 
 #### Cache Problems
+
 ```python
 # Test cache operations
 from django.core.cache import cache
@@ -389,6 +419,7 @@ except Exception as e:
 ```
 
 ### Debug Mode
+
 Enable debug mode for detailed health information:
 
 ```python
@@ -403,16 +434,19 @@ HEALTH_CHECK_SETTINGS = {
 ## 📈 Performance Optimization
 
 ### Caching Strategy
+
 - Health check results are cached to reduce system load
 - Configurable cache timeouts for different check types
 - Smart cache invalidation on system changes
 
 ### Monitoring Efficiency
+
 - Lightweight health checks with minimal system impact
 - Asynchronous monitoring to avoid blocking operations
 - Intelligent alerting to prevent notification spam
 
 ### Resource Management
+
 - Memory-efficient historical data storage
 - Automatic cleanup of old monitoring data
 - Optimized database queries for health checks
@@ -420,6 +454,7 @@ HEALTH_CHECK_SETTINGS = {
 ## 🔮 Future Enhancements
 
 ### Planned Features
+
 - **Custom Health Checks**: User-defined health check plugins
 - **Advanced Analytics**: Machine learning-based anomaly detection
 - **Multi-instance Monitoring**: Health checks across multiple app instances
@@ -427,11 +462,12 @@ HEALTH_CHECK_SETTINGS = {
 - **Mobile Dashboard**: Responsive mobile interface for health monitoring
 
 ### Extensibility
+
 The health system is designed to be extensible:
 
 ```python
 # Custom health check example
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 class CustomHealthChecker(HealthChecker):
     def check_custom_service_health(self):

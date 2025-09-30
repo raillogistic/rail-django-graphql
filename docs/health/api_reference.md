@@ -5,9 +5,11 @@
 ### Health Check Endpoints
 
 #### `GET /health/check/`
+
 Simple health check endpoint for load balancers and monitoring tools.
 
 **Response:**
+
 - **200 OK**: System is healthy
 - **503 Service Unavailable**: System has issues
 
@@ -19,9 +21,11 @@ Simple health check endpoint for load balancers and monitoring tools.
 ```
 
 #### `GET /health/ping/`
+
 Minimal ping endpoint for basic connectivity testing.
 
 **Response:**
+
 ```json
 {
   "message": "pong",
@@ -30,9 +34,11 @@ Minimal ping endpoint for basic connectivity testing.
 ```
 
 #### `GET /health/status/`
+
 Basic status information without detailed metrics.
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -48,9 +54,11 @@ Basic status information without detailed metrics.
 ### Detailed Health Endpoints
 
 #### `GET /health/api/`
+
 Complete health information including all components and metrics.
 
 **Response:**
+
 ```json
 {
   "health_status": {
@@ -98,9 +106,11 @@ Complete health information including all components and metrics.
 ```
 
 #### `GET /health/metrics/`
+
 System metrics only, without component health details.
 
 **Response:**
+
 ```json
 {
   "cpu_usage_percent": 45.2,
@@ -116,9 +126,11 @@ System metrics only, without component health details.
 ```
 
 #### `GET /health/components/`
+
 Component health status without system metrics.
 
 **Response:**
+
 ```json
 {
   "components": [
@@ -130,7 +142,7 @@ Component health status without system metrics.
       "timestamp": "2024-01-15T10:30:00Z"
     },
     {
-      "component": "Database", 
+      "component": "Database",
       "status": "healthy",
       "message": "Connection successful",
       "response_time_ms": 12.8,
@@ -139,7 +151,7 @@ Component health status without system metrics.
     {
       "component": "Cache",
       "status": "healthy",
-      "message": "Operations successful", 
+      "message": "Operations successful",
       "response_time_ms": 3.1,
       "timestamp": "2024-01-15T10:30:00Z"
     }
@@ -155,9 +167,11 @@ Component health status without system metrics.
 ### Specialized Health Endpoints
 
 #### `GET /health/schema/`
+
 GraphQL schema-specific health check.
 
 **Response:**
+
 ```json
 {
   "component": "GraphQL Schema",
@@ -175,9 +189,11 @@ GraphQL schema-specific health check.
 ```
 
 #### `GET /health/database/`
+
 Database-specific health check.
 
 **Response:**
+
 ```json
 {
   "component": "Database",
@@ -195,9 +211,11 @@ Database-specific health check.
 ```
 
 #### `GET /health/cache/`
+
 Cache system-specific health check.
 
 **Response:**
+
 ```json
 {
   "component": "Cache",
@@ -217,13 +235,16 @@ Cache system-specific health check.
 ### Historical Data Endpoints
 
 #### `GET /health/history/`
+
 Historical health data for trend analysis.
 
 **Query Parameters:**
+
 - `hours` (optional): Number of hours of history to retrieve (default: 24)
 - `component` (optional): Filter by specific component name
 
 **Response:**
+
 ```json
 {
   "timeframe": "24 hours",
@@ -260,6 +281,7 @@ Historical health data for trend analysis.
 ### Health Queries
 
 #### Basic Health Query
+
 ```graphql
 query {
   healthStatus {
@@ -274,6 +296,7 @@ query {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -290,6 +313,7 @@ query {
 ```
 
 #### System Metrics Query
+
 ```graphql
 query {
   systemMetrics {
@@ -306,6 +330,7 @@ query {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -324,6 +349,7 @@ query {
 ```
 
 #### Complete Health Report Query
+
 ```graphql
 query {
   healthReport {
@@ -359,6 +385,7 @@ query {
 ### GraphQL Schema Types
 
 #### HealthStatusType
+
 ```graphql
 type HealthStatusType {
   overallStatus: String!
@@ -371,6 +398,7 @@ type HealthStatusType {
 ```
 
 #### SystemMetricsType
+
 ```graphql
 type SystemMetricsType {
   cpuUsagePercent: Float!
@@ -385,6 +413,7 @@ type SystemMetricsType {
 ```
 
 #### ComponentHealthType
+
 ```graphql
 type ComponentHealthType {
   component: String!
@@ -396,6 +425,7 @@ type ComponentHealthType {
 ```
 
 #### HealthReportType
+
 ```graphql
 type HealthReportType {
   healthStatus: HealthStatusType!
@@ -409,8 +439,9 @@ type HealthReportType {
 ### HealthChecker Class
 
 #### Initialization
+
 ```python
-from django_graphql_auto.extensions.health import HealthChecker
+from rail_django_graphql.extensions.health import HealthChecker
 
 # Initialize with default settings
 checker = HealthChecker()
@@ -422,6 +453,7 @@ checker = HealthChecker(cache_timeout=600)  # 10 minutes
 #### Methods
 
 ##### `get_health_status() -> HealthStatus`
+
 Get overall system health status.
 
 ```python
@@ -432,6 +464,7 @@ print(f"Recommendations: {status.recommendations}")
 ```
 
 ##### `get_system_metrics() -> SystemMetrics`
+
 Get current system performance metrics.
 
 ```python
@@ -442,6 +475,7 @@ print(f"Cache hit rate: {metrics.cache_hit_rate}")
 ```
 
 ##### `check_schema_health() -> dict`
+
 Check GraphQL schema health specifically.
 
 ```python
@@ -451,6 +485,7 @@ print(f"Response time: {schema_health['response_time_ms']}ms")
 ```
 
 ##### `check_database_health() -> dict`
+
 Check database connectivity and performance.
 
 ```python
@@ -460,6 +495,7 @@ print(f"Response time: {db_health['response_time_ms']}ms")
 ```
 
 ##### `check_cache_health() -> dict`
+
 Check cache system health and performance.
 
 ```python
@@ -469,6 +505,7 @@ print(f"Response time: {cache_health['response_time_ms']}ms")
 ```
 
 ##### `get_health_report() -> dict`
+
 Get complete health report with all components and metrics.
 
 ```python
@@ -482,6 +519,7 @@ for component in report['component_details']:
 ### Data Classes
 
 #### HealthStatus
+
 ```python
 @dataclass
 class HealthStatus:
@@ -494,6 +532,7 @@ class HealthStatus:
 ```
 
 #### SystemMetrics
+
 ```python
 @dataclass
 class SystemMetrics:
@@ -512,6 +551,7 @@ class SystemMetrics:
 ### HTTP Error Codes
 
 #### 503 Service Unavailable
+
 Returned when the system is unhealthy.
 
 ```json
@@ -530,6 +570,7 @@ Returned when the system is unhealthy.
 ```
 
 #### 500 Internal Server Error
+
 Returned when the health check system itself fails.
 
 ```json
@@ -544,13 +585,14 @@ Returned when the health check system itself fails.
 ### GraphQL Errors
 
 #### Health Check Failure
+
 ```json
 {
   "data": null,
   "errors": [
     {
       "message": "Health check failed: Database connection timeout",
-      "locations": [{"line": 2, "column": 3}],
+      "locations": [{ "line": 2, "column": 3 }],
       "path": ["healthStatus"]
     }
   ]
@@ -560,16 +602,19 @@ Returned when the health check system itself fails.
 ## 📊 Status Values
 
 ### Overall Status
+
 - **`healthy`**: All components are functioning normally
 - **`degraded`**: Some components have performance issues but are functional
 - **`unhealthy`**: One or more critical components are failing
 
 ### Component Status
+
 - **`healthy`**: Component is functioning normally
 - **`degraded`**: Component has performance issues but is functional
 - **`unhealthy`**: Component is failing or unavailable
 
 ### Response Time Thresholds
+
 - **Healthy**: < 100ms
 - **Degraded**: 100ms - 1000ms
 - **Unhealthy**: > 1000ms or timeout
@@ -577,6 +622,7 @@ Returned when the health check system itself fails.
 ## 🔄 Caching Behavior
 
 ### Cache Keys
+
 - `health_check:status` - Overall health status
 - `health_check:metrics` - System metrics
 - `health_check:schema` - Schema health
@@ -584,12 +630,15 @@ Returned when the health check system itself fails.
 - `health_check:cache` - Cache health
 
 ### Cache Timeouts
+
 - **Default**: 300 seconds (5 minutes)
 - **Configurable**: Via `HEALTH_CHECK_SETTINGS['CACHE_TIMEOUT']`
 - **Manual Invalidation**: Available via admin interface
 
 ### Cache Invalidation
+
 Cache is automatically invalidated when:
+
 - System status changes (healthy ↔ degraded ↔ unhealthy)
 - Component status changes
 - Manual refresh is requested
@@ -598,16 +647,19 @@ Cache is automatically invalidated when:
 ## 🔐 Security Considerations
 
 ### Access Control
+
 - Health endpoints are publicly accessible by default
 - Sensitive system information is excluded from public endpoints
 - Detailed metrics may require authentication in production
 
 ### Rate Limiting
+
 - Implement rate limiting for health endpoints in production
 - Consider caching to reduce system load from frequent health checks
 - Monitor for abuse of health check endpoints
 
 ### Information Disclosure
+
 - Avoid exposing sensitive system information
 - Filter error messages in production environments
 - Consider separate internal/external health endpoints

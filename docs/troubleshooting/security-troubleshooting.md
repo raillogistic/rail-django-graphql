@@ -22,6 +22,7 @@ This guide helps you diagnose and resolve common security issues in the Django G
 ### Problem: Authentication Required Error
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -36,6 +37,7 @@ This guide helps you diagnose and resolve common security issues in the Django G
 ```
 
 **Diagnosis:**
+
 ```python
 # Check authentication middleware
 def debug_authentication(request):
@@ -48,21 +50,23 @@ def debug_authentication(request):
 **Solutions:**
 
 1. **Check JWT Token Format:**
+
 ```javascript
 // Correct format
 const headers = {
-    'Authorization': 'Bearer your-jwt-token-here',
-    'Content-Type': 'application/json'
+  Authorization: "Bearer your-jwt-token-here",
+  "Content-Type": "application/json",
 };
 
 // Common mistakes
 const wrongHeaders = {
-    'Authorization': 'your-jwt-token-here',  // Missing 'Bearer'
-    'Authorization': 'JWT your-jwt-token-here',  // Wrong prefix
+  Authorization: "your-jwt-token-here", // Missing 'Bearer'
+  Authorization: "JWT your-jwt-token-here", // Wrong prefix
 };
 ```
 
 2. **Verify Token Validity:**
+
 ```python
 import jwt
 from django.conf import settings
@@ -70,8 +74,8 @@ from django.conf import settings
 def debug_jwt_token(token):
     try:
         payload = jwt.decode(
-            token, 
-            settings.GRAPHQL_JWT_SECRET_KEY, 
+            token,
+            settings.GRAPHQL_JWT_SECRET_KEY,
             algorithms=['HS256']
         )
         print(f"Token payload: {payload}")
@@ -86,10 +90,11 @@ def debug_jwt_token(token):
 ```
 
 3. **Check Authentication Backend:**
+
 ```python
 # settings.py
 AUTHENTICATION_BACKENDS = [
-    'django_graphql_auto.auth.backends.GraphQLJWTBackend',
+    'rail_django_graphql.auth.backends.GraphQLJWTBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -102,6 +107,7 @@ print(f"Authentication result: {user}")
 ### Problem: Session Authentication Not Working
 
 **Diagnosis:**
+
 ```python
 def debug_session_auth(request):
     print(f"Session key: {request.session.session_key}")
@@ -112,6 +118,7 @@ def debug_session_auth(request):
 **Solutions:**
 
 1. **Check Session Configuration:**
+
 ```python
 # settings.py
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
@@ -122,6 +129,7 @@ SESSION_SAVE_EVERY_REQUEST = True
 ```
 
 2. **Verify CSRF Protection:**
+
 ```python
 # For GraphQL, you might need to disable CSRF for the endpoint
 from django.views.decorators.csrf import csrf_exempt
@@ -137,6 +145,7 @@ def graphql_view(request):
 ### Problem: Permission Denied Errors
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -152,6 +161,7 @@ def graphql_view(request):
 ```
 
 **Diagnosis:**
+
 ```python
 def debug_permissions(user, obj=None, permission=None):
     print(f"User: {user}")
@@ -159,7 +169,7 @@ def debug_permissions(user, obj=None, permission=None):
     print(f"User permissions: {list(user.user_permissions.all())}")
     print(f"Is superuser: {user.is_superuser}")
     print(f"Is staff: {user.is_staff}")
-    
+
     if obj and permission:
         has_perm = user.has_perm(permission, obj)
         print(f"Has permission '{permission}' for {obj}: {has_perm}")
@@ -168,6 +178,7 @@ def debug_permissions(user, obj=None, permission=None):
 **Solutions:**
 
 1. **Check Permission Configuration:**
+
 ```python
 # models.py
 class MyModel(models.Model):
@@ -185,6 +196,7 @@ for perm in perms:
 ```
 
 2. **Check User Permissions:**
+
 ```python
 # Grant permissions
 from django.contrib.auth.models import User, Permission
@@ -201,13 +213,14 @@ user.groups.add(group)
 ```
 
 3. **Debug Custom Permission Classes:**
+
 ```python
 class CustomPermission:
     def has_permission(self, user, info, **kwargs):
         print(f"Checking permission for user: {user}")
         print(f"Info: {info}")
         print(f"Kwargs: {kwargs}")
-        
+
         # Your permission logic
         result = your_permission_logic(user, info, **kwargs)
         print(f"Permission result: {result}")
@@ -217,13 +230,14 @@ class CustomPermission:
 ### Problem: Object-Level Permissions Not Working
 
 **Diagnosis:**
+
 ```python
 def debug_object_permissions(user, obj):
     # Check if user owns the object
     if hasattr(obj, 'owner'):
         print(f"Object owner: {obj.owner}")
         print(f"User is owner: {obj.owner == user}")
-    
+
     # Check custom object permissions
     if hasattr(obj, 'has_permission'):
         result = obj.has_permission(user, 'view')
@@ -233,10 +247,11 @@ def debug_object_permissions(user, obj):
 **Solutions:**
 
 1. **Implement Object-Level Permissions:**
+
 ```python
 class MyModel(models.Model):
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
-    
+
     def has_permission(self, user, action):
         if action == 'view':
             return True  # Anyone can view
@@ -246,6 +261,7 @@ class MyModel(models.Model):
 ```
 
 2. **Use Django Guardian (Optional):**
+
 ```python
 # Install: pip install django-guardian
 from guardian.shortcuts import assign_perm, get_perms
@@ -263,6 +279,7 @@ print(f"User permissions for object: {perms}")
 ### Problem: Rate Limit Exceeded
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -278,14 +295,15 @@ print(f"User permissions for object: {perms}")
 ```
 
 **Diagnosis:**
+
 ```python
 def debug_rate_limiting(request):
     from django.core.cache import cache
-    
+
     # Check current rate limit status
     client_ip = request.META.get('REMOTE_ADDR')
     cache_key = f"rate_limit:{client_ip}"
-    
+
     current_count = cache.get(cache_key, 0)
     print(f"Client IP: {client_ip}")
     print(f"Current request count: {current_count}")
@@ -295,6 +313,7 @@ def debug_rate_limiting(request):
 **Solutions:**
 
 1. **Adjust Rate Limit Configuration:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -312,23 +331,25 @@ GRAPHQL_AUTO_SECURITY = {
 ```
 
 2. **Implement Custom Rate Limiting:**
+
 ```python
 class CustomRateLimiter:
     def is_allowed(self, request, operation=None):
         # Custom rate limiting logic
         if request.user.is_staff:
             return True  # No limits for staff
-        
+
         # Different limits for different users
         if request.user.is_authenticated:
             limit = 1000  # Higher limit for authenticated users
         else:
             limit = 100   # Lower limit for anonymous users
-        
+
         return self.check_limit(request, limit)
 ```
 
 3. **Whitelist IP Addresses:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -345,13 +366,14 @@ GRAPHQL_AUTO_SECURITY = {
 ### Problem: Rate Limiting Not Working
 
 **Diagnosis:**
+
 ```python
 def test_rate_limiting():
     import requests
-    
+
     url = 'http://localhost:8000/graphql/'
     query = '{ __schema { types { name } } }'
-    
+
     for i in range(20):
         response = requests.post(url, json={'query': query})
         print(f"Request {i+1}: {response.status_code}")
@@ -365,16 +387,18 @@ def test_rate_limiting():
 **Solutions:**
 
 1. **Check Middleware Order:**
+
 ```python
 # settings.py
 MIDDLEWARE = [
-    'django_graphql_auto.middleware.RateLimitMiddleware',  # Should be early
+    'rail_django_graphql.middleware.RateLimitMiddleware',  # Should be early
     'django.middleware.security.SecurityMiddleware',
     # ... other middleware
 ]
 ```
 
 2. **Verify Cache Backend:**
+
 ```python
 # Rate limiting requires a cache backend
 CACHES = {
@@ -395,6 +419,7 @@ print(f"Cache test: {cache.get('test')}")
 ### Problem: Query Depth Limit Exceeded
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -411,10 +436,11 @@ print(f"Cache test: {cache.get('test')}")
 ```
 
 **Diagnosis:**
+
 ```python
 def analyze_query_depth(query):
     import graphql
-    
+
     try:
         document = graphql.parse(query)
         depth = calculate_depth(document)
@@ -437,6 +463,7 @@ def calculate_depth(node, current_depth=0):
 **Solutions:**
 
 1. **Adjust Depth Limit:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -448,6 +475,7 @@ GRAPHQL_AUTO_SECURITY = {
 ```
 
 2. **Optimize Query Structure:**
+
 ```graphql
 # Instead of deep nesting
 query DeepQuery {
@@ -492,10 +520,11 @@ query PostComments($postId: ID!) {
 ### Problem: Query Complexity Limit Exceeded
 
 **Diagnosis:**
+
 ```python
 def analyze_query_complexity(query, variables=None):
-    from django_graphql_auto.security.query_analysis import QueryComplexityAnalyzer
-    
+    from rail_django_graphql.security.query_analysis import QueryComplexityAnalyzer
+
     analyzer = QueryComplexityAnalyzer()
     complexity = analyzer.calculate_complexity(query, variables)
     print(f"Query complexity: {complexity}")
@@ -505,12 +534,16 @@ def analyze_query_complexity(query, variables=None):
 **Solutions:**
 
 1. **Optimize Query Complexity:**
+
 ```graphql
 # High complexity query
 query ExpensiveQuery {
-  users {  # Complexity: 1000 users
-    posts {  # Complexity: 1000 * 100 posts = 100,000
-      comments {  # Complexity: 100,000 * 50 comments = 5,000,000
+  users {
+    # Complexity: 1000 users
+    posts {
+      # Complexity: 1000 * 100 posts = 100,000
+      comments {
+        # Complexity: 100,000 * 50 comments = 5,000,000
         content
       }
     }
@@ -519,9 +552,12 @@ query ExpensiveQuery {
 
 # Optimized query with pagination
 query OptimizedQuery {
-  users(first: 10) {  # Limit users
-    posts(first: 5) {  # Limit posts per user
-      comments(first: 3) {  # Limit comments per post
+  users(first: 10) {
+    # Limit users
+    posts(first: 5) {
+      # Limit posts per user
+      comments(first: 3) {
+        # Limit comments per post
         content
       }
     }
@@ -530,6 +566,7 @@ query OptimizedQuery {
 ```
 
 2. **Configure Complexity Weights:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -551,6 +588,7 @@ GRAPHQL_AUTO_SECURITY = {
 ### Problem: XSS Protection Blocking Valid Input
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -566,10 +604,11 @@ GRAPHQL_AUTO_SECURITY = {
 ```
 
 **Diagnosis:**
+
 ```python
 def debug_xss_protection(input_value):
-    from django_graphql_auto.security.validators import XSSValidator
-    
+    from rail_django_graphql.security.validators import XSSValidator
+
     validator = XSSValidator()
     try:
         cleaned_value = validator.clean(input_value)
@@ -584,6 +623,7 @@ def debug_xss_protection(input_value):
 **Solutions:**
 
 1. **Configure XSS Protection:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -599,23 +639,24 @@ GRAPHQL_AUTO_SECURITY = {
 ```
 
 2. **Custom XSS Validator:**
+
 ```python
 class CustomXSSValidator:
     def clean(self, value):
         import bleach
-        
+
         # Allow more HTML tags for rich content
         allowed_tags = [
             'p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li',
             'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'
         ]
-        
+
         allowed_attributes = {
             '*': ['class', 'id'],
             'a': ['href', 'title'],
             'img': ['src', 'alt', 'width', 'height'],
         }
-        
+
         return bleach.clean(
             value,
             tags=allowed_tags,
@@ -627,13 +668,14 @@ class CustomXSSValidator:
 ### Problem: SQL Injection Protection False Positives
 
 **Diagnosis:**
+
 ```python
 def debug_sql_injection_protection(input_value):
-    from django_graphql_auto.security.validators import SQLInjectionValidator
-    
+    from rail_django_graphql.security.validators import SQLInjectionValidator
+
     validator = SQLInjectionValidator()
     patterns = validator.get_dangerous_patterns()
-    
+
     for pattern in patterns:
         if pattern.search(input_value.lower()):
             print(f"Matched pattern: {pattern.pattern}")
@@ -643,6 +685,7 @@ def debug_sql_injection_protection(input_value):
 **Solutions:**
 
 1. **Configure SQL Injection Protection:**
+
 ```python
 # settings.py
 GRAPHQL_AUTO_SECURITY = {
@@ -663,6 +706,7 @@ GRAPHQL_AUTO_SECURITY = {
 ```
 
 2. **Custom SQL Injection Validator:**
+
 ```python
 class CustomSQLInjectionValidator:
     def __init__(self):
@@ -671,22 +715,22 @@ class CustomSQLInjectionValidator:
             re.compile(r'[\'";].*[\'";]', re.IGNORECASE),
             re.compile(r'--.*', re.IGNORECASE),
         ]
-        
+
         self.whitelist_patterns = [
             re.compile(r'select\s+(option|item|choice)', re.IGNORECASE),
         ]
-    
+
     def is_safe(self, value):
         # Check whitelist first
         for pattern in self.whitelist_patterns:
             if pattern.search(value):
                 return True
-        
+
         # Check dangerous patterns
         for pattern in self.dangerous_patterns:
             if pattern.search(value):
                 return False
-        
+
         return True
 ```
 
@@ -695,6 +739,7 @@ class CustomSQLInjectionValidator:
 ### Problem: Token Expired
 
 **Symptoms:**
+
 ```json
 {
   "errors": [
@@ -711,18 +756,19 @@ class CustomSQLInjectionValidator:
 **Solutions:**
 
 1. **Implement Token Refresh:**
+
 ```javascript
 // Client-side token refresh
 async function refreshToken() {
-    const refreshToken = localStorage.getItem('refreshToken');
-    
-    const response = await fetch('/graphql/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            query: `
+  const refreshToken = localStorage.getItem("refreshToken");
+
+  const response = await fetch("/graphql/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      query: `
                 mutation RefreshToken($refreshToken: String!) {
                     refreshToken(refreshToken: $refreshToken) {
                         token
@@ -732,22 +778,23 @@ async function refreshToken() {
                     }
                 }
             `,
-            variables: { refreshToken }
-        })
-    });
-    
-    const data = await response.json();
-    if (data.data.refreshToken.success) {
-        localStorage.setItem('token', data.data.refreshToken.token);
-        localStorage.setItem('refreshToken', data.data.refreshToken.refreshToken);
-        return data.data.refreshToken.token;
-    }
-    
-    throw new Error('Token refresh failed');
+      variables: { refreshToken },
+    }),
+  });
+
+  const data = await response.json();
+  if (data.data.refreshToken.success) {
+    localStorage.setItem("token", data.data.refreshToken.token);
+    localStorage.setItem("refreshToken", data.data.refreshToken.refreshToken);
+    return data.data.refreshToken.token;
+  }
+
+  throw new Error("Token refresh failed");
 }
 ```
 
 2. **Configure Token Expiration:**
+
 ```python
 # settings.py
 GRAPHQL_JWT = {
@@ -760,26 +807,27 @@ GRAPHQL_JWT = {
 ### Problem: Invalid Token Format
 
 **Diagnosis:**
+
 ```python
 def debug_token_format(token):
     import base64
     import json
-    
+
     try:
         # JWT has 3 parts separated by dots
         parts = token.split('.')
         if len(parts) != 3:
             print(f"Invalid JWT format: expected 3 parts, got {len(parts)}")
             return False
-        
+
         # Decode header and payload (not signature)
         header = json.loads(base64.urlsafe_b64decode(parts[0] + '=='))
         payload = json.loads(base64.urlsafe_b64decode(parts[1] + '=='))
-        
+
         print(f"Header: {header}")
         print(f"Payload: {payload}")
         return True
-        
+
     except Exception as e:
         print(f"Token decoding error: {e}")
         return False
@@ -788,25 +836,26 @@ def debug_token_format(token):
 **Solutions:**
 
 1. **Verify Token Generation:**
+
 ```python
 def generate_debug_token(user):
     import jwt
     from datetime import datetime, timedelta
     from django.conf import settings
-    
+
     payload = {
         'user_id': user.id,
         'username': user.username,
         'exp': datetime.utcnow() + timedelta(hours=1),
         'iat': datetime.utcnow(),
     }
-    
+
     token = jwt.encode(
         payload,
         settings.GRAPHQL_JWT_SECRET_KEY,
         algorithm='HS256'
     )
-    
+
     print(f"Generated token: {token}")
     return token
 ```
@@ -816,21 +865,22 @@ def generate_debug_token(user):
 ### Problem: Middleware Not Applied
 
 **Diagnosis:**
+
 ```python
 def debug_middleware_order():
     from django.conf import settings
-    
+
     print("Current middleware order:")
     for i, middleware in enumerate(settings.MIDDLEWARE):
         print(f"{i+1}. {middleware}")
-    
+
     # Check if security middleware is present
     security_middlewares = [
-        'django_graphql_auto.middleware.SecurityMiddleware',
-        'django_graphql_auto.middleware.RateLimitMiddleware',
-        'django_graphql_auto.middleware.AuthenticationMiddleware',
+        'rail_django_graphql.middleware.SecurityMiddleware',
+        'rail_django_graphql.middleware.RateLimitMiddleware',
+        'rail_django_graphql.middleware.AuthenticationMiddleware',
     ]
-    
+
     for middleware in security_middlewares:
         if middleware in settings.MIDDLEWARE:
             print(f"✓ {middleware} is present")
@@ -841,34 +891,36 @@ def debug_middleware_order():
 **Solutions:**
 
 1. **Correct Middleware Order:**
+
 ```python
 # settings.py
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django_graphql_auto.middleware.SecurityMiddleware',  # Early
-    'django_graphql_auto.middleware.RateLimitMiddleware',  # Before auth
+    'rail_django_graphql.middleware.SecurityMiddleware',  # Early
+    'rail_django_graphql.middleware.RateLimitMiddleware',  # Before auth
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django_graphql_auto.middleware.AuthenticationMiddleware',  # After Django auth
+    'rail_django_graphql.middleware.AuthenticationMiddleware',  # After Django auth
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 ```
 
 2. **Test Middleware Functionality:**
+
 ```python
 def test_security_middleware():
     from django.test import RequestFactory
-    from django_graphql_auto.middleware import SecurityMiddleware
-    
+    from rail_django_graphql.middleware import SecurityMiddleware
+
     factory = RequestFactory()
     request = factory.post('/graphql/', {'query': 'malicious query'})
-    
+
     middleware = SecurityMiddleware(lambda r: None)
     response = middleware(request)
-    
+
     print(f"Middleware response: {response}")
 ```
 
@@ -877,6 +929,7 @@ def test_security_middleware():
 ### Problem: Security Checks Causing Performance Issues
 
 **Diagnosis:**
+
 ```python
 import time
 from functools import wraps
@@ -887,7 +940,7 @@ def performance_monitor(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        
+
         print(f"{func.__name__} took {end_time - start_time:.4f} seconds")
         return result
     return wrapper
@@ -902,6 +955,7 @@ def validate_input(value):
 **Solutions:**
 
 1. **Optimize Security Checks:**
+
 ```python
 # Cache validation results
 from django.core.cache import cache
@@ -910,15 +964,16 @@ class CachedValidator:
     def validate(self, value):
         cache_key = f"validation:{hash(value)}"
         result = cache.get(cache_key)
-        
+
         if result is None:
             result = self.perform_validation(value)
             cache.set(cache_key, result, 300)  # Cache for 5 minutes
-        
+
         return result
 ```
 
 2. **Async Security Checks:**
+
 ```python
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -926,7 +981,7 @@ from concurrent.futures import ThreadPoolExecutor
 class AsyncSecurityValidator:
     def __init__(self):
         self.executor = ThreadPoolExecutor(max_workers=4)
-    
+
     async def validate_async(self, value):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
@@ -965,12 +1020,12 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.security': {
+        'rail_django_graphql.security': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': False,
         },
-        'django_graphql_auto.middleware': {
+        'rail_django_graphql.middleware': {
             'handlers': ['console', 'file'],
             'level': 'DEBUG',
             'propagate': False,
@@ -985,22 +1040,22 @@ LOGGING = {
 class SecurityDebugMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-    
+
     def __call__(self, request):
         # Log request details
         print(f"Request path: {request.path}")
         print(f"Request method: {request.method}")
         print(f"Request headers: {dict(request.headers)}")
         print(f"Request user: {request.user}")
-        
+
         # Process request
         response = self.get_response(request)
-        
+
         # Log response details
         print(f"Response status: {response.status_code}")
         if hasattr(response, 'content'):
             print(f"Response content: {response.content[:500]}")
-        
+
         return response
 ```
 
@@ -1009,24 +1064,24 @@ class SecurityDebugMiddleware:
 ```python
 def inspect_graphql_query(query, variables=None):
     import graphql
-    
+
     try:
         document = graphql.parse(query)
-        
+
         print("=== GraphQL Query Analysis ===")
         print(f"Query: {query}")
         print(f"Variables: {variables}")
-        
+
         # Extract operations
         for definition in document.definitions:
             if isinstance(definition, graphql.OperationDefinitionNode):
                 print(f"Operation: {definition.operation}")
                 print(f"Name: {definition.name.value if definition.name else 'Anonymous'}")
-                
+
                 # Extract fields
                 fields = extract_fields(definition.selection_set)
                 print(f"Fields: {fields}")
-        
+
     except Exception as e:
         print(f"Query parsing error: {e}")
 
@@ -1036,10 +1091,10 @@ def extract_fields(selection_set, depth=0):
         if isinstance(selection, graphql.FieldNode):
             field_name = selection.name.value
             fields.append("  " * depth + field_name)
-            
+
             if selection.selection_set:
                 fields.extend(extract_fields(selection.selection_set, depth + 1))
-    
+
     return fields
 ```
 
@@ -1058,58 +1113,58 @@ class SecurityDebugTestCase(TestCase):
             username='testuser',
             password='testpass123'
         )
-    
+
     def test_authentication_debug(self):
         """Test authentication debugging"""
         request = self.factory.post('/graphql/')
         request.user = self.user
-        
+
         # Debug authentication
         self.debug_authentication(request)
-        
+
         self.assertTrue(request.user.is_authenticated)
-    
+
     def test_permission_debug(self):
         """Test permission debugging"""
         from django.contrib.auth.models import Permission
-        
+
         # Add permission to user
         permission = Permission.objects.get(codename='add_user')
         self.user.user_permissions.add(permission)
-        
+
         # Debug permissions
         self.debug_permissions(self.user, permission='auth.add_user')
-        
+
         self.assertTrue(self.user.has_perm('auth.add_user'))
-    
+
     def test_rate_limiting_debug(self):
         """Test rate limiting debugging"""
         request = self.factory.post('/graphql/')
         request.META['REMOTE_ADDR'] = '127.0.0.1'
-        
+
         # Debug rate limiting
         self.debug_rate_limiting(request)
-    
+
     def debug_authentication(self, request):
         print(f"User: {request.user}")
         print(f"Is authenticated: {request.user.is_authenticated}")
         print(f"User ID: {request.user.id if request.user.is_authenticated else 'N/A'}")
-    
+
     def debug_permissions(self, user, permission=None):
         print(f"User: {user}")
         print(f"User groups: {list(user.groups.all())}")
         print(f"User permissions: {list(user.user_permissions.all())}")
-        
+
         if permission:
             has_perm = user.has_perm(permission)
             print(f"Has permission '{permission}': {has_perm}")
-    
+
     def debug_rate_limiting(self, request):
         from django.core.cache import cache
-        
+
         client_ip = request.META.get('REMOTE_ADDR')
         cache_key = f"rate_limit:{client_ip}"
-        
+
         current_count = cache.get(cache_key, 0)
         print(f"Client IP: {client_ip}")
         print(f"Current request count: {current_count}")
@@ -1119,18 +1174,18 @@ class SecurityDebugTestCase(TestCase):
 
 ### Error Code Reference
 
-| Error Code | Message | Cause | Solution |
-|------------|---------|-------|----------|
-| `AUTHENTICATION_REQUIRED` | Authentication required | No valid authentication provided | Provide valid JWT token or session |
-| `TOKEN_EXPIRED` | Token has expired | JWT token is expired | Refresh token or login again |
-| `INVALID_TOKEN` | Invalid token format | Malformed JWT token | Check token format and generation |
-| `PERMISSION_DENIED` | Permission denied | User lacks required permissions | Grant appropriate permissions |
-| `RATE_LIMIT_EXCEEDED` | Rate limit exceeded | Too many requests | Wait or increase rate limits |
-| `QUERY_DEPTH_EXCEEDED` | Query depth limit exceeded | Query too deeply nested | Reduce query depth or increase limit |
-| `QUERY_COMPLEXITY_EXCEEDED` | Query complexity limit exceeded | Query too complex | Simplify query or increase limit |
-| `XSS_DETECTED` | Potentially malicious input detected | Input contains XSS patterns | Sanitize input or adjust XSS settings |
-| `SQL_INJECTION_DETECTED` | SQL injection attempt detected | Input contains SQL injection patterns | Sanitize input or adjust SQL protection |
-| `VALIDATION_ERROR` | Input validation failed | Input doesn't meet validation criteria | Fix input format or adjust validation |
+| Error Code                  | Message                              | Cause                                  | Solution                                |
+| --------------------------- | ------------------------------------ | -------------------------------------- | --------------------------------------- |
+| `AUTHENTICATION_REQUIRED`   | Authentication required              | No valid authentication provided       | Provide valid JWT token or session      |
+| `TOKEN_EXPIRED`             | Token has expired                    | JWT token is expired                   | Refresh token or login again            |
+| `INVALID_TOKEN`             | Invalid token format                 | Malformed JWT token                    | Check token format and generation       |
+| `PERMISSION_DENIED`         | Permission denied                    | User lacks required permissions        | Grant appropriate permissions           |
+| `RATE_LIMIT_EXCEEDED`       | Rate limit exceeded                  | Too many requests                      | Wait or increase rate limits            |
+| `QUERY_DEPTH_EXCEEDED`      | Query depth limit exceeded           | Query too deeply nested                | Reduce query depth or increase limit    |
+| `QUERY_COMPLEXITY_EXCEEDED` | Query complexity limit exceeded      | Query too complex                      | Simplify query or increase limit        |
+| `XSS_DETECTED`              | Potentially malicious input detected | Input contains XSS patterns            | Sanitize input or adjust XSS settings   |
+| `SQL_INJECTION_DETECTED`    | SQL injection attempt detected       | Input contains SQL injection patterns  | Sanitize input or adjust SQL protection |
+| `VALIDATION_ERROR`          | Input validation failed              | Input doesn't meet validation criteria | Fix input format or adjust validation   |
 
 ### Error Response Format
 
@@ -1167,7 +1222,7 @@ class SecurityDebugTestCase(TestCase):
 def setup_security_alerts():
     import logging
     from django.core.mail import send_mail
-    
+
     class SecurityAlertHandler(logging.Handler):
         def emit(self, record):
             if record.levelno >= logging.ERROR:
@@ -1178,9 +1233,9 @@ def setup_security_alerts():
                     ['admin@yourdomain.com'],
                     fail_silently=False,
                 )
-    
+
     # Add to security logger
-    security_logger = logging.getLogger('django_graphql_auto.security')
+    security_logger = logging.getLogger('rail_django_graphql.security')
     security_logger.addHandler(SecurityAlertHandler())
 ```
 
@@ -1196,33 +1251,33 @@ class SecurityMetrics:
         """Record security events for monitoring"""
         timestamp = datetime.now()
         cache_key = f"security_events:{event_type}:{timestamp.strftime('%Y%m%d%H')}"
-        
+
         current_count = cache.get(cache_key, 0)
         cache.set(cache_key, current_count + 1, 3600)  # 1 hour TTL
-        
+
         # Store event details
         if details:
             detail_key = f"security_details:{event_type}:{timestamp.isoformat()}"
             cache.set(detail_key, details, 3600)
-    
+
     @staticmethod
     def get_security_stats(hours=24):
         """Get security statistics for the last N hours"""
         stats = {}
         now = datetime.now()
-        
+
         for i in range(hours):
             hour = now - timedelta(hours=i)
             hour_key = hour.strftime('%Y%m%d%H')
-            
+
             for event_type in ['auth_failure', 'rate_limit', 'xss_attempt', 'sql_injection']:
                 cache_key = f"security_events:{event_type}:{hour_key}"
                 count = cache.get(cache_key, 0)
-                
+
                 if event_type not in stats:
                     stats[event_type] = 0
                 stats[event_type] += count
-        
+
         return stats
 ```
 
@@ -1231,21 +1286,25 @@ class SecurityMetrics:
 ### 1. Systematic Approach
 
 1. **Identify the Problem**
+
    - Collect error messages and stack traces
    - Note when the problem occurs
    - Identify affected users or operations
 
 2. **Gather Information**
+
    - Check logs and monitoring data
    - Review recent changes
    - Test with minimal examples
 
 3. **Isolate the Issue**
+
    - Disable security features one by one
    - Test with different user roles
    - Use debug tools and logging
 
 4. **Implement Solution**
+
    - Make minimal changes
    - Test thoroughly
    - Monitor for side effects
@@ -1264,19 +1323,19 @@ class SecurityTestCase(TestCase):
         """Test all security features together"""
         # Test authentication
         self.test_authentication()
-        
+
         # Test permissions
         self.test_permissions()
-        
+
         # Test rate limiting
         self.test_rate_limiting()
-        
+
         # Test input validation
         self.test_input_validation()
-        
+
         # Test query analysis
         self.test_query_analysis()
-    
+
     def test_security_edge_cases(self):
         """Test edge cases and boundary conditions"""
         # Test with empty inputs
@@ -1291,19 +1350,19 @@ class SecurityTestCase(TestCase):
 ```python
 def setup_comprehensive_monitoring():
     """Setup monitoring for all security aspects"""
-    
+
     # Monitor authentication failures
     monitor_auth_failures()
-    
+
     # Monitor rate limiting
     monitor_rate_limits()
-    
+
     # Monitor query complexity
     monitor_query_complexity()
-    
+
     # Monitor input validation failures
     monitor_validation_failures()
-    
+
     # Monitor performance impact
     monitor_security_performance()
 

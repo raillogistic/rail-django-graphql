@@ -30,7 +30,7 @@ The custom scalar system provides:
 Handles JSON data with proper serialization and validation.
 
 ```python
-from django_graphql_auto.generators.scalars import JSONScalar
+from rail_django_graphql.generators.scalars import JSONScalar
 import graphene
 
 class JSONScalar(graphene.Scalar):
@@ -38,13 +38,13 @@ class JSONScalar(graphene.Scalar):
     Custom scalar for JSON data.
     Supports serialization of Python objects to JSON and vice versa.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize Python object to JSON string."""
         if value is None:
             return None
-        
+
         if isinstance(value, str):
             # Already a JSON string
             try:
@@ -52,12 +52,12 @@ class JSONScalar(graphene.Scalar):
                 return value
             except json.JSONDecodeError:
                 raise GraphQLError(f"Invalid JSON string: {value}")
-        
+
         try:
             return json.dumps(value, default=str, ensure_ascii=False)
         except (TypeError, ValueError) as e:
             raise GraphQLError(f"Cannot serialize to JSON: {e}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse JSON from GraphQL literal."""
@@ -67,7 +67,7 @@ class JSONScalar(graphene.Scalar):
             except json.JSONDecodeError as e:
                 raise GraphQLError(f"Invalid JSON literal: {e}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse JSON from variable value."""
@@ -120,19 +120,19 @@ class DateTimeScalar(graphene.Scalar):
     """
     Custom scalar for DateTime with enhanced timezone handling.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize datetime to ISO string."""
         if value is None:
             return None
-        
+
         if isinstance(value, datetime):
             # Ensure timezone awareness
             if timezone.is_naive(value):
                 value = timezone.make_aware(value)
             return value.isoformat()
-        
+
         if isinstance(value, str):
             # Validate datetime string
             try:
@@ -140,9 +140,9 @@ class DateTimeScalar(graphene.Scalar):
                 return parsed.isoformat()
             except ValueError as e:
                 raise GraphQLError(f"Invalid datetime string: {e}")
-        
+
         raise GraphQLError(f"Cannot serialize datetime: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse datetime from GraphQL literal."""
@@ -152,7 +152,7 @@ class DateTimeScalar(graphene.Scalar):
             except ValueError as e:
                 raise GraphQLError(f"Invalid datetime literal: {e}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse datetime from variable value."""
@@ -175,27 +175,27 @@ class DecimalScalar(graphene.Scalar):
     """
     Custom scalar for Decimal with precision handling.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize Decimal to string."""
         if value is None:
             return None
-        
+
         if isinstance(value, Decimal):
             return str(value)
-        
+
         if isinstance(value, (int, float)):
             return str(Decimal(str(value)))
-        
+
         if isinstance(value, str):
             try:
                 return str(Decimal(value))
             except (InvalidOperation, ValueError) as e:
                 raise GraphQLError(f"Invalid decimal string: {e}")
-        
+
         raise GraphQLError(f"Cannot serialize decimal: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse Decimal from GraphQL literal."""
@@ -210,7 +210,7 @@ class DecimalScalar(graphene.Scalar):
             except (InvalidOperation, ValueError) as e:
                 raise GraphQLError(f"Invalid decimal literal: {e}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse Decimal from variable value."""
@@ -235,25 +235,25 @@ class UUIDScalar(graphene.Scalar):
     """
     Custom scalar for UUID with validation.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize UUID to string."""
         if value is None:
             return None
-        
+
         if isinstance(value, UUID):
             return str(value)
-        
+
         if isinstance(value, str):
             try:
                 UUID(value)  # Validate UUID format
                 return value
             except ValueError as e:
                 raise GraphQLError(f"Invalid UUID string: {e}")
-        
+
         raise GraphQLError(f"Cannot serialize UUID: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse UUID from GraphQL literal."""
@@ -263,7 +263,7 @@ class UUIDScalar(graphene.Scalar):
             except ValueError as e:
                 raise GraphQLError(f"Invalid UUID literal: {e}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse UUID from variable value."""
@@ -286,29 +286,29 @@ class DurationScalar(graphene.Scalar):
     """
     Custom scalar for Duration/timedelta.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize timedelta to ISO 8601 duration string."""
         if value is None:
             return None
-        
+
         if isinstance(value, timedelta):
             # Convert to ISO 8601 duration format
             total_seconds = int(value.total_seconds())
             hours, remainder = divmod(total_seconds, 3600)
             minutes, seconds = divmod(remainder, 60)
             return f"PT{hours}H{minutes}M{seconds}S"
-        
+
         if isinstance(value, str):
             # Validate duration string
             try:
                 return DurationScalar._parse_duration_string(value)
             except ValueError as e:
                 raise GraphQLError(f"Invalid duration string: {e}")
-        
+
         raise GraphQLError(f"Cannot serialize duration: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse duration from GraphQL literal."""
@@ -318,7 +318,7 @@ class DurationScalar(graphene.Scalar):
             except ValueError as e:
                 raise GraphQLError(f"Invalid duration literal: {e}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse duration from variable value."""
@@ -330,7 +330,7 @@ class DurationScalar(graphene.Scalar):
         elif isinstance(value, timedelta):
             return value
         return None
-    
+
     @staticmethod
     def _parse_duration_string(duration_str):
         """Parse ISO 8601 duration string to timedelta."""
@@ -340,11 +340,11 @@ class DurationScalar(graphene.Scalar):
         match = re.match(pattern, duration_str)
         if not match:
             raise ValueError(f"Invalid duration format: {duration_str}")
-        
+
         hours = int(match.group(1) or 0)
         minutes = int(match.group(2) or 0)
         seconds = int(match.group(3) or 0)
-        
+
         return timedelta(hours=hours, minutes=minutes, seconds=seconds)
 ```
 
@@ -353,42 +353,42 @@ class DurationScalar(graphene.Scalar):
 The `CustomScalarRegistry` manages all custom scalars and provides automatic type mapping.
 
 ```python
-from django_graphql_auto.generators.scalars import CustomScalarRegistry
+from rail_django_graphql.generators.scalars import CustomScalarRegistry
 
 class CustomScalarRegistry:
     """
     Registry for managing custom GraphQL scalars and their mappings.
     """
-    
+
     def __init__(self):
         self._scalars = {}
         self._field_mappings = {}
         self._type_mappings = {}
         self._register_builtin_scalars()
-    
+
     def register_scalar(self, name: str, scalar_class: Type[graphene.Scalar]):
         """Register a custom scalar."""
         self._scalars[name] = scalar_class
-    
+
     def register_field_mapping(self, field_type: Type[Field], scalar_name: str):
         """Map Django field type to scalar."""
         self._field_mappings[field_type] = scalar_name
-    
+
     def register_type_mapping(self, python_type: Type, scalar_name: str):
         """Map Python type to scalar."""
         self._type_mappings[python_type] = scalar_name
-    
+
     def get_scalar_for_field(self, field: Field) -> Optional[Type[graphene.Scalar]]:
         """Get appropriate scalar for Django field."""
         field_type = type(field)
         scalar_name = self._field_mappings.get(field_type)
         return self._scalars.get(scalar_name) if scalar_name else None
-    
+
     def get_scalar_for_type(self, python_type: Type) -> Optional[Type[graphene.Scalar]]:
         """Get appropriate scalar for Python type."""
         scalar_name = self._type_mappings.get(python_type)
         return self._scalars.get(scalar_name) if scalar_name else None
-    
+
     def _register_builtin_scalars(self):
         """Register built-in custom scalars."""
         # Register scalars
@@ -397,7 +397,7 @@ class CustomScalarRegistry:
         self.register_scalar('Decimal', DecimalScalar)
         self.register_scalar('UUID', UUIDScalar)
         self.register_scalar('Duration', DurationScalar)
-        
+
         # Register field mappings
         from django.db import models
         self.register_field_mapping(models.JSONField, 'JSON')
@@ -405,12 +405,12 @@ class CustomScalarRegistry:
         self.register_field_mapping(models.DecimalField, 'Decimal')
         self.register_field_mapping(models.UUIDField, 'UUID')
         self.register_field_mapping(models.DurationField, 'Duration')
-        
+
         # Register type mappings
         from decimal import Decimal
         from uuid import UUID
         from datetime import datetime, timedelta
-        
+
         self.register_type_mapping(dict, 'JSON')
         self.register_type_mapping(list, 'JSON')
         self.register_type_mapping(datetime, 'DateTime')
@@ -427,36 +427,36 @@ scalar_registry = CustomScalarRegistry()
 The `MethodReturnTypeAnalyzer` analyzes model methods and properties to determine appropriate GraphQL types.
 
 ```python
-from django_graphql_auto.generators.scalars import MethodReturnTypeAnalyzer
+from rail_django_graphql.generators.scalars import MethodReturnTypeAnalyzer
 
 class MethodReturnTypeAnalyzer:
     """
     Analyzes method return types and maps them to appropriate GraphQL types.
     """
-    
+
     def __init__(self, scalar_registry: CustomScalarRegistry):
         self.scalar_registry = scalar_registry
-    
+
     def analyze_method(self, method: Callable) -> Optional[Type[graphene.Scalar]]:
         """
         Analyze a method and determine its GraphQL return type.
-        
+
         Args:
             method: Method or property to analyze
-            
+
         Returns:
             Appropriate GraphQL scalar type or None
         """
         # Get type hints
         type_hints = get_type_hints(method)
         return_type = type_hints.get('return')
-        
+
         if return_type:
             return self._map_type_to_scalar(return_type)
-        
+
         # Fallback to docstring analysis
         return self._analyze_docstring(method)
-    
+
     def _map_type_to_scalar(self, python_type: Type) -> Optional[Type[graphene.Scalar]]:
         """Map Python type to GraphQL scalar."""
         # Handle basic types
@@ -468,12 +468,12 @@ class MethodReturnTypeAnalyzer:
             return graphene.Float
         elif python_type == bool:
             return graphene.Boolean
-        
+
         # Handle custom scalars
         scalar = self.scalar_registry.get_scalar_for_type(python_type)
         if scalar:
             return scalar
-        
+
         # Handle generic types
         origin = get_origin(python_type)
         if origin is list:
@@ -481,25 +481,25 @@ class MethodReturnTypeAnalyzer:
             if args:
                 item_type = self._map_type_to_scalar(args[0])
                 return graphene.List(item_type) if item_type else None
-        
+
         elif origin is dict:
             return JSONScalar
-        
+
         elif origin is Union:
             # Handle Optional types
             args = get_args(python_type)
             if len(args) == 2 and type(None) in args:
                 non_none_type = next(arg for arg in args if arg != type(None))
                 return self._map_type_to_scalar(non_none_type)
-        
+
         return None
-    
+
     def _analyze_docstring(self, method: Callable) -> Optional[Type[graphene.Scalar]]:
         """Analyze method docstring for return type information."""
         docstring = inspect.getdoc(method)
         if not docstring:
             return None
-        
+
         # Look for return type patterns in docstring
         patterns = {
             r'returns?\s*:?\s*str': graphene.String,
@@ -509,11 +509,11 @@ class MethodReturnTypeAnalyzer:
             r'returns?\s*:?\s*dict': JSONScalar,
             r'returns?\s*:?\s*list': graphene.List(graphene.String),
         }
-        
+
         for pattern, scalar_type in patterns.items():
             if re.search(pattern, docstring, re.IGNORECASE):
                 return scalar_type
-        
+
         return None
 
 # Usage example
@@ -523,17 +523,17 @@ class Post(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def get_word_count(self) -> int:
         """Returns the word count of the content."""
         return len(self.content.split())
-    
+
     def get_reading_time(self) -> timedelta:
         """Returns estimated reading time."""
         words = len(self.content.split())
         minutes = words / 200  # Average reading speed
         return timedelta(minutes=minutes)
-    
+
     @property
     def metadata(self) -> dict:
         """Returns post metadata as JSON."""
@@ -562,21 +562,21 @@ class ColorScalar(Scalar):
     """
     Custom scalar for color values (hex, rgb, hsl).
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize color to string."""
         if value is None:
             return None
-        
+
         if isinstance(value, str):
             if ColorScalar._is_valid_color(value):
                 return value
             else:
                 raise GraphQLError(f"Invalid color format: {value}")
-        
+
         raise GraphQLError(f"Cannot serialize color: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse color from GraphQL literal."""
@@ -586,7 +586,7 @@ class ColorScalar(Scalar):
             else:
                 raise GraphQLError(f"Invalid color literal: {node.value}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse color from variable value."""
@@ -596,31 +596,31 @@ class ColorScalar(Scalar):
             else:
                 raise GraphQLError(f"Invalid color value: {value}")
         return None
-    
+
     @staticmethod
     def _is_valid_color(color_str):
         """Validate color string format."""
         import re
-        
+
         # Hex color pattern
         hex_pattern = r'^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$'
         if re.match(hex_pattern, color_str):
             return True
-        
+
         # RGB pattern
         rgb_pattern = r'^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$'
         rgb_match = re.match(rgb_pattern, color_str)
         if rgb_match:
             r, g, b = map(int, rgb_match.groups())
             return all(0 <= val <= 255 for val in [r, g, b])
-        
+
         # HSL pattern
         hsl_pattern = r'^hsl\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*\)$'
         hsl_match = re.match(hsl_pattern, color_str)
         if hsl_match:
             h, s, l = map(int, hsl_match.groups())
             return 0 <= h <= 360 and 0 <= s <= 100 and 0 <= l <= 100
-        
+
         return False
 
 # Register the custom scalar
@@ -634,21 +634,21 @@ class EmailScalar(Scalar):
     """
     Custom scalar for email addresses with validation.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize email to string."""
         if value is None:
             return None
-        
+
         if isinstance(value, str):
             if EmailScalar._is_valid_email(value):
                 return value.lower()  # Normalize to lowercase
             else:
                 raise GraphQLError(f"Invalid email format: {value}")
-        
+
         raise GraphQLError(f"Cannot serialize email: {type(value)}")
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse email from GraphQL literal."""
@@ -658,7 +658,7 @@ class EmailScalar(Scalar):
             else:
                 raise GraphQLError(f"Invalid email literal: {node.value}")
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse email from variable value."""
@@ -668,13 +668,13 @@ class EmailScalar(Scalar):
             else:
                 raise GraphQLError(f"Invalid email value: {value}")
         return None
-    
+
     @staticmethod
     def _is_valid_email(email_str):
         """Validate email format using Django's validator."""
         from django.core.validators import validate_email
         from django.core.exceptions import ValidationError
-        
+
         try:
             validate_email(email_str)
             return True
@@ -691,11 +691,11 @@ scalar_registry.register_field_mapping(models.EmailField, 'Email')
 ### Custom Field Converter
 
 ```python
-from django_graphql_auto.generators.types import TypeGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 class CustomTypeGenerator(TypeGenerator):
     """Extended type generator with custom field handling."""
-    
+
     def convert_field(self, field_info):
         """Convert Django field to GraphQL field with custom scalar support."""
         # Check for custom scalar mapping first
@@ -706,7 +706,7 @@ class CustomTypeGenerator(TypeGenerator):
                 required=field_info.is_required,
                 description=field_info.help_text
             )
-        
+
         # Handle special field types
         if isinstance(field_info.field, models.FileField):
             return self._convert_file_field(field_info)
@@ -714,10 +714,10 @@ class CustomTypeGenerator(TypeGenerator):
             return self._convert_image_field(field_info)
         elif hasattr(field_info.field, 'choices') and field_info.field.choices:
             return self._convert_choice_field(field_info)
-        
+
         # Fallback to default conversion
         return super().convert_field(field_info)
-    
+
     def _convert_file_field(self, field_info):
         """Convert FileField to custom File scalar."""
         return graphene.Field(
@@ -725,7 +725,7 @@ class CustomTypeGenerator(TypeGenerator):
             required=field_info.is_required,
             description=f"File field: {field_info.help_text}"
         )
-    
+
     def _convert_image_field(self, field_info):
         """Convert ImageField to custom Image scalar."""
         return graphene.Field(
@@ -733,7 +733,7 @@ class CustomTypeGenerator(TypeGenerator):
             required=field_info.is_required,
             description=f"Image field: {field_info.help_text}"
         )
-    
+
     def _convert_choice_field(self, field_info):
         """Convert field with choices to Enum."""
         enum_name = f"{field_info.model.__name__}{field_info.name.title()}Enum"
@@ -741,9 +741,9 @@ class CustomTypeGenerator(TypeGenerator):
             choice[0].upper().replace(' ', '_'): choice[0]
             for choice in field_info.field.choices
         }
-        
+
         enum_type = type(enum_name, (graphene.Enum,), enum_values)
-        
+
         return graphene.Field(
             enum_type,
             required=field_info.is_required,
@@ -756,13 +756,13 @@ class CustomTypeGenerator(TypeGenerator):
 ```python
 class FileScalar(Scalar):
     """Custom scalar for file uploads and references."""
-    
+
     @staticmethod
     def serialize(value):
         """Serialize file to URL or file info."""
         if value is None:
             return None
-        
+
         if hasattr(value, 'url'):
             return {
                 'url': value.url,
@@ -771,16 +771,16 @@ class FileScalar(Scalar):
             }
         elif isinstance(value, str):
             return {'url': value, 'name': value.split('/')[-1]}
-        
+
         return str(value)
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse file from GraphQL literal."""
         if isinstance(node, StringValueNode):
             return node.value
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse file from variable value."""
@@ -792,22 +792,22 @@ class FileScalar(Scalar):
 
 class ImageScalar(FileScalar):
     """Custom scalar for image files with additional metadata."""
-    
+
     @staticmethod
     def serialize(value):
         """Serialize image with dimensions and metadata."""
         if value is None:
             return None
-        
+
         result = FileScalar.serialize(value)
-        
+
         if hasattr(value, 'width') and hasattr(value, 'height'):
             if isinstance(result, dict):
                 result.update({
                     'width': value.width,
                     'height': value.height,
                 })
-        
+
         return result
 ```
 
@@ -824,7 +824,7 @@ class Product(models.Model):
     metadata = models.JSONField(default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
     uuid = models.UUIDField(default=uuid.uuid4, unique=True)
-    
+
     def get_price_range(self) -> dict:
         """Returns price range information."""
         return {
@@ -832,7 +832,7 @@ class Product(models.Model):
             'max': float(self.price * Decimal('1.1')),
             'currency': 'USD'
         }
-    
+
     @property
     def processing_time(self) -> timedelta:
         """Estimated processing time."""
@@ -920,7 +920,7 @@ mutation CreateProduct($input: CreateProductInput!) {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'CUSTOM_SCALARS': {
         # Built-in scalars
         'ENABLE_JSON_SCALAR': True,
@@ -928,19 +928,19 @@ DJANGO_GRAPHQL_AUTO = {
         'ENABLE_DECIMAL_SCALAR': True,
         'ENABLE_UUID_SCALAR': True,
         'ENABLE_DURATION_SCALAR': True,
-        
+
         # Custom scalar mappings
         'FIELD_MAPPINGS': {
             'myapp.fields.ColorField': 'Color',
             'myapp.fields.EmailField': 'Email',
         },
-        
+
         # Type mappings
         'TYPE_MAPPINGS': {
             'myapp.types.CustomType': 'JSON',
         },
     },
-    
+
     'METHOD_ANALYSIS': {
         'ENABLE_METHOD_ANALYSIS': True,
         'ANALYZE_PROPERTIES': True,
@@ -957,14 +957,14 @@ DJANGO_GRAPHQL_AUTO = {
 class Product(models.Model):
     name = models.CharField(max_length=200)
     color = models.CharField(max_length=50)
-    
+
     class GraphQLMeta:
         # Override scalar for specific fields
         scalar_overrides = {
             'color': 'Color',
             'metadata': 'JSON',
         }
-        
+
         # Include computed fields
         computed_fields = {
             'price_range': 'JSON',

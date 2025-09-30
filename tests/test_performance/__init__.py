@@ -1,5 +1,5 @@
 """
-Tests de performance pour django_graphql_auto.
+Tests de performance pour rail_django_graphql.
 
 Ce package contient:
 - Benchmarks de performance des requêtes

@@ -26,35 +26,44 @@ We welcome several types of contributions:
 
 ### Bug Report Template
 
-```markdown
+````markdown
 ## Bug Description
+
 Brief description of the issue
 
 ## Environment
-- Library Version: 
-- Django Version: 
-- Python Version: 
-- Operating System: 
+
+- Library Version:
+- Django Version:
+- Python Version:
+- Operating System:
 
 ## Steps to Reproduce
+
 1. Step one
 2. Step two
 3. Step three
 
 ## Expected Behavior
+
 What should happen
 
 ## Actual Behavior
+
 What actually happens
 
 ## Code Example
+
 ```python
 # Minimal reproducible example
 ```
+````
 
 ## Additional Context
+
 Any other relevant information
-```
+
+````
 
 ## 💡 Feature Requests
 
@@ -82,25 +91,28 @@ Other ways to achieve the same goal
 
 ## Additional Context
 Any other relevant information
-```
+````
 
 ## 🔧 Code Contributions
 
 ### Development Setup
 
 1. **Fork the repository**
+
    ```bash
    git clone https://github.com/yourusername/django-graphql-auto-generation.git
    cd django-graphql-auto-generation
    ```
 
 2. **Create virtual environment**
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies**
+
    ```bash
    pip install -e .
    pip install -r requirements-dev.txt
@@ -114,28 +126,32 @@ Any other relevant information
 ### Development Workflow
 
 1. **Create a branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 2. **Make changes**
+
    - Follow coding standards
    - Add tests for new functionality
    - Update documentation as needed
 
 3. **Test your changes**
+
    ```bash
    # Run all tests
    python -m pytest
-   
+
    # Run specific test file
    python -m pytest tests/test_your_feature.py
-   
+
    # Run with coverage
-   python -m pytest --cov=django_graphql_auto
+   python -m pytest --cov=rail_django_graphql
    ```
 
 4. **Commit changes**
+
    ```bash
    git add .
    git commit -m "feat: add your feature description"
@@ -149,18 +165,21 @@ Any other relevant information
 ### Coding Standards
 
 #### Python Code Style
+
 - Follow **PEP 8** style guide
 - Use **Black** for code formatting
 - Use **isort** for import sorting
 - Maximum line length: **88 characters**
 
 #### Code Quality
+
 - Write **docstrings** for all public functions and classes
 - Add **type hints** where appropriate
 - Follow **SOLID principles**
 - Keep functions **small and focused**
 
 #### Testing
+
 - Write tests for all new functionality
 - Maintain **high test coverage** (>90%)
 - Use **descriptive test names**
@@ -193,6 +212,7 @@ docs/
 ### Documentation Guidelines
 
 #### Writing Style
+
 - Use **clear, concise language**
 - Write for **different skill levels**
 - Include **practical examples**
@@ -200,6 +220,7 @@ docs/
 - Be **consistent** with terminology
 
 #### Content Structure
+
 - Start with **overview** and **objectives**
 - Provide **step-by-step instructions**
 - Include **code examples** with explanations
@@ -207,6 +228,7 @@ docs/
 - End with **next steps** or **related topics**
 
 #### Code Examples
+
 - Use **realistic scenarios**
 - Include **complete, runnable code**
 - Add **comments** to explain complex parts
@@ -233,26 +255,29 @@ docs/
 ### Testing Guidelines
 
 #### Test Structure
+
 ```python
 def test_feature_should_behavior_when_condition():
     """Test that feature behaves correctly under specific conditions."""
     # Arrange
     setup_test_data()
-    
+
     # Act
     result = perform_action()
-    
+
     # Assert
     assert result == expected_value
 ```
 
 #### Test Coverage
+
 - **New features** must include tests
 - **Bug fixes** should include regression tests
 - **Edge cases** should be covered
 - **Error conditions** should be tested
 
 #### Test Data
+
 - Use **factories** for creating test objects
 - Keep test data **minimal** and **focused**
 - Use **fixtures** for common setup
@@ -270,6 +295,7 @@ def test_feature_should_behavior_when_condition():
 ### Example Guidelines
 
 #### Structure
+
 ```python
 """
 Example: Brief description of what this example demonstrates
@@ -307,6 +333,7 @@ query ExampleQuery {
 ```
 
 #### Best Practices
+
 - **Focus on one concept** per example
 - **Explain the why**, not just the how
 - **Include error handling** where relevant
@@ -316,13 +343,16 @@ query ExampleQuery {
 ## 🚀 Release Process
 
 ### Version Numbering
+
 We follow **Semantic Versioning** (SemVer):
+
 - **MAJOR.MINOR.PATCH** (e.g., 1.2.3)
 - **Major**: Breaking changes
 - **Minor**: New features (backward compatible)
 - **Patch**: Bug fixes (backward compatible)
 
 ### Release Phases
+
 1. **Phase 1**: Core functionality (✅ Completed)
 2. **Phase 2**: Advanced features (✅ Completed)
 3. **Phase 3**: Extended features (✅ Completed)
@@ -333,12 +363,15 @@ We follow **Semantic Versioning** (SemVer):
 ## 🏆 Recognition
 
 ### Contributors
+
 All contributors are recognized in:
+
 - **CONTRIBUTORS.md** file
 - **Release notes**
 - **Documentation credits**
 
 ### Types of Recognition
+
 - **Code contributors** - Feature implementations and bug fixes
 - **Documentation contributors** - Guides, examples, and improvements
 - **Community contributors** - Support, feedback, and testing
@@ -346,11 +379,13 @@ All contributors are recognized in:
 ## 📞 Getting Help
 
 ### Communication Channels
+
 - **GitHub Issues** - Bug reports and feature requests
 - **GitHub Discussions** - Questions and community support
 - **Documentation** - Comprehensive guides and examples
 
 ### Response Times
+
 - **Bug reports**: Within 48 hours
 - **Feature requests**: Within 1 week
 - **Pull requests**: Within 1 week
@@ -359,6 +394,7 @@ All contributors are recognized in:
 ## 📋 Checklist for Contributors
 
 ### Before Submitting
+
 - [ ] Code follows style guidelines
 - [ ] Tests pass locally
 - [ ] Documentation is updated
@@ -367,11 +403,14 @@ All contributors are recognized in:
 - [ ] PR description explains changes
 
 ### PR Template
+
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Type of Change
+
 - [ ] Bug fix
 - [ ] New feature
 - [ ] Documentation update
@@ -379,16 +418,19 @@ Brief description of changes
 - [ ] Other (please describe)
 
 ## Testing
+
 - [ ] Tests pass
 - [ ] New tests added
 - [ ] Manual testing completed
 
 ## Documentation
+
 - [ ] Documentation updated
 - [ ] Examples added/updated
 - [ ] API reference updated
 
 ## Checklist
+
 - [ ] Code follows style guidelines
 - [ ] Self-review completed
 - [ ] Comments added for complex code
@@ -399,4 +441,4 @@ Brief description of changes
 
 Thank you for contributing to the Django GraphQL Auto-Generation Library! Your contributions help make this library better for everyone. 🙏
 
-*For questions about contributing, please open a GitHub Discussion or contact the maintainers.*
+_For questions about contributing, please open a GitHub Discussion or contact the maintainers._

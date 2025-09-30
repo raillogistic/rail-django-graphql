@@ -36,7 +36,7 @@ Enable bulk operations in your Django settings:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'APPS': ['your_app'],
     'MUTATION_SETTINGS': {
         'enable_bulk_operations': True,   # Enable bulk operations
@@ -49,12 +49,12 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable_bulk_operations` | `bool` | `False` | Enable/disable bulk operations |
-| `bulk_batch_size` | `int` | `100` | Number of records processed per batch |
-| `bulk_max_objects` | `int` | `1000` | Maximum objects allowed per operation |
-| `bulk_transaction_timeout` | `int` | `30` | Transaction timeout in seconds |
+| Option                     | Type   | Default | Description                           |
+| -------------------------- | ------ | ------- | ------------------------------------- |
+| `enable_bulk_operations`   | `bool` | `False` | Enable/disable bulk operations        |
+| `bulk_batch_size`          | `int`  | `100`   | Number of records processed per batch |
+| `bulk_max_objects`         | `int`  | `1000`  | Maximum objects allowed per operation |
+| `bulk_transaction_timeout` | `int`  | `30`    | Transaction timeout in seconds        |
 
 ## 🔄 Available Operations
 
@@ -142,6 +142,7 @@ mutation BulkCreateArticles($input: BulkCreateArticleInput!) {
 ```
 
 Variables:
+
 ```json
 {
   "input": {
@@ -186,6 +187,7 @@ mutation BulkUpdateArticles($input: BulkUpdateArticleInput!) {
 ```
 
 Variables:
+
 ```json
 {
   "input": {
@@ -221,6 +223,7 @@ mutation BulkDeleteArticles($input: BulkDeleteArticleInput!) {
 ```
 
 Variables:
+
 ```json
 {
   "input": {
@@ -274,7 +277,7 @@ Bulk operations support partial success, where some records succeed while others
           "id": "1",
           "title": "Successfully Created Article"
         },
-        null  // Failed to create
+        null // Failed to create
       ],
       "errors": [
         "Object 2: Title is required",
@@ -326,7 +329,7 @@ Bulk operations respect Django model permissions:
 class ArticlePermissions:
     def has_add_permission(self, request):
         return request.user.has_perm('blog.add_article')
-    
+
     def has_change_permission(self, request, obj=None):
         return request.user.has_perm('blog.change_article')
 ```
@@ -337,7 +340,7 @@ Implement rate limiting for bulk operations:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'bulk_rate_limit': {
             'max_operations_per_minute': 10,
@@ -385,17 +388,17 @@ Implement comprehensive error handling:
 const handleBulkCreate = async (objects) => {
   try {
     const result = await bulkCreateArticles({ objects });
-    
+
     if (result.ok) {
-      console.log('All objects created successfully');
+      console.log("All objects created successfully");
     } else {
       // Handle partial success
-      const successful = result.objects.filter(obj => obj !== null);
+      const successful = result.objects.filter((obj) => obj !== null);
       console.log(`${successful.length}/${objects.length} objects created`);
-      console.error('Errors:', result.errors);
+      console.error("Errors:", result.errors);
     }
   } catch (error) {
-    console.error('Network or GraphQL error:', error);
+    console.error("Network or GraphQL error:", error);
   }
 };
 ```
@@ -409,7 +412,7 @@ For large operations, implement progress tracking:
 class BulkCreateWithProgress(graphene.Mutation):
     class Arguments:
         input = BulkCreateInput(required=True)
-    
+
     ok = graphene.Boolean()
     progress = graphene.Int()  # Percentage complete
     objects = graphene.List(ObjectType)
@@ -423,7 +426,7 @@ Prepare data efficiently before bulk operations:
 ```javascript
 // Prepare data for bulk create
 const prepareArticlesForBulk = (articles) => {
-  return articles.map(article => ({
+  return articles.map((article) => ({
     title: article.title.trim(),
     content: article.content,
     authorId: article.author.id,
@@ -444,13 +447,13 @@ Implement conditional logic in bulk operations:
 def bulk_create_with_conditions(objects):
     valid_objects = []
     errors = []
-    
+
     for i, obj_data in enumerate(objects):
         if should_create_object(obj_data):
             valid_objects.append(obj_data)
         else:
             errors.append(f"Object {i+1}: Condition not met")
-    
+
     return bulk_create(valid_objects), errors
 ```
 
@@ -475,6 +478,7 @@ mutation BulkCreatePostsWithTags($input: BulkCreatePostInput!) {
 ```
 
 Variables with relationships:
+
 ```json
 {
   "input": {
@@ -483,7 +487,7 @@ Variables with relationships:
         "title": "Post with Tags",
         "content": "Content...",
         "authorId": 1,
-        "tagIds": [1, 2, 3]  // Many-to-many relationships
+        "tagIds": [1, 2, 3] // Many-to-many relationships
       }
     ]
   }
@@ -521,11 +525,13 @@ mutation BulkCreateDocuments($input: BulkCreateDocumentInput!) {
 ### Common Issues
 
 1. **Memory errors with large datasets**
+
    - Reduce `bulk_batch_size`
    - Implement streaming for very large datasets
    - Monitor memory usage
 
 2. **Transaction timeout errors**
+
    - Increase `bulk_transaction_timeout`
    - Reduce batch size
    - Optimize database queries
@@ -548,11 +554,11 @@ logger = logging.getLogger('bulk_operations')
 
 def monitor_bulk_operation(operation_name, object_count):
     start_time = time.time()
-    
+
     def log_completion():
         duration = time.time() - start_time
         logger.info(f"{operation_name}: {object_count} objects in {duration:.2f}s")
-    
+
     return log_completion
 ```
 
@@ -570,7 +576,7 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.generators.mutations': {
+        'rail_django_graphql.generators.mutations': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },
@@ -582,12 +588,12 @@ LOGGING = {
 
 Typical performance improvements with bulk operations:
 
-| Operation | Individual Mutations | Bulk Operation | Improvement |
-|-----------|---------------------|----------------|-------------|
-| Create 100 records | ~2000ms | ~200ms | 10x faster |
-| Update 500 records | ~5000ms | ~300ms | 16x faster |
-| Delete 1000 records | ~8000ms | ~100ms | 80x faster |
+| Operation           | Individual Mutations | Bulk Operation | Improvement |
+| ------------------- | -------------------- | -------------- | ----------- |
+| Create 100 records  | ~2000ms              | ~200ms         | 10x faster  |
+| Update 500 records  | ~5000ms              | ~300ms         | 16x faster  |
+| Delete 1000 records | ~8000ms              | ~100ms         | 80x faster  |
 
-*Benchmarks may vary based on model complexity and database configuration.*
+_Benchmarks may vary based on model complexity and database configuration._
 
 This comprehensive guide covers all aspects of bulk operations in the Django GraphQL Auto-Generation Library. Bulk operations provide significant performance improvements for batch processing while maintaining data integrity and comprehensive error handling.

@@ -2,7 +2,11 @@ from re import I
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth.models import User
-from django_graphql_auto.decorators import mutation, business_logic, custom_mutation_name
+from rail_django_graphql.decorators import (
+    mutation,
+    business_logic,
+    custom_mutation_name,
+)
 
 
 class Category(models.Model):
@@ -19,7 +23,7 @@ class Category(models.Model):
     def uppercase_name(self) -> str:
         """Retourne le nom de la catégorie en majuscules"""
         return self.name.upper()
-    
+
     @property
     def post_count(self) -> int:
         """Retourne le nombre de posts dans cette catégorie"""
@@ -65,8 +69,10 @@ class Tag(models.Model):
 class Post(models.Model):
     title = models.CharField("Titre", max_length=200)
     content = models.TextField("Contenu")
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
-    tags = models.ManyToManyField('Tag', blank=True, verbose_name="Tags")
+    category = models.ForeignKey(
+        Category, on_delete=models.CASCADE, verbose_name="Catégorie"
+    )
+    tags = models.ManyToManyField("Tag", blank=True, verbose_name="Tags")
     created_at = models.DateTimeField("Date de création", auto_now_add=True)
     updated_at = models.DateTimeField("Date de modification", auto_now=True)
     is_published = models.BooleanField("Publié", default=False)
@@ -75,12 +81,12 @@ class Post(models.Model):
     def title_with_category(self) -> str:
         """Retourne le titre avec le nom de la catégorie"""
         return f"{self.title} - {self.category.name}"
-    
+
     @property
     def word_count(self) -> int:
         """Retourne le nombre de mots dans le contenu"""
         return len(self.content.split())
-    
+
     @property
     def tag_names(self) -> list:
         """Retourne la liste des noms des tags"""
@@ -92,20 +98,24 @@ class Post(models.Model):
     class Meta:
         verbose_name = "Article"
         verbose_name_plural = "Articles"
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
 
     @business_logic(category="publishing", requires_permission="can_publish_posts")
     def publish_post(self, publish_notes: str = ""):
         """Publish this post."""
-        self.status = 'published'
+        self.status = "published"
         self.published_at = timezone.now()
         self.save()
-        return {"status": "published", "published_at": self.published_at, "notes": publish_notes}
+        return {
+            "status": "published",
+            "published_at": self.published_at,
+            "notes": publish_notes,
+        }
 
     @business_logic(category="workflow")
     def archive_post(self, archive_reason: str = "Manual archival"):
         """Archive this post."""
-        self.status = 'archived'
+        self.status = "archived"
         self.save()
         return {"status": "archived", "reason": archive_reason}
 
@@ -127,7 +137,9 @@ class Post(models.Model):
 
 
 class Comment(models.Model):
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments', verbose_name="Article")
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="comments", verbose_name="Article"
+    )
     author = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Auteur")
     content = models.TextField("Contenu")
     is_approved = models.BooleanField("Approuvé", default=False)
@@ -150,7 +162,7 @@ class Comment(models.Model):
             "status": "approved",
             "approved_by": approved_by,
             "notes": moderation_notes,
-            "approved_at": timezone.now()
+            "approved_at": timezone.now(),
         }
 
     def reject_comment(self, rejection_reason: str):
@@ -160,7 +172,9 @@ class Comment(models.Model):
 
 
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, verbose_name="Utilisateur")
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, verbose_name="Utilisateur"
+    )
     bio = models.TextField("Biographie", blank=True)
     avatar = models.URLField("Avatar", blank=True)
     website = models.URLField("Site web", blank=True)
@@ -183,7 +197,7 @@ class Profile(models.Model):
             "status": "verified",
             "verified_by": verified_by,
             "notes": verification_notes,
-            "verified_at": timezone.now()
+            "verified_at": timezone.now(),
         }
 
     def update_bio(self, new_bio: str):
@@ -194,19 +208,24 @@ class Profile(models.Model):
 
 
 from polymorphic.models import PolymorphicModel
+
+
 class Client(PolymorphicModel):
     raison = models.CharField("Nom", max_length=255)
-    
+
     @property
-    def uppercase_raison(self)->str:
+    def uppercase_raison(self) -> str:
         return self.raison.upper()
+
 
 class LocalClient(Client):
     test = models.CharField("Test", max_length=255)
 
 
 class ClientInformation(models.Model):
-    client = models.OneToOneField(Client, on_delete=models.CASCADE, verbose_name="Client",related_name="info")
+    client = models.OneToOneField(
+        Client, on_delete=models.CASCADE, verbose_name="Client", related_name="info"
+    )
     adresse = models.CharField("Adresse", max_length=255)
     ville = models.CharField("Ville", max_length=255)
     code_postal = models.CharField("Code postal", max_length=20)
@@ -218,11 +237,11 @@ class ClientInformation(models.Model):
 class Country(models.Model):
     name = models.CharField("Nom du pays", max_length=100)
     code = models.CharField("Code du pays", max_length=3)
-    
+
     class Meta:
         verbose_name = "Pays"
         verbose_name_plural = "Pays"
-    
+
     def __str__(self):
         return self.name
 
@@ -231,11 +250,11 @@ class Brand(models.Model):
     name = models.CharField("Nom de la marque", max_length=100)
     country = models.ForeignKey(Country, on_delete=models.CASCADE, verbose_name="Pays")
     founded_year = models.IntegerField("Année de fondation")
-    
+
     class Meta:
         verbose_name = "Marque"
         verbose_name_plural = "Marques"
-    
+
     def __str__(self):
         return self.name
 
@@ -243,14 +262,15 @@ class Brand(models.Model):
 class Product(models.Model):
     name = models.CharField("Nom du produit", max_length=200)
     price = models.DecimalField("Prix", max_digits=10, decimal_places=2)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
+    category = models.ForeignKey(
+        Category, on_delete=models.CASCADE, verbose_name="Catégorie"
+    )
     brand = models.ForeignKey(Brand, on_delete=models.CASCADE, verbose_name="Marque")
     is_active = models.BooleanField("Actif", default=True)
-    
+
     class Meta:
         verbose_name = "Produit"
         verbose_name_plural = "Produits"
-    
+
     def __str__(self):
         return self.name
-    

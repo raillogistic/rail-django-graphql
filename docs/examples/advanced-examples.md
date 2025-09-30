@@ -32,13 +32,13 @@ class Order(models.Model):
         ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
     ]
-    
+
     order_number = models.CharField(max_length=20, unique=True, verbose_name="Numéro de commande")
     customer = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Client")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name="Statut de la commande")
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Montant total")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+
     def confirm_order(self):
         """Confirmer la commande (Confirm the order)"""
         if self.status == 'pending':
@@ -46,7 +46,7 @@ class Order(models.Model):
             self.save()
             # Send confirmation email logic here
         return self
-    
+
     def ship_order(self, tracking_number=None):
         """Expédier la commande (Ship the order)"""
         if self.status == 'confirmed':
@@ -55,7 +55,7 @@ class Order(models.Model):
                 self.tracking_number = tracking_number
             self.save()
         return self
-    
+
     def cancel_order(self, reason=None):
         """Annuler la commande (Cancel the order)"""
         if self.status in ['pending', 'confirmed']:
@@ -83,10 +83,7 @@ mutation ConfirmOrder($orderId: ID!) {
 
 # Ship an order with tracking
 mutation ShipOrder($orderId: ID!, $trackingNumber: String) {
-  orderShipOrder(input: { 
-    id: $orderId
-    trackingNumber: $trackingNumber 
-  }) {
+  orderShipOrder(input: { id: $orderId, trackingNumber: $trackingNumber }) {
     ok
     order {
       id
@@ -235,16 +232,16 @@ class Comment(models.Model):
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         # Global setting: enable nested relations by default
         'enable_nested_relations': True,
-        
+
         # Per-model overrides
         'nested_relations_config': {
             'Comment': False,  # Disable all nested relations for comments
         },
-        
+
         # Per-field granular control
         'nested_field_config': {
             'Post': {
@@ -267,24 +264,28 @@ DJANGO_GRAPHQL_AUTO = {
 ```graphql
 # ✅ ALLOWED: Create post with nested tags and category
 mutation CreatePostWithNesting {
-  createPost(input: {
-    title: "Advanced GraphQL Tutorial"
-    content: "Learn about nested operations..."
-    category: {
-      name: "Technology"
-      description: "Tech-related articles"
+  createPost(
+    input: {
+      title: "Advanced GraphQL Tutorial"
+      content: "Learn about nested operations..."
+      category: { name: "Technology", description: "Tech-related articles" }
+      tags: [
+        { name: "GraphQL", color: "#e10098" }
+        { name: "Django", color: "#092e20" }
+      ]
     }
-    tags: [
-      { name: "GraphQL", color: "#e10098" }
-      { name: "Django", color: "#092e20" }
-    ]
-  }) {
+  ) {
     ok
     post {
       id
       title
-      category { name }
-      tags { name color }
+      category {
+        name
+      }
+      tags {
+        name
+        color
+      }
     }
     errors
   }
@@ -292,30 +293,42 @@ mutation CreatePostWithNesting {
 
 # ❌ BLOCKED: Nested comments disabled by configuration
 mutation CreatePostWithComments {
-  createPost(input: {
-    title: "Post Title"
-    content: "Content..."
-    comments: [  # This will be ignored due to configuration
-      { content: "First comment", author: { bio: "Author bio" } }
-    ]
-  }) {
+  createPost(
+    input: {
+      title: "Post Title"
+      content: "Content..."
+      comments: [
+        # This will be ignored due to configuration
+        { content: "First comment", author: { bio: "Author bio" } }
+      ]
+    }
+  ) {
     ok
-    post { id title }
+    post {
+      id
+      title
+    }
     errors
   }
 }
 
 # ❌ BLOCKED: Nested relations disabled for Comment model
 mutation CreateCommentWithNesting {
-  createComment(input: {
-    content: "Comment content"
-    post: {  # This will be ignored due to per-model configuration
-      title: "New Post"
-      content: "Post content"
+  createComment(
+    input: {
+      content: "Comment content"
+      post: {
+        # This will be ignored due to per-model configuration
+        title: "New Post"
+        content: "Post content"
+      }
     }
-  }) {
+  ) {
     ok
-    comment { id content }
+    comment {
+      id
+      content
+    }
     errors
   }
 }
@@ -325,17 +338,17 @@ mutation CreateCommentWithNesting {
 
 ```python
 # Configuration for secure e-commerce operations
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_nested_relations': False,  # Secure default: disabled globally
-        
+
         # Selectively enable for safe operations only
         'nested_relations_config': {
             'Product': True,   # Allow nested product operations
             'Order': False,    # Disable nested order operations (security)
             'User': False,     # Disable nested user operations (security)
         },
-        
+
         'nested_field_config': {
             'Product': {
                 'reviews': True,        # Allow nested review creation
@@ -363,7 +376,7 @@ input_data = {
     'title': 'Article about "Advanced GraphQL"',
     'content': '''
         This article discusses "nested operations" and their benefits.
-        
+
         Example JSON configuration:
         {
             "enable_nested_relations": true,
@@ -391,7 +404,7 @@ mutation CreateArticleWithQuotes {
     title: "Article about \"Advanced GraphQL\""
     content: """
       This article discusses "nested operations" and their benefits.
-      
+
       Example JSON configuration:
       {
         "enable_nested_relations": true,
@@ -441,7 +454,7 @@ user_inputs = [
     {
         'review': '''
             The product description said "premium quality" and it delivered!
-            
+
             Specifications:
             - Material: "Stainless Steel"
             - Warranty: "2 years"
@@ -544,7 +557,7 @@ class Store(models.Model):
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'name': ['exact', 'icontains'],
@@ -561,11 +574,11 @@ class Category(models.Model):
     image = models.ImageField(upload_to='categories/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     sort_order = models.IntegerField(default=0)
-    
+
     class Meta:
         unique_together = ['slug', 'store']
         ordering = ['sort_order', 'name']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'name': ['exact', 'icontains'],
@@ -580,7 +593,7 @@ class Brand(models.Model):
     logo = models.ImageField(upload_to='brands/', null=True, blank=True)
     description = models.TextField(blank=True)
     website = models.URLField(blank=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'name': ['exact', 'icontains'],
@@ -593,7 +606,7 @@ class Product(models.Model):
         ('grouped', 'Grouped Product'),
         ('external', 'External Product'),
     ]
-    
+
     name = models.CharField(max_length=200)
     slug = models.SlugField()
     sku = models.CharField(max_length=100, unique=True)
@@ -601,42 +614,42 @@ class Product(models.Model):
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='products')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     brand = models.ForeignKey(Brand, on_delete=models.SET_NULL, null=True, blank=True, related_name='products')
-    
+
     description = models.TextField(blank=True)
     short_description = models.TextField(max_length=500, blank=True)
-    
+
     # Pricing
     price = models.DecimalField(max_digits=10, decimal_places=2)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
+
     # Inventory
     manage_stock = models.BooleanField(default=True)
     stock_quantity = models.IntegerField(default=0)
     low_stock_threshold = models.IntegerField(default=5)
-    
+
     # Physical properties
     weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     length = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     width = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     height = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    
+
     # SEO
     meta_title = models.CharField(max_length=200, blank=True)
     meta_description = models.TextField(max_length=300, blank=True)
-    
+
     # Status
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
-    
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['slug', 'store']
         ordering = ['-created_at']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'name': ['exact', 'icontains'],
@@ -653,23 +666,23 @@ class Product(models.Model):
             'created_at': ['gte', 'lte', 'range'],
         }
         ordering = ['-created_at', 'name', 'price', '-price']
-    
+
     def get_effective_price(self):
         """Get the current selling price (sale price if available, otherwise regular price)."""
         return self.sale_price if self.sale_price else self.price
-    
+
     def get_discount_percentage(self):
         """Calculate discount percentage if on sale."""
         if self.sale_price and self.price > self.sale_price:
             return round(((self.price - self.sale_price) / self.price) * 100, 2)
         return 0
-    
+
     def is_in_stock(self):
         """Check if product is in stock."""
         if not self.manage_stock:
             return True
         return self.stock_quantity > 0
-    
+
     def is_low_stock(self):
         """Check if product is low in stock."""
         if not self.manage_stock:
@@ -681,7 +694,7 @@ class ProductAttribute(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField()
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='attributes')
-    
+
     class Meta:
         unique_together = ['slug', 'store']
 
@@ -690,7 +703,7 @@ class ProductAttributeValue(models.Model):
     attribute = models.ForeignKey(ProductAttribute, on_delete=models.CASCADE, related_name='values')
     value = models.CharField(max_length=200)
     color_code = models.CharField(max_length=7, blank=True)  # For color attributes
-    
+
     class Meta:
         unique_together = ['attribute', 'value']
 
@@ -698,17 +711,17 @@ class ProductVariation(models.Model):
     """Product variations (e.g., Red T-shirt Size M)"""
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='variations')
     sku = models.CharField(max_length=100, unique=True)
-    
+
     # Override parent product pricing/inventory
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     stock_quantity = models.IntegerField(default=0)
-    
+
     # Physical properties override
     weight = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    
+
     is_active = models.BooleanField(default=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'product': ['exact'],
@@ -722,7 +735,7 @@ class ProductVariationAttribute(models.Model):
     """Link variations to their attribute values"""
     variation = models.ForeignKey(ProductVariation, on_delete=models.CASCADE, related_name='attributes')
     attribute_value = models.ForeignKey(ProductAttributeValue, on_delete=models.CASCADE)
-    
+
     class Meta:
         unique_together = ['variation', 'attribute_value']
 
@@ -733,7 +746,7 @@ class ProductImage(models.Model):
     alt_text = models.CharField(max_length=200, blank=True)
     is_primary = models.BooleanField(default=False)
     sort_order = models.IntegerField(default=0)
-    
+
     class Meta:
         ordering = ['sort_order', 'id']
 
@@ -746,39 +759,39 @@ class Order(models.Model):
         ('cancelled', 'Cancelled'),
         ('refunded', 'Refunded'),
     ]
-    
+
     order_number = models.CharField(max_length=50, unique=True)
     store = models.ForeignKey(Store, on_delete=models.CASCADE, related_name='orders')
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
-    
+
     # Pricing
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     shipping_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    
+
     # Status and tracking
     status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='pending')
     tracking_number = models.CharField(max_length=100, blank=True)
-    
+
     # Addresses
     billing_address = models.JSONField()
     shipping_address = models.JSONField()
-    
+
     # Notes
     customer_notes = models.TextField(blank=True)
     admin_notes = models.TextField(blank=True)
-    
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     shipped_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'order_number': ['exact', 'icontains'],
@@ -796,16 +809,16 @@ class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     variation = models.ForeignKey(ProductVariation, on_delete=models.CASCADE, null=True, blank=True)
-    
+
     quantity = models.IntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
-    
+
     # Snapshot of product data at time of order
     product_name = models.CharField(max_length=200)
     product_sku = models.CharField(max_length=100)
     variation_attributes = models.JSONField(null=True, blank=True)  # Snapshot of variation attributes
-    
+
     class GraphQLMeta:
         filter_fields = {
             'order': ['exact'],
@@ -839,7 +852,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
           isInStock
           isLowStock
           stockQuantity
-          
+
           # Category hierarchy
           category {
             id
@@ -854,7 +867,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
               }
             }
           }
-          
+
           # Brand information
           brand {
             id
@@ -862,7 +875,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
             slug
             logo
           }
-          
+
           # Primary image
           images(filters: {isPrimary: true}) {
             edges {
@@ -873,7 +886,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
               }
             }
           }
-          
+
           # Product variations
           variations(filters: {isActive: true}) {
             edges {
@@ -884,7 +897,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
                 salePrice
                 stockQuantity
                 isActive
-                
+
                 # Variation attributes (e.g., Color: Red, Size: M)
                 attributes {
                   edges {
@@ -902,7 +915,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
                     }
                   }
                 }
-                
+
                 # Variation-specific images
                 images {
                   edges {
@@ -916,7 +929,7 @@ query ProductSearch($storeId: ID!, $filters: ProductFilterInput, $first: Int, $a
               }
             }
           }
-          
+
           # Metadata
           createdAt
           updatedAt
@@ -962,7 +975,7 @@ mutation CreateVariableProduct($input: CreateProductWithVariationsInput!) {
       sku
       productType
       price
-      
+
       # Created variations
       variations {
         edges {
@@ -971,7 +984,7 @@ mutation CreateVariableProduct($input: CreateProductWithVariationsInput!) {
             sku
             price
             stockQuantity
-            
+
             attributes {
               edges {
                 node {
@@ -987,7 +1000,7 @@ mutation CreateVariableProduct($input: CreateProductWithVariationsInput!) {
           }
         }
       }
-      
+
       # Uploaded images
       images {
         edges {
@@ -1021,7 +1034,7 @@ mutation CreateVariableProduct($input: CreateProductWithVariationsInput!) {
     "manageStock": true,
     "isActive": true,
     "isFeatured": true,
-    
+
     # Product images
     "images": [
       {
@@ -1037,7 +1050,7 @@ mutation CreateVariableProduct($input: CreateProductWithVariationsInput!) {
         "sortOrder": 2
       }
     ],
-    
+
     # Product variations
     "variations": [
       {
@@ -1112,7 +1125,7 @@ mutation CreateOrder($input: CreateOrderInput!) {
       shippingAmount
       discountAmount
       totalAmount
-      
+
       customer {
         id
         username
@@ -1120,7 +1133,7 @@ mutation CreateOrder($input: CreateOrderInput!) {
         firstName
         lastName
       }
-      
+
       items {
         edges {
           node {
@@ -1130,11 +1143,11 @@ mutation CreateOrder($input: CreateOrderInput!) {
             totalPrice
             productName
             productSku
-            
+
             product {
               id
               name
-              images(filters: {isPrimary: true}) {
+              images(filters: { isPrimary: true }) {
                 edges {
                   node {
                     image
@@ -1142,7 +1155,7 @@ mutation CreateOrder($input: CreateOrderInput!) {
                 }
               }
             }
-            
+
             variation {
               id
               sku
@@ -1162,7 +1175,7 @@ mutation CreateOrder($input: CreateOrderInput!) {
           }
         }
       }
-      
+
       billingAddress
       shippingAddress
       createdAt
@@ -1182,7 +1195,7 @@ mutation UpdateOrderStatus($orderId: ID!, $input: UpdateOrderStatusInput!) {
       trackingNumber
       shippedAt
       deliveredAt
-      
+
       # Send notification to customer
       customer {
         email
@@ -1209,19 +1222,19 @@ class Tenant(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
     domain = models.CharField(max_length=100, unique=True, null=True, blank=True)
-    
+
     # Subscription info
     plan = models.CharField(max_length=50, default='free')
     max_users = models.IntegerField(default=5)
     max_projects = models.IntegerField(default=3)
-    
+
     # Settings
     settings = models.JSONField(default=dict)
-    
+
     # Status
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'name': ['exact', 'icontains'],
@@ -1238,21 +1251,21 @@ class TenantUser(models.Model):
         ('member', 'Member'),
         ('viewer', 'Viewer'),
     ]
-    
+
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='memberships')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='tenant_memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    
+
     # Permissions
     permissions = models.JSONField(default=list)
-    
+
     # Status
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['tenant', 'user']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'tenant': ['exact'],
@@ -1267,22 +1280,22 @@ class Project(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField()
     description = models.TextField(blank=True)
-    
+
     # Project settings
     settings = models.JSONField(default=dict)
-    
+
     # Access control
     is_public = models.BooleanField(default=False)
     allowed_users = models.ManyToManyField(User, through='ProjectMember', related_name='accessible_projects')
-    
+
     # Status
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['tenant', 'slug']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'tenant': ['exact'],
@@ -1301,18 +1314,18 @@ class ProjectMember(models.Model):
         ('reporter', 'Reporter'),
         ('guest', 'Guest'),
     ]
-    
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
-    
+
     # Specific permissions
     can_read = models.BooleanField(default=True)
     can_write = models.BooleanField(default=False)
     can_admin = models.BooleanField(default=False)
-    
+
     joined_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['project', 'user']
 
@@ -1325,37 +1338,37 @@ class Task(models.Model):
         ('done', 'Done'),
         ('closed', 'Closed'),
     ]
-    
+
     PRIORITY_CHOICES = [
         ('low', 'Low'),
         ('medium', 'Medium'),
         ('high', 'High'),
         ('urgent', 'Urgent'),
     ]
-    
+
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    
+
     # Assignment
     assignee = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_tasks')
     reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_tasks')
-    
+
     # Classification
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
     labels = models.JSONField(default=list)
-    
+
     # Timing
     estimated_hours = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     actual_hours = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
     due_date = models.DateTimeField(null=True, blank=True)
-    
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'project': ['exact'],
@@ -1374,13 +1387,13 @@ class Comment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     content = models.TextField()
-    
+
     # Metadata
     is_internal = models.BooleanField(default=False)  # Internal team comments
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'task': ['exact'],
@@ -1394,21 +1407,21 @@ class TimeEntry(models.Model):
     """Time tracking for tasks"""
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='time_entries')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='time_entries')
-    
+
     description = models.TextField(blank=True)
     hours = models.DecimalField(max_digits=6, decimal_places=2)
-    
+
     # Timing
     date = models.DateField()
     start_time = models.TimeField(null=True, blank=True)
     end_time = models.TimeField(null=True, blank=True)
-    
+
     # Billing
     is_billable = models.BooleanField(default=True)
     hourly_rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'task': ['exact'],
@@ -1431,31 +1444,31 @@ query TenantDashboard($tenantId: ID!) {
     plan
     maxUsers
     maxProjects
-    
+
     # Current usage
-    memberships(filters: {isActive: true}) {
+    memberships(filters: { isActive: true }) {
       totalCount
     }
-    
-    projects(filters: {isActive: true}) {
+
+    projects(filters: { isActive: true }) {
       totalCount
       edges {
         node {
           id
           name
           slug
-          
+
           # Project statistics
           tasks {
             totalCount
           }
-          
+
           tasksByStatus: tasks {
-            open: totalCount(filters: {status: "open"})
-            inProgress: totalCount(filters: {status: "in_progress"})
-            done: totalCount(filters: {status: "done"})
+            open: totalCount(filters: { status: "open" })
+            inProgress: totalCount(filters: { status: "in_progress" })
+            done: totalCount(filters: { status: "done" })
           }
-          
+
           # Recent activity
           recentTasks: tasks(first: 5, orderBy: "-created_at") {
             edges {
@@ -1473,15 +1486,15 @@ query TenantDashboard($tenantId: ID!) {
               }
             }
           }
-          
+
           createdAt
           updatedAt
         }
       }
     }
-    
+
     # Team members
-    memberships(filters: {isActive: true}) {
+    memberships(filters: { isActive: true }) {
       edges {
         node {
           id
@@ -1507,9 +1520,9 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
     name
     description
     isPublic
-    
+
     # Check user's role in project
-    members(filters: {user: $userId}) {
+    members(filters: { user: $userId }) {
       edges {
         node {
           role
@@ -1519,12 +1532,10 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
         }
       }
     }
-    
+
     # Tasks with advanced filtering
     tasks(
-      filters: {
-        status_In: ["open", "in_progress"]
-      }
+      filters: { status_In: ["open", "in_progress"] }
       orderBy: ["-priority", "due_date"]
       first: 20
     ) {
@@ -1539,19 +1550,19 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
           estimatedHours
           actualHours
           dueDate
-          
+
           assignee {
             id
             username
             firstName
             lastName
           }
-          
+
           reporter {
             id
             username
           }
-          
+
           # Recent comments
           comments(first: 3, orderBy: "-created_at") {
             edges {
@@ -1565,13 +1576,13 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
               }
             }
           }
-          
+
           # Time tracking
           timeEntries {
             totalCount
             totalHours: sum(field: "hours")
           }
-          
+
           createdAt
           updatedAt
           completedAt
@@ -1582,7 +1593,7 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
         endCursor
       }
     }
-    
+
     # Project statistics
     statistics {
       totalTasks
@@ -1590,19 +1601,19 @@ query ProjectDetails($projectId: ID!, $userId: ID!) {
       completedTasks
       totalHours
       billableHours
-      
+
       # Task distribution by status
       tasksByStatus {
         status
         count
       }
-      
+
       # Task distribution by priority
       tasksByPriority {
         priority
         count
       }
-      
+
       # Team productivity
       teamProductivity {
         user {
@@ -1629,7 +1640,7 @@ mutation CreateProjectWithTeam($input: CreateProjectWithTeamInput!) {
       id
       name
       slug
-      
+
       # Added team members
       members {
         edges {
@@ -1646,14 +1657,14 @@ mutation CreateProjectWithTeam($input: CreateProjectWithTeamInput!) {
         }
       }
     }
-    
+
     # Invitation results
     invitations {
       email
       status
       error
     }
-    
+
     success
     errors
   }
@@ -1670,13 +1681,13 @@ mutation BulkUpdateTasks($input: BulkUpdateTasksInput!) {
         username
       }
     }
-    
+
     results {
       taskId
       success
       error
     }
-    
+
     totalUpdated
     totalFailed
   }
@@ -1699,15 +1710,15 @@ class Site(models.Model):
     """Multi-site CMS support"""
     name = models.CharField(max_length=200)
     domain = models.CharField(max_length=100, unique=True)
-    
+
     # Theme and settings
     theme = models.CharField(max_length=100, default='default')
     settings = models.JSONField(default=dict)
-    
+
     # SEO defaults
     default_meta_title = models.CharField(max_length=200, blank=True)
     default_meta_description = models.TextField(max_length=300, blank=True)
-    
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1715,18 +1726,18 @@ class ContentType(models.Model):
     """Define different content types (Article, Page, Product, etc.)"""
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
-    
+
     # Content structure definition
     fields_schema = models.JSONField(default=dict)  # JSON schema for custom fields
-    
+
     # Display settings
     template = models.CharField(max_length=200, blank=True)
     list_template = models.CharField(max_length=200, blank=True)
-    
+
     # Permissions
     can_create = models.ManyToManyField(User, related_name='can_create_content_types', blank=True)
     can_edit = models.ManyToManyField(User, related_name='can_edit_content_types', blank=True)
-    
+
     is_active = models.BooleanField(default=True)
 
 class Category(models.Model):
@@ -1735,23 +1746,23 @@ class Category(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField()
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
-    
+
     description = models.TextField(blank=True)
-    
+
     # SEO
     meta_title = models.CharField(max_length=200, blank=True)
     meta_description = models.TextField(max_length=300, blank=True)
-    
+
     # Display
     image = models.ImageField(upload_to='categories/', null=True, blank=True)
     sort_order = models.IntegerField(default=0)
-    
+
     is_active = models.BooleanField(default=True)
-    
+
     class Meta:
         unique_together = ['site', 'slug']
         ordering = ['sort_order', 'name']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'site': ['exact'],
@@ -1767,52 +1778,52 @@ class Content(models.Model):
         ('published', 'Published'),
         ('archived', 'Archived'),
     ]
-    
+
     # Basic info
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='content')
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='content')
-    
+
     title = models.CharField(max_length=300)
     slug = models.SlugField()
     excerpt = models.TextField(max_length=500, blank=True)
     content = models.TextField()
-    
+
     # Custom fields (stored as JSON)
     custom_fields = models.JSONField(default=dict)
-    
+
     # Categorization
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='content')
     tags = models.ManyToManyField('Tag', blank=True, related_name='content')
-    
+
     # Authorship
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='authored_content')
     editor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='edited_content')
-    
+
     # Publishing
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     published_at = models.DateTimeField(null=True, blank=True)
-    
+
     # SEO
     meta_title = models.CharField(max_length=200, blank=True)
     meta_description = models.TextField(max_length=300, blank=True)
     canonical_url = models.URLField(blank=True)
-    
+
     # Social media
     social_image = models.ImageField(upload_to='social/', null=True, blank=True)
     social_title = models.CharField(max_length=200, blank=True)
     social_description = models.TextField(max_length=300, blank=True)
-    
+
     # Analytics
     view_count = models.IntegerField(default=0)
-    
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         unique_together = ['site', 'slug']
         ordering = ['-published_at', '-created_at']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'site': ['exact'],
@@ -1834,10 +1845,10 @@ class Tag(models.Model):
     slug = models.SlugField()
     description = models.TextField(blank=True)
     color = models.CharField(max_length=7, default='#000000')
-    
+
     class Meta:
         unique_together = ['site', 'slug']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'site': ['exact'],
@@ -1853,36 +1864,36 @@ class Media(models.Model):
         ('document', 'Document'),
         ('other', 'Other'),
     ]
-    
+
     site = models.ForeignKey(Site, on_delete=models.CASCADE, related_name='media')
-    
+
     title = models.CharField(max_length=200)
     file = models.FileField(upload_to='media/')
     media_type = models.CharField(max_length=20, choices=MEDIA_TYPES)
-    
+
     # Metadata
     alt_text = models.CharField(max_length=200, blank=True)
     caption = models.TextField(blank=True)
     description = models.TextField(blank=True)
-    
+
     # File info
     file_size = models.IntegerField()  # in bytes
     mime_type = models.CharField(max_length=100)
-    
+
     # Image-specific
     width = models.IntegerField(null=True, blank=True)
     height = models.IntegerField(null=True, blank=True)
-    
+
     # Organization
     folder = models.CharField(max_length=200, blank=True)
     tags = models.ManyToManyField(Tag, blank=True, related_name='media')
-    
+
     # Usage tracking
     usage_count = models.IntegerField(default=0)
-    
+
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
     uploaded_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'site': ['exact'],
@@ -1897,20 +1908,20 @@ class Media(models.Model):
 class ContentRevision(models.Model):
     """Content version history"""
     content = models.ForeignKey(Content, on_delete=models.CASCADE, related_name='revisions')
-    
+
     # Snapshot of content at revision time
     title = models.CharField(max_length=300)
     content_data = models.TextField()
     custom_fields = models.JSONField(default=dict)
-    
+
     # Revision metadata
     revision_note = models.TextField(blank=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     # Change tracking
     changes_summary = models.JSONField(default=dict)  # Summary of what changed
-    
+
     class GraphQLMeta:
         filter_fields = {
             'content': ['exact'],
@@ -1925,9 +1936,9 @@ class Menu(models.Model):
     name = models.CharField(max_length=100)
     slug = models.SlugField()
     location = models.CharField(max_length=100)  # header, footer, sidebar, etc.
-    
+
     is_active = models.BooleanField(default=True)
-    
+
     class Meta:
         unique_together = ['site', 'slug']
 
@@ -1935,20 +1946,20 @@ class MenuItem(models.Model):
     """Menu items with hierarchy"""
     menu = models.ForeignKey(Menu, on_delete=models.CASCADE, related_name='items')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
-    
+
     title = models.CharField(max_length=200)
     url = models.CharField(max_length=500, blank=True)
-    
+
     # Link to content
     content = models.ForeignKey(Content, on_delete=models.CASCADE, null=True, blank=True)
-    
+
     # Display options
     css_class = models.CharField(max_length=100, blank=True)
     target = models.CharField(max_length=20, default='_self')  # _self, _blank, etc.
-    
+
     sort_order = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
-    
+
     class Meta:
         ordering = ['sort_order', 'title']
 ```
@@ -1965,7 +1976,7 @@ query SiteContent($domain: String!, $path: String) {
     settings
     defaultMetaTitle
     defaultMetaDescription
-    
+
     # Main navigation
     menus(filters: {location: "header", isActive: true}) {
       edges {
@@ -1980,7 +1991,7 @@ query SiteContent($domain: String!, $path: String) {
                 url
                 target
                 cssClass
-                
+
                 # Nested menu items
                 children(filters: {isActive: true}) {
                   edges {
@@ -1989,7 +2000,7 @@ query SiteContent($domain: String!, $path: String) {
                       title
                       url
                       target
-                      
+
                       # Third level
                       children(filters: {isActive: true}) {
                         edges {
@@ -2003,7 +2014,7 @@ query SiteContent($domain: String!, $path: String) {
                     }
                   }
                 }
-                
+
                 # Linked content
                 content {
                   id
@@ -2016,7 +2027,7 @@ query SiteContent($domain: String!, $path: String) {
         }
       }
     }
-    
+
     # Page content (if path provided)
     content(slug: $path) {
       id
@@ -2025,18 +2036,18 @@ query SiteContent($domain: String!, $path: String) {
       excerpt
       content
       customFields
-      
+
       contentType {
         name
         slug
         template
       }
-      
+
       category {
         id
         name
         slug
-        
+
         # Category hierarchy
         parent {
           id
@@ -2047,7 +2058,7 @@ query SiteContent($domain: String!, $path: String) {
           }
         }
       }
-      
+
       tags {
         edges {
           node {
@@ -2058,14 +2069,14 @@ query SiteContent($domain: String!, $path: String) {
           }
         }
       }
-      
+
       author {
         id
         username
         firstName
         lastName
       }
-      
+
       # SEO data
       metaTitle
       metaDescription
@@ -2073,11 +2084,11 @@ query SiteContent($domain: String!, $path: String) {
       socialImage
       socialTitle
       socialDescription
-      
+
       status
       publishedAt
       viewCount
-      
+
       # Related content
       relatedContent: content(
         filters: {
@@ -2098,7 +2109,7 @@ query SiteContent($domain: String!, $path: String) {
         }
       }
     }
-    
+
     # Recent blog posts
     recentPosts: content(
       filters: {
@@ -2115,12 +2126,12 @@ query SiteContent($domain: String!, $path: String) {
           slug
           excerpt
           publishedAt
-          
+
           author {
             firstName
             lastName
           }
-          
+
           category {
             name
             slug
@@ -2136,13 +2147,13 @@ query ContentDashboard($siteId: ID!) {
   site(id: $siteId) {
     id
     name
-    
+
     # Content statistics
     contentStats {
       totalContent
       publishedContent
       draftContent
-      
+
       # By content type
       byContentType {
         contentType {
@@ -2151,7 +2162,7 @@ query ContentDashboard($siteId: ID!) {
         }
         count
       }
-      
+
       # Recent activity
       recentActivity: content(
         first: 10
@@ -2163,11 +2174,11 @@ query ContentDashboard($siteId: ID!) {
             title
             status
             updatedAt
-            
+
             author {
               username
             }
-            
+
             contentType {
               name
             }
@@ -2175,19 +2186,19 @@ query ContentDashboard($siteId: ID!) {
         }
       }
     }
-    
+
     # Media library stats
     mediaStats {
       totalFiles
       totalSize
-      
+
       # By media type
       byMediaType {
         mediaType
         count
         totalSize
       }
-      
+
       # Recent uploads
       recentUploads: media(
         first: 10
@@ -2200,7 +2211,7 @@ query ContentDashboard($siteId: ID!) {
             mediaType
             fileSize
             uploadedAt
-            
+
             uploadedBy {
               username
             }
@@ -2223,7 +2234,7 @@ mutation CreateContentWithWorkflow($input: CreateContentInput!) {
       title
       slug
       status
-      
+
       # Auto-generated revision
       revisions(first: 1, orderBy: "-created_at") {
         edges {
@@ -2238,7 +2249,7 @@ mutation CreateContentWithWorkflow($input: CreateContentInput!) {
         }
       }
     }
-    
+
     # Workflow notifications sent
     notifications {
       recipient {
@@ -2247,7 +2258,7 @@ mutation CreateContentWithWorkflow($input: CreateContentInput!) {
       type
       sent
     }
-    
+
     success
     errors
   }
@@ -2260,14 +2271,14 @@ mutation BulkContentOperation($input: BulkContentOperationInput!) {
       contentId
       success
       error
-      
+
       content {
         id
         title
         status
       }
     }
-    
+
     summary {
       totalProcessed
       successful
@@ -2291,34 +2302,34 @@ from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelatio
 class Profile(models.Model):
     """Extended user profile"""
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
-    
+
     # Profile info
     bio = models.TextField(max_length=500, blank=True)
     location = models.CharField(max_length=100, blank=True)
     website = models.URLField(blank=True)
     birth_date = models.DateField(null=True, blank=True)
-    
+
     # Avatar and cover
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     cover_image = models.ImageField(upload_to='covers/', null=True, blank=True)
-    
+
     # Privacy settings
     is_private = models.BooleanField(default=False)
     show_email = models.BooleanField(default=False)
     show_birth_date = models.BooleanField(default=False)
-    
+
     # Verification
     is_verified = models.BooleanField(default=False)
     verification_type = models.CharField(max_length=50, blank=True)  # blue_check, business, etc.
-    
+
     # Statistics (denormalized for performance)
     followers_count = models.IntegerField(default=0)
     following_count = models.IntegerField(default=0)
     posts_count = models.IntegerField(default=0)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'user': ['exact'],
@@ -2334,16 +2345,16 @@ class Follow(models.Model):
     """User following relationships"""
     follower = models.ForeignKey(User, on_delete=models.CASCADE, related_name='following')
     following = models.ForeignKey(User, on_delete=models.CASCADE, related_name='followers')
-    
+
     # Follow metadata
     is_mutual = models.BooleanField(default=False)  # Both users follow each other
     notification_enabled = models.BooleanField(default=True)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['follower', 'following']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'follower': ['exact'],
@@ -2361,39 +2372,39 @@ class Post(models.Model):
         ('link', 'Link Post'),
         ('poll', 'Poll Post'),
     ]
-    
+
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
     post_type = models.CharField(max_length=20, choices=POST_TYPES, default='text')
-    
+
     # Content
     content = models.TextField(max_length=2000, blank=True)
-    
+
     # Media attachments
     images = GenericRelation('MediaAttachment', related_query_name='post_images')
     videos = GenericRelation('MediaAttachment', related_query_name='post_videos')
-    
+
     # Link preview (for link posts)
     link_url = models.URLField(blank=True)
     link_title = models.CharField(max_length=200, blank=True)
     link_description = models.TextField(max_length=500, blank=True)
     link_image = models.URLField(blank=True)
-    
+
     # Engagement (denormalized)
     likes_count = models.IntegerField(default=0)
     comments_count = models.IntegerField(default=0)
     shares_count = models.IntegerField(default=0)
-    
+
     # Visibility
     is_public = models.BooleanField(default=True)
     is_pinned = models.BooleanField(default=False)
-    
+
     # Moderation
     is_flagged = models.BooleanField(default=False)
     is_removed = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'author': ['exact'],
@@ -2415,42 +2426,42 @@ class MediaAttachment(models.Model):
         ('video', 'Video'),
         ('gif', 'GIF'),
     ]
-    
+
     # Generic foreign key to attach to any model
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
-    
+
     media_type = models.CharField(max_length=20, choices=MEDIA_TYPES)
     file = models.FileField(upload_to='media/')
-    
+
     # Metadata
     alt_text = models.CharField(max_length=200, blank=True)
     width = models.IntegerField(null=True, blank=True)
     height = models.IntegerField(null=True, blank=True)
     duration = models.IntegerField(null=True, blank=True)  # For videos in seconds
-    
+
     # Processing status (for videos)
     is_processed = models.BooleanField(default=True)
     processing_status = models.CharField(max_length=50, blank=True)
-    
+
     sort_order = models.IntegerField(default=0)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 class Like(models.Model):
     """Generic likes for posts, comments, etc."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='likes')
-    
+
     # Generic foreign key
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['user', 'content_type', 'object_id']
-    
+
     class GraphQLMeta:
         filter_fields = {
             'user': ['exact'],
@@ -2463,23 +2474,23 @@ class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
-    
+
     content = models.TextField(max_length=1000)
-    
+
     # Engagement
     likes_count = models.IntegerField(default=0)
     replies_count = models.IntegerField(default=0)
-    
+
     # Generic relations for likes
     likes = GenericRelation(Like, related_query_name='comment_likes')
-    
+
     # Moderation
     is_flagged = models.BooleanField(default=False)
     is_removed = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'post': ['exact'],
@@ -2494,15 +2505,15 @@ class Comment(models.Model):
 class Hashtag(models.Model):
     """Hashtags extracted from posts"""
     tag = models.CharField(max_length=100, unique=True)
-    
+
     # Statistics
     usage_count = models.IntegerField(default=0)
     trending_score = models.FloatField(default=0.0)
-    
+
     # Timestamps
     first_used = models.DateTimeField(auto_now_add=True)
     last_used = models.DateTimeField(auto_now=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'tag': ['exact', 'icontains'],
@@ -2516,9 +2527,9 @@ class PostHashtag(models.Model):
     """Many-to-many relationship between posts and hashtags"""
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='hashtags')
     hashtag = models.ForeignKey(Hashtag, on_delete=models.CASCADE, related_name='posts')
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['post', 'hashtag']
 
@@ -2526,40 +2537,40 @@ class Mention(models.Model):
     """User mentions in posts"""
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='mentions')
     mentioned_user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mentions')
-    
+
     # Position in content
     start_position = models.IntegerField()
     end_position = models.IntegerField()
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['post', 'mentioned_user']
 
 class Story(models.Model):
     """Instagram-style stories"""
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='stories')
-    
+
     # Content
     media = GenericRelation(MediaAttachment, related_query_name='story_media')
     text_overlay = models.TextField(max_length=500, blank=True)
-    
+
     # Story-specific features
     background_color = models.CharField(max_length=7, default='#000000')
     music_track = models.CharField(max_length=200, blank=True)
-    
+
     # Visibility
     is_public = models.BooleanField(default=True)
     close_friends_only = models.BooleanField(default=False)
-    
+
     # Analytics
     views_count = models.IntegerField(default=0)
-    
+
     # Auto-expiry (24 hours default)
     expires_at = models.DateTimeField()
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'author': ['exact'],
@@ -2574,9 +2585,9 @@ class StoryView(models.Model):
     """Story view tracking"""
     story = models.ForeignKey(Story, on_delete=models.CASCADE, related_name='views')
     viewer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='story_views')
-    
+
     viewed_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['story', 'viewer']
 ```
@@ -2589,12 +2600,12 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
   user(id: $userId) {
     id
     username
-    
+
     profile {
       avatar
       isPrivate
     }
-    
+
     # Following users for feed content
     following {
       edges {
@@ -2607,7 +2618,7 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
       }
     }
   }
-  
+
   # Feed posts from followed users
   posts(
     filters: {
@@ -2624,20 +2635,20 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
         id
         postType
         content
-        
+
         author {
           id
           username
           firstName
           lastName
-          
+
           profile {
             avatar
             isVerified
             verificationType
           }
         }
-        
+
         # Media attachments
         images {
           edges {
@@ -2650,7 +2661,7 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
             }
           }
         }
-        
+
         videos {
           edges {
             node {
@@ -2661,23 +2672,23 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
             }
           }
         }
-        
+
         # Link preview
         linkUrl
         linkTitle
         linkDescription
         linkImage
-        
+
         # Engagement
         likesCount
         commentsCount
         sharesCount
-        
+
         # User's interaction with this post
         userLiked: likes(filters: {user: $userId}) {
           totalCount
         }
-        
+
         # Hashtags
         hashtags {
           edges {
@@ -2688,7 +2699,7 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
             }
           }
         }
-        
+
         # Mentions
         mentions {
           edges {
@@ -2701,7 +2712,7 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
             }
           }
         }
-        
+
         # Recent comments
         comments(
           filters: {
@@ -2717,26 +2728,26 @@ query UserFeed($userId: ID!, $first: Int, $after: String) {
               content
               likesCount
               repliesCount
-              
+
               author {
                 username
                 profile {
                   avatar
                 }
               }
-              
+
               # User's like on comment
               userLiked: likes(filters: {user: $userId}) {
                 totalCount
               }
-              
+
               createdAt
             }
           }
-          
+
           totalCount
         }
-        
+
         createdAt
         updatedAt
       }
@@ -2758,7 +2769,7 @@ query UserProfile($username: String!, $viewerId: ID) {
     firstName
     lastName
     dateJoined
-    
+
     profile {
       bio
       location
@@ -2766,33 +2777,33 @@ query UserProfile($username: String!, $viewerId: ID) {
       birthDate
       avatar
       coverImage
-      
+
       # Privacy settings (only show to profile owner)
       isPrivate
       showEmail
       showBirthDate
-      
+
       # Verification
       isVerified
       verificationType
-      
+
       # Statistics
       followersCount
       followingCount
       postsCount
-      
+
       createdAt
     }
-    
+
     # Relationship with viewer
     relationshipWithViewer: followers(filters: {follower: $viewerId}) {
       totalCount
     }
-    
+
     viewerFollowsUser: following(filters: {following: $viewerId}) {
       totalCount
     }
-    
+
     # Recent posts (if public or following)
     posts(
       filters: {
@@ -2807,7 +2818,7 @@ query UserProfile($username: String!, $viewerId: ID) {
           id
           postType
           content
-          
+
           # Thumbnail for media posts
           images(first: 1) {
             edges {
@@ -2818,14 +2829,14 @@ query UserProfile($username: String!, $viewerId: ID) {
               }
             }
           }
-          
+
           likesCount
           commentsCount
           createdAt
         }
       }
     }
-    
+
     # Pinned posts
     pinnedPosts: posts(
       filters: {
@@ -2843,7 +2854,7 @@ query UserProfile($username: String!, $viewerId: ID) {
         }
       }
     }
-    
+
     # Active stories
     stories(
       filters: {
@@ -2857,7 +2868,7 @@ query UserProfile($username: String!, $viewerId: ID) {
           id
           textOverlay
           backgroundColor
-          
+
           media {
             edges {
               node {
@@ -2866,7 +2877,7 @@ query UserProfile($username: String!, $viewerId: ID) {
               }
             }
           }
-          
+
           viewsCount
           createdAt
           expiresAt
@@ -2891,7 +2902,7 @@ query TrendingContent($timeframe: String = "24h") {
         tag
         usageCount
         trendingScore
-        
+
         # Recent posts with this hashtag
         posts(
           first: 3
@@ -2914,7 +2925,7 @@ query TrendingContent($timeframe: String = "24h") {
       }
     }
   }
-  
+
   # Trending posts
   trendingPosts: posts(
     filters: {
@@ -2930,7 +2941,7 @@ query TrendingContent($timeframe: String = "24h") {
         id
         postType
         content
-        
+
         author {
           username
           profile {
@@ -2938,7 +2949,7 @@ query TrendingContent($timeframe: String = "24h") {
             isVerified
           }
         }
-        
+
         images(first: 1) {
           edges {
             node {
@@ -2946,7 +2957,7 @@ query TrendingContent($timeframe: String = "24h") {
             }
           }
         }
-        
+
         likesCount
         commentsCount
         sharesCount
@@ -2954,7 +2965,7 @@ query TrendingContent($timeframe: String = "24h") {
       }
     }
   }
-  
+
   # Suggested users to follow
   suggestedUsers: users(
     filters: {
@@ -2969,18 +2980,18 @@ query TrendingContent($timeframe: String = "24h") {
         username
         firstName
         lastName
-        
+
         profile {
           bio
           avatar
           isVerified
           followersCount
         }
-        
+
         # Mutual connections
         mutualFollowers(viewerId: $viewerId) {
           totalCount
-          
+
           # Sample mutual followers
           edges(first: 3) {
             node {
@@ -3009,7 +3020,7 @@ mutation CreatePost($input: CreatePostInput!) {
       id
       postType
       content
-      
+
       # Uploaded media
       images {
         edges {
@@ -3021,7 +3032,7 @@ mutation CreatePost($input: CreatePostInput!) {
           }
         }
       }
-      
+
       videos {
         edges {
           node {
@@ -3033,7 +3044,7 @@ mutation CreatePost($input: CreatePostInput!) {
           }
         }
       }
-      
+
       # Extracted hashtags
       hashtags {
         edges {
@@ -3044,7 +3055,7 @@ mutation CreatePost($input: CreatePostInput!) {
           }
         }
       }
-      
+
       # Detected mentions
       mentions {
         edges {
@@ -3055,10 +3066,10 @@ mutation CreatePost($input: CreatePostInput!) {
           }
         }
       }
-      
+
       createdAt
     }
-    
+
     # Notifications sent
     notifications {
       type
@@ -3067,7 +3078,7 @@ mutation CreatePost($input: CreatePostInput!) {
       }
       sent
     }
-    
+
     success
     errors
   }
@@ -3089,8 +3100,8 @@ mutation ToggleFollow($userId: ID!) {
       isMutual
       createdAt
     }
-    
-    action  # "followed" or "unfollowed"
+
+    action # "followed" or "unfollowed"
     success
   }
 }
@@ -3102,7 +3113,7 @@ mutation CreateStory($input: CreateStoryInput!) {
       id
       textOverlay
       backgroundColor
-      
+
       media {
         edges {
           node {
@@ -3111,13 +3122,13 @@ mutation CreateStory($input: CreateStoryInput!) {
           }
         }
       }
-      
+
       isPublic
       closeFriendsOnly
       expiresAt
       createdAt
     }
-    
+
     success
     errors
   }
@@ -3151,38 +3162,38 @@ class AnalyticsEvent(models.Model):
         ('video_play', 'Video Play'),
         ('custom', 'Custom Event'),
     ]
-    
+
     # Event identification
     event_id = models.UUIDField(default=uuid.uuid4, unique=True)
     event_type = models.CharField(max_length=50, choices=EVENT_TYPES)
     event_name = models.CharField(max_length=200)
-    
+
     # User tracking
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='analytics_events')
     session_id = models.CharField(max_length=100)
-    
+
     # Event data
     properties = models.JSONField(default=dict)  # Custom event properties
-    
+
     # Context
     url = models.URLField()
     referrer = models.URLField(blank=True)
     user_agent = models.TextField()
     ip_address = models.GenericIPAddressField()
-    
+
     # Geographic data
     country = models.CharField(max_length=100, blank=True)
     region = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
-    
+
     # Device info
     device_type = models.CharField(max_length=50, blank=True)  # desktop, mobile, tablet
     browser = models.CharField(max_length=100, blank=True)
     os = models.CharField(max_length=100, blank=True)
-    
+
     # Timing
     timestamp = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'event_type': ['exact', 'in'],
@@ -3200,38 +3211,38 @@ class PageView(models.Model):
     # Basic info
     url = models.URLField()
     title = models.CharField(max_length=300)
-    
+
     # User tracking
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     session_id = models.CharField(max_length=100)
-    
+
     # Navigation
     referrer = models.URLField(blank=True)
     landing_page = models.BooleanField(default=False)
     exit_page = models.BooleanField(default=False)
-    
+
     # Engagement metrics
     time_on_page = models.IntegerField(null=True, blank=True)  # seconds
     scroll_depth = models.IntegerField(null=True, blank=True)  # percentage
-    
+
     # Technical details
     load_time = models.IntegerField(null=True, blank=True)  # milliseconds
     user_agent = models.TextField()
     ip_address = models.GenericIPAddressField()
-    
+
     # Geographic
     country = models.CharField(max_length=100, blank=True)
     region = models.CharField(max_length=100, blank=True)
     city = models.CharField(max_length=100, blank=True)
-    
+
     # Device
     device_type = models.CharField(max_length=50, blank=True)
     browser = models.CharField(max_length=100, blank=True)
     os = models.CharField(max_length=100, blank=True)
     screen_resolution = models.CharField(max_length=20, blank=True)
-    
+
     timestamp = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'url': ['exact', 'icontains'],
@@ -3248,27 +3259,27 @@ class ConversionFunnel(models.Model):
     """Define conversion funnels"""
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    
+
     # Funnel steps (ordered)
     steps = models.JSONField()  # List of step definitions
-    
+
     # Configuration
     time_window = models.IntegerField(default=86400)  # seconds (24 hours default)
-    
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
 class FunnelStep(models.Model):
     """Individual funnel step"""
     funnel = models.ForeignKey(ConversionFunnel, on_delete=models.CASCADE, related_name='funnel_steps')
-    
+
     name = models.CharField(max_length=200)
     step_order = models.IntegerField()
-    
+
     # Step criteria
     event_type = models.CharField(max_length=50)
     event_conditions = models.JSONField(default=dict)  # Conditions to match
-    
+
     class Meta:
         unique_together = ['funnel', 'step_order']
         ordering = ['step_order']
@@ -3277,32 +3288,32 @@ class UserSession(models.Model):
     """User session tracking"""
     session_id = models.CharField(max_length=100, unique=True)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    
+
     # Session details
     start_time = models.DateTimeField()
     end_time = models.DateTimeField(null=True, blank=True)
     duration = models.IntegerField(null=True, blank=True)  # seconds
-    
+
     # Entry/exit
     landing_page = models.URLField()
     exit_page = models.URLField(blank=True)
-    
+
     # Engagement
     page_views = models.IntegerField(default=0)
     events_count = models.IntegerField(default=0)
-    
+
     # Attribution
     utm_source = models.CharField(max_length=100, blank=True)
     utm_medium = models.CharField(max_length=100, blank=True)
     utm_campaign = models.CharField(max_length=100, blank=True)
     utm_term = models.CharField(max_length=100, blank=True)
     utm_content = models.CharField(max_length=100, blank=True)
-    
+
     # Device/location (from first event)
     country = models.CharField(max_length=100, blank=True)
     device_type = models.CharField(max_length=50, blank=True)
     browser = models.CharField(max_length=100, blank=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'user': ['exact', 'isnull'],
@@ -3323,16 +3334,16 @@ class Goal(models.Model):
         ('duration', 'Duration Goal'),
         ('pages_per_session', 'Pages per Session Goal'),
     ]
-    
+
     name = models.CharField(max_length=200)
     goal_type = models.CharField(max_length=50, choices=GOAL_TYPES)
-    
+
     # Goal criteria
     conditions = models.JSONField()
-    
+
     # Value
     goal_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -3341,16 +3352,16 @@ class GoalConversion(models.Model):
     goal = models.ForeignKey(Goal, on_delete=models.CASCADE, related_name='conversions')
     session = models.ForeignKey(UserSession, on_delete=models.CASCADE, related_name='goal_conversions')
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
-    
+
     # Conversion details
     conversion_value = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    
+
     # Attribution
     first_touch_source = models.CharField(max_length=100, blank=True)
     last_touch_source = models.CharField(max_length=100, blank=True)
-    
+
     converted_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         filter_fields = {
             'goal': ['exact'],
@@ -3364,23 +3375,23 @@ class ABTest(models.Model):
     """A/B testing framework"""
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
-    
+
     # Test configuration
     variants = models.JSONField()  # List of variant definitions
     traffic_allocation = models.JSONField()  # Traffic split percentages
-    
+
     # Targeting
     targeting_rules = models.JSONField(default=dict)
-    
+
     # Status
     is_active = models.BooleanField(default=False)
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
-    
+
     # Goals
     primary_goal = models.ForeignKey(Goal, on_delete=models.SET_NULL, null=True, related_name='primary_tests')
     secondary_goals = models.ManyToManyField(Goal, blank=True, related_name='secondary_tests')
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
 
 class ABTestAssignment(models.Model):
@@ -3388,11 +3399,11 @@ class ABTestAssignment(models.Model):
     test = models.ForeignKey(ABTest, on_delete=models.CASCADE, related_name='assignments')
     user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
     session_id = models.CharField(max_length=100)
-    
+
     variant = models.CharField(max_length=100)
-    
+
     assigned_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         unique_together = ['test', 'user', 'session_id']
 ```
@@ -3401,7 +3412,10 @@ class ABTestAssignment(models.Model):
 
 ```graphql
 # Comprehensive analytics dashboard
-query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFiltersInput) {
+query AnalyticsDashboard(
+  $dateRange: DateRangeInput!
+  $filters: AnalyticsFiltersInput
+) {
   # Overview metrics
   overview: analyticsOverview(dateRange: $dateRange, filters: $filters) {
     totalPageViews
@@ -3410,7 +3424,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
     averageSessionDuration
     bounceRate
     conversionRate
-    
+
     # Comparison with previous period
     previousPeriod {
       totalPageViews
@@ -3420,7 +3434,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       bounceRate
       conversionRate
     }
-    
+
     # Growth percentages
     growth {
       pageViewsGrowth
@@ -3431,7 +3445,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       conversionRateChange
     }
   }
-  
+
   # Traffic sources
   trafficSources: userSessions(
     dateRange: $dateRange
@@ -3446,7 +3460,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       pageViews
       averageDuration
       conversionRate
-      
+
       # Trend data
       trend(interval: "day") {
         date
@@ -3455,7 +3469,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       }
     }
   }
-  
+
   # Geographic distribution
   geographic: userSessions(
     dateRange: $dateRange
@@ -3472,7 +3486,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       conversionRate
     }
   }
-  
+
   # Device breakdown
   devices: userSessions(
     dateRange: $dateRange
@@ -3488,7 +3502,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       bounceRate
     }
   }
-  
+
   # Top pages
   topPages: pageViews(
     dateRange: $dateRange
@@ -3504,13 +3518,13 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       uniquePageViews
       averageTimeOnPage
       exitRate
-      
+
       # Page performance metrics
       averageLoadTime
       averageScrollDepth
     }
   }
-  
+
   # Real-time data (last 30 minutes)
   realTime: analyticsRealTime {
     activeUsers
@@ -3520,7 +3534,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       title
       activeUsers
     }
-    
+
     # Live events stream
     recentEvents(limit: 50) {
       eventType
@@ -3531,37 +3545,37 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       timestamp
     }
   }
-  
+
   # Conversion funnels
   funnels: conversionFunnels(dateRange: $dateRange, filters: $filters) {
     edges {
       node {
         id
         name
-        
+
         # Funnel analysis
         analysis {
           totalEntries
-          
+
           steps {
             stepName
             stepOrder
             users
             conversionRate
             dropoffRate
-            
+
             # Step-to-step conversion
             fromPreviousStep {
               users
               conversionRate
             }
           }
-          
+
           # Overall funnel metrics
           overallConversionRate
           totalDropoffs
         }
-        
+
         # Funnel visualization data
         visualization {
           stepName
@@ -3571,22 +3585,22 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       }
     }
   }
-  
+
   # Goal conversions
-  goals: goals(filters: {isActive: true}) {
+  goals: goals(filters: { isActive: true }) {
     edges {
       node {
         id
         name
         goalType
         goalValue
-        
+
         # Goal performance
         performance(dateRange: $dateRange) {
           totalConversions
           conversionRate
           totalValue
-          
+
           # Conversion trend
           trend(interval: "day") {
             date
@@ -3594,7 +3608,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
             conversionRate
             value
           }
-          
+
           # Attribution analysis
           attribution {
             firstTouchSources {
@@ -3602,7 +3616,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
               conversions
               percentage
             }
-            
+
             lastTouchSources {
               source
               conversions
@@ -3613,21 +3627,21 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
       }
     }
   }
-  
+
   # A/B tests
-  abTests: abTests(filters: {isActive: true}) {
+  abTests: abTests(filters: { isActive: true }) {
     edges {
       node {
         id
         name
         description
-        
+
         # Test results
         results(dateRange: $dateRange) {
           variants {
             variantName
             participants
-            
+
             # Primary goal performance
             primaryGoal {
               conversions
@@ -3635,7 +3649,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
               confidence
               significance
             }
-            
+
             # Secondary goals
             secondaryGoals {
               goalName
@@ -3643,7 +3657,7 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
               conversionRate
             }
           }
-          
+
           # Statistical significance
           statisticalSignificance
           recommendedWinner
@@ -3654,20 +3668,24 @@ query AnalyticsDashboard($dateRange: DateRangeInput!, $filters: AnalyticsFilters
 }
 
 # Event analytics with custom dimensions
-query EventAnalytics($dateRange: DateRangeInput!, $eventType: String!, $dimensions: [String!]) {
+query EventAnalytics(
+  $dateRange: DateRangeInput!
+  $eventType: String!
+  $dimensions: [String!]
+) {
   events: analyticsEvents(
     dateRange: $dateRange
-    filters: {eventType: $eventType}
+    filters: { eventType: $eventType }
     groupBy: $dimensions
   ) {
     groups {
       # Dynamic dimensions based on input
       dimensions
-      
+
       # Metrics
       totalEvents
       uniqueUsers
-      
+
       # Event properties analysis
       properties {
         propertyName
@@ -3677,7 +3695,7 @@ query EventAnalytics($dateRange: DateRangeInput!, $eventType: String!, $dimensio
           percentage
         }
       }
-      
+
       # Trend analysis
       trend(interval: "hour") {
         timestamp
@@ -3686,7 +3704,7 @@ query EventAnalytics($dateRange: DateRangeInput!, $eventType: String!, $dimensio
       }
     }
   }
-  
+
   # Event flow analysis
   eventFlow: eventFlow(
     dateRange: $dateRange
@@ -3698,7 +3716,7 @@ query EventAnalytics($dateRange: DateRangeInput!, $eventType: String!, $dimensio
       eventType
       eventName
       users
-      
+
       # Flow to next events
       nextEvents {
         eventType
@@ -3715,7 +3733,7 @@ query UserJourneyAnalysis($userId: ID!, $dateRange: DateRangeInput) {
   user(id: $userId) {
     id
     username
-    
+
     # User's sessions in date range
     sessions(dateRange: $dateRange, orderBy: "start_time") {
       edges {
@@ -3725,12 +3743,12 @@ query UserJourneyAnalysis($userId: ID!, $dateRange: DateRangeInput) {
           endTime
           duration
           pageViews
-          
+
           # Attribution
           utmSource
           utmMedium
           utmCampaign
-          
+
           # Journey events
           events(orderBy: "timestamp") {
             edges {
@@ -3743,7 +3761,7 @@ query UserJourneyAnalysis($userId: ID!, $dateRange: DateRangeInput) {
               }
             }
           }
-          
+
           # Page views in session
           pageViews(orderBy: "timestamp") {
             edges {
@@ -3756,7 +3774,7 @@ query UserJourneyAnalysis($userId: ID!, $dateRange: DateRangeInput) {
               }
             }
           }
-          
+
           # Goal conversions in session
           goalConversions {
             edges {
@@ -3772,26 +3790,26 @@ query UserJourneyAnalysis($userId: ID!, $dateRange: DateRangeInput) {
         }
       }
     }
-    
+
     # User's overall analytics
     analytics(dateRange: $dateRange) {
       totalSessions
       totalPageViews
       totalTimeSpent
       averageSessionDuration
-      
+
       # Conversion history
       conversions {
         totalConversions
         totalValue
-        
+
         byGoal {
           goalName
           conversions
           totalValue
         }
       }
-      
+
       # Engagement patterns
       engagementPatterns {
         mostActiveHours
@@ -3813,6 +3831,7 @@ This comprehensive advanced examples documentation covers:
 5. **Real-time Analytics Dashboard** - Event tracking, funnels, A/B testing, user journeys
 
 Each section includes:
+
 - Detailed Django models with GraphQL configuration
 - Complex GraphQL queries with nested relationships
 - Advanced filtering and pagination

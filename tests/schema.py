@@ -12,11 +12,11 @@ import graphene
 from graphene import ObjectType, Schema
 from graphene_django import DjangoObjectType
 
-from django_graphql_auto.core.schema import SchemaBuilder
-from django_graphql_auto.generators.introspector import ModelIntrospector
-from django_graphql_auto.generators.types import TypeGenerator
-from django_graphql_auto.generators.queries import QueryGenerator
-from django_graphql_auto.generators.mutations import MutationGenerator
+from rail_django_graphql.core.schema import SchemaBuilder
+from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.types import TypeGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.mutations import MutationGenerator
 
 from tests.fixtures.test_data_fixtures import (
     FixtureTestAuthor,

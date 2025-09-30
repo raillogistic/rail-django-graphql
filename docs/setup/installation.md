@@ -61,15 +61,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party apps
     'graphene_django',
     'corsheaders',
     'django_extensions',
-    
+
     # Django GraphQL Auto
-    'django_graphql_auto',
-    
+    'rail_django_graphql',
+
     # Your apps
     'your_app',
     'another_app',
@@ -84,14 +84,14 @@ import os
 
 # GraphQL Configuration
 GRAPHENE = {
-    'SCHEMA': 'django_graphql_auto.schema.schema',
+    'SCHEMA': 'rail_django_graphql.schema.schema',
     'MIDDLEWARE': [
-        'django_graphql_auto.core.middleware.GraphQLAuthMiddleware',
+        'rail_django_graphql.core.middleware.GraphQLAuthMiddleware',
     ],
 }
 
 # Django GraphQL Auto Configuration
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_OUTPUT_DIR': os.path.join(BASE_DIR, 'generated_schema'),
     'AUTO_GENERATE_SCHEMA': True,
     'ENABLE_INTROSPECTION': True,
@@ -107,7 +107,7 @@ DJANGO_GRAPHQL_AUTO = {
     'ENABLE_FILTERS': True,
     'ENABLE_NESTED_OPERATIONS': True,
     'ENABLE_FILE_UPLOADS': True,
-    
+
     # File Upload & Media Configuration
     'FILE_UPLOADS': {
         'ENABLE_FILE_UPLOADS': True,
@@ -166,6 +166,7 @@ urlpatterns = [
 If you plan to use file uploads and media processing, install these system dependencies:
 
 #### Ubuntu/Debian:
+
 ```bash
 # Install ClamAV for virus scanning
 sudo apt-get update
@@ -186,6 +187,7 @@ sudo systemctl enable clamav-daemon
 ```
 
 #### macOS:
+
 ```bash
 # Install ClamAV
 brew install clamav
@@ -204,6 +206,7 @@ brew services start clamav
 ```
 
 #### Windows:
+
 ```powershell
 # Install ClamAV (download from https://www.clamav.net/downloads)
 # Or use Chocolatey
@@ -242,6 +245,7 @@ python manage.py generate_graphql_schema
 ```
 
 This command will:
+
 - Analyze all your Django models
 - Generate GraphQL types, queries, and mutations
 - Create schema files in the configured output directory
@@ -288,7 +292,7 @@ class Author(models.Model):
     email = models.EmailField()
     bio = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self):
         return self.name
 
@@ -298,7 +302,7 @@ class Book(models.Model):
     isbn = models.CharField(max_length=13, unique=True)
     published_date = models.DateField()
     pages = models.PositiveIntegerField()
-    
+
     def __str__(self):
         return self.title
 ```
@@ -329,10 +333,12 @@ query {
 
 # Test file upload functionality
 mutation {
-  uploadFile(input: {
-    file: null  # File will be provided via multipart form
-    description: "Test upload"
-  }) {
+  uploadFile(
+    input: {
+      file: null # File will be provided via multipart form
+      description: "Test upload"
+    }
+  ) {
     ok
     file {
       id
@@ -363,19 +369,19 @@ query {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # ... other settings
     'CUSTOM_SCALARS': {
-        'JSONField': 'django_graphql_auto.scalars.JSONScalar',
-        'UUIDField': 'django_graphql_auto.scalars.UUIDScalar',
+        'JSONField': 'rail_django_graphql.scalars.JSONScalar',
+        'UUIDField': 'rail_django_graphql.scalars.UUIDScalar',
     },
     'FIELD_CONVERTERS': {
         'custom_field': 'your_app.converters.CustomFieldConverter',
     },
     'MUTATION_PERMISSIONS': {
-        'create': 'django_graphql_auto.permissions.IsAuthenticated',
-        'update': 'django_graphql_auto.permissions.IsOwnerOrReadOnly',
-        'delete': 'django_graphql_auto.permissions.IsOwnerOrAdmin',
+        'create': 'rail_django_graphql.permissions.IsAuthenticated',
+        'update': 'rail_django_graphql.permissions.IsOwnerOrReadOnly',
+        'delete': 'rail_django_graphql.permissions.IsOwnerOrAdmin',
     },
 }
 ```
@@ -386,7 +392,7 @@ DJANGO_GRAPHQL_AUTO = {
 # settings/development.py
 from .base import *
 
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'ENABLE_PLAYGROUND': True,
     'ENABLE_INTROSPECTION': True,
     'DEBUG_MODE': True,
@@ -395,7 +401,7 @@ DJANGO_GRAPHQL_AUTO.update({
 # settings/production.py
 from .base import *
 
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'ENABLE_PLAYGROUND': False,
     'ENABLE_INTROSPECTION': False,
     'DEBUG_MODE': False,
@@ -422,7 +428,7 @@ Enable debug mode for detailed error messages:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # ... other settings
     'DEBUG_MODE': True,
     'VERBOSE_ERRORS': True,

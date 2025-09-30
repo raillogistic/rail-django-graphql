@@ -22,15 +22,15 @@ The library automatically generates GraphQL schema from your Django models:
 ```python
 # management/commands/generate_schema.py
 from django.core.management.base import BaseCommand
-from django_graphql_auto.core.schema_generator import SchemaGenerator
+from rail_django_graphql.core.schema_generator import SchemaGenerator
 
 class Command(BaseCommand):
     help = 'Generate GraphQL schema from Django models'
-    
+
     def handle(self, *args, **options):
         generator = SchemaGenerator()
         schema = generator.generate_schema()
-        
+
         self.stdout.write(
             self.style.SUCCESS(f'Schema generated with {len(schema.types)} types')
         )
@@ -40,7 +40,7 @@ class Command(BaseCommand):
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_CONFIG': {
         # Model inclusion/exclusion
         'models': [
@@ -52,7 +52,7 @@ DJANGO_GRAPHQL_AUTO = {
             'admin.models.LogEntry',
             'sessions.models.Session',
         ],
-        
+
         # Feature configuration
         'mutations': {
             'enabled': True,
@@ -61,21 +61,21 @@ DJANGO_GRAPHQL_AUTO = {
             'delete': True,
             'bulk_operations': True,
         },
-        
+
         'queries': {
             'pagination': 'relay',  # 'relay', 'offset', 'cursor'
             'filtering': True,
             'ordering': True,
             'search': True,
         },
-        
+
         # Field configuration
         'fields': {
             'auto_resolve_foreign_keys': True,
             'include_reverse_relations': True,
             'max_depth': 5,
         },
-        
+
         # Security
         'permissions': {
             'require_authentication': False,
@@ -90,16 +90,16 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```python
 # utils/schema_inspector.py
-from django_graphql_auto.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.introspector import ModelIntrospector
 from django.apps import apps
 
 def inspect_models():
     """Inspect all models and generate schema information."""
     introspector = ModelIntrospector()
-    
+
     for model in apps.get_models():
         analysis = introspector.analyze_model(model)
-        
+
         print(f"Model: {analysis.model_name}")
         print(f"Fields: {list(analysis.fields.keys())}")
         print(f"Relationships: {list(analysis.relationships.keys())}")
@@ -248,7 +248,7 @@ query {
       count
     }
   }
-  
+
   userStats {
     totalUsers
     activeUsers
@@ -298,22 +298,14 @@ query {
 ```graphql
 # Bulk create
 mutation {
-  bulkCreatePosts(input: {
-    posts: [
-      {
-        title: "Post 1"
-        content: "Content 1"
-        authorId: 1
-        categoryId: 1
-      }
-      {
-        title: "Post 2"
-        content: "Content 2"
-        authorId: 2
-        categoryId: 1
-      }
-    ]
-  }) {
+  bulkCreatePosts(
+    input: {
+      posts: [
+        { title: "Post 1", content: "Content 1", authorId: 1, categoryId: 1 }
+        { title: "Post 2", content: "Content 2", authorId: 2, categoryId: 1 }
+      ]
+    }
+  ) {
     posts {
       id
       title
@@ -325,18 +317,14 @@ mutation {
 
 # Bulk update
 mutation {
-  bulkUpdatePosts(input: {
-    updates: [
-      {
-        id: 1
-        data: { published: true }
-      }
-      {
-        id: 2
-        data: { published: false }
-      }
-    ]
-  }) {
+  bulkUpdatePosts(
+    input: {
+      updates: [
+        { id: 1, data: { published: true } }
+        { id: 2, data: { published: false } }
+      ]
+    }
+  ) {
     posts {
       id
       published
@@ -348,9 +336,7 @@ mutation {
 
 # Bulk delete
 mutation {
-  bulkDeletePosts(input: {
-    ids: [1, 2, 3]
-  }) {
+  bulkDeletePosts(input: { ids: [1, 2, 3] }) {
     deletedCount
     success
     errors
@@ -363,23 +349,17 @@ mutation {
 ```graphql
 # Create post with nested category
 mutation {
-  createPost(input: {
-    title: "New Post"
-    content: "Post content"
-    authorId: 1
-    category: {
-      create: {
-        name: "New Category"
-        description: "Category description"
+  createPost(
+    input: {
+      title: "New Post"
+      content: "Post content"
+      authorId: 1
+      category: {
+        create: { name: "New Category", description: "Category description" }
       }
+      tags: { connect: [1, 2], create: [{ name: "new-tag" }] }
     }
-    tags: {
-      connect: [1, 2]
-      create: [
-        { name: "new-tag" }
-      ]
-    }
-  }) {
+  ) {
     post {
       id
       title
@@ -409,14 +389,8 @@ mutation {
 mutation {
   updatePost(
     id: 1
-    input: {
-      title: "Updated Title"
-      published: true
-    }
-    conditions: {
-      author: { id: { eq: 1 } }
-      published: { eq: false }
-    }
+    input: { title: "Updated Title", published: true }
+    conditions: { author: { id: { eq: 1 } }, published: { eq: false } }
   ) {
     post {
       id
@@ -502,7 +476,7 @@ query {
   files(
     filters: {
       mimeType: { startsWith: "image/" }
-      size: { lte: 5242880 }  # 5MB
+      size: { lte: 5242880 } # 5MB
       uploadedAt: { gte: "2024-01-01" }
     }
     orderBy: [{ field: "uploadedAt", direction: DESC }]
@@ -537,10 +511,7 @@ mutation {
 ```graphql
 # Login
 mutation {
-  login(input: {
-    username: "user@example.com"
-    password: "password123"
-  }) {
+  login(input: { username: "user@example.com", password: "password123" }) {
     token
     refreshToken
     user {
@@ -555,9 +526,7 @@ mutation {
 
 # Refresh token
 mutation {
-  refreshToken(input: {
-    refreshToken: "refresh_token_here"
-  }) {
+  refreshToken(input: { refreshToken: "refresh_token_here" }) {
     token
     refreshToken
     success
@@ -599,16 +568,16 @@ query {
 
 ```python
 # Custom permission classes
-from django_graphql_auto.security.permissions import BasePermission
+from rail_django_graphql.security.permissions import BasePermission
 
 class IsAuthorOrReadOnly(BasePermission):
     """Allow read access to all, write access only to author."""
-    
+
     def has_permission(self, user, operation, model):
         if operation == 'read':
             return True
         return user.is_authenticated
-    
+
     def has_object_permission(self, user, operation, obj):
         if operation == 'read':
             return True
@@ -617,7 +586,7 @@ class IsAuthorOrReadOnly(BasePermission):
 # Apply to model
 class Post(models.Model):
     # ... fields ...
-    
+
     class GraphQLMeta:
         permission_classes = [IsAuthorOrReadOnly]
 ```
@@ -628,7 +597,7 @@ class Post(models.Model):
 
 ```python
 # Enable query optimization
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'PERFORMANCE': {
         'ENABLE_QUERY_OPTIMIZATION': True,
         'ENABLE_DATALOADER': True,
@@ -661,7 +630,7 @@ query {
 
 ```python
 # Custom DataLoader
-from django_graphql_auto.extensions.optimization import BaseDataLoader
+from rail_django_graphql.extensions.optimization import BaseDataLoader
 
 class CategoryLoader(BaseDataLoader):
     def batch_load_fn(self, category_ids):
@@ -673,7 +642,7 @@ class CategoryLoader(BaseDataLoader):
 class PostType(DjangoObjectType):
     class Meta:
         model = Post
-    
+
     def resolve_category(self, info):
         return CategoryLoader(info.context).load(self.category_id)
 ```
@@ -690,22 +659,22 @@ from graphql.language import ast
 
 class JSONScalar(Scalar):
     """JSON scalar type."""
-    
+
     @staticmethod
     def serialize(value):
         return value
-    
+
     @staticmethod
     def parse_literal(node):
         if isinstance(node, ast.StringValue):
             return json.loads(node.value)
-    
+
     @staticmethod
     def parse_value(value):
         return value
 
 # Register custom scalar
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'CUSTOM_SCALARS': {
         'JSONField': 'myapp.scalars.JSONScalar',
     }
@@ -716,11 +685,11 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```python
 # Custom filter for full-text search
-from django_graphql_auto.generators.filters import BaseFilter
+from rail_django_graphql.generators.filters import BaseFilter
 
 class FullTextSearchFilter(BaseFilter):
     """Full-text search filter."""
-    
+
     def filter_queryset(self, queryset, value, info):
         if hasattr(queryset.model, 'search_vector'):
             return queryset.filter(search_vector=value)
@@ -729,7 +698,7 @@ class FullTextSearchFilter(BaseFilter):
         )
 
 # Register custom filter
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'CUSTOM_FILTERS': {
         'fullTextSearch': 'myapp.filters.FullTextSearchFilter',
     }
@@ -742,25 +711,25 @@ DJANGO_GRAPHQL_AUTO = {
 # Custom GraphQL middleware
 class TimingMiddleware:
     """Middleware to track query execution time."""
-    
+
     def resolve(self, next, root, info, **args):
         start_time = time.time()
         result = next(root, info, **args)
         end_time = time.time()
-        
+
         # Log slow queries
         if end_time - start_time > 1.0:
             logger.warning(
                 f"Slow query detected: {info.field_name} took {end_time - start_time:.2f}s"
             )
-        
+
         return result
 
 # Add to settings
 GRAPHENE = {
     'MIDDLEWARE': [
         'myapp.middleware.TimingMiddleware',
-        'django_graphql_auto.middleware.AuthenticationMiddleware',
+        'rail_django_graphql.middleware.AuthenticationMiddleware',
     ],
 }
 ```
@@ -772,13 +741,14 @@ GRAPHENE = {
 #### SchemaGenerator
 
 ```python
-from django_graphql_auto.core.schema_generator import SchemaGenerator
+from rail_django_graphql.core.schema_generator import SchemaGenerator
 
 generator = SchemaGenerator(config=config)
 schema = generator.generate_schema()
 ```
 
 **Methods:**
+
 - `generate_schema()` - Generate complete GraphQL schema
 - `generate_types()` - Generate GraphQL types only
 - `generate_queries()` - Generate query operations
@@ -787,13 +757,14 @@ schema = generator.generate_schema()
 #### TypeGenerator
 
 ```python
-from django_graphql_auto.generators.types import TypeGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 type_gen = TypeGenerator(config=config)
 post_type = type_gen.generate_type(Post)
 ```
 
 **Methods:**
+
 - `generate_type(model)` - Generate GraphQL type for model
 - `get_field_type(field)` - Get GraphQL type for Django field
 - `generate_input_type(model)` - Generate input type for mutations
@@ -801,13 +772,14 @@ post_type = type_gen.generate_type(Post)
 #### QueryGenerator
 
 ```python
-from django_graphql_auto.generators.queries import QueryGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
 
 query_gen = QueryGenerator(type_generator, filter_generator)
 queries = query_gen.generate_queries([Post, Category])
 ```
 
 **Methods:**
+
 - `generate_single_query(model)` - Generate single object query
 - `generate_list_query(model)` - Generate list query with pagination
 - `generate_search_query(model)` - Generate search query
@@ -815,13 +787,14 @@ queries = query_gen.generate_queries([Post, Category])
 #### MutationGenerator
 
 ```python
-from django_graphql_auto.generators.mutations import MutationGenerator
+from rail_django_graphql.generators.mutations import MutationGenerator
 
 mutation_gen = MutationGenerator(type_generator)
 mutations = mutation_gen.generate_mutations([Post, Category])
 ```
 
 **Methods:**
+
 - `generate_create_mutation(model)` - Generate create mutation
 - `generate_update_mutation(model)` - Generate update mutation
 - `generate_delete_mutation(model)` - Generate delete mutation
@@ -830,12 +803,12 @@ mutations = mutation_gen.generate_mutations([Post, Category])
 ### Configuration Options
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # Schema generation
     'AUTO_GENERATE_SCHEMA': True,
     'SCHEMA_OUTPUT_DIR': 'generated_schema/',
     'NAMING_CONVENTION': 'snake_case',  # 'snake_case', 'camelCase'
-    
+
     # Features
     'ENABLE_MUTATIONS': True,
     'ENABLE_SUBSCRIPTIONS': False,
@@ -843,25 +816,25 @@ DJANGO_GRAPHQL_AUTO = {
     'ENABLE_FILE_UPLOADS': True,
     'ENABLE_PERMISSIONS': True,
     'ENABLE_CACHING': False,
-    
+
     # Model configuration
     'APPS_TO_INCLUDE': [],
     'APPS_TO_EXCLUDE': ['admin', 'auth', 'contenttypes'],
     'MODELS_TO_EXCLUDE': [],
-    
+
     # Pagination
     'PAGINATION_SIZE': 20,
     'MAX_QUERY_DEPTH': 10,
-    
+
     # Performance
     'ENABLE_QUERY_OPTIMIZATION': True,
     'CACHE_TIMEOUT': 300,
-    
+
     # Security
     'ENABLE_RATE_LIMITING': True,
     'RATE_LIMIT_PER_MINUTE': 100,
     'MAX_QUERY_COMPLEXITY': 1000,
-    
+
     # Custom components
     'CUSTOM_SCALARS': {},
     'CUSTOM_FILTERS': {},
@@ -896,7 +869,7 @@ query {
 
 ```python
 # Enable performance monitoring
-from django_graphql_auto.extensions.optimization import get_performance_monitor
+from rail_django_graphql.extensions.optimization import get_performance_monitor
 
 monitor = get_performance_monitor()
 stats = monitor.get_stats()
@@ -910,7 +883,7 @@ print(f"Cache hit rate: {stats.cache_hit_rate}")
 
 ```python
 # Custom error handler
-from django_graphql_auto.core.exceptions import GraphQLAutoError
+from rail_django_graphql.core.exceptions import GraphQLAutoError
 
 class CustomErrorHandler:
     def handle_error(self, error, info):
@@ -923,7 +896,7 @@ class CustomErrorHandler:
         return {'message': 'An unexpected error occurred'}
 
 # Register error handler
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'ERROR_HANDLER': 'myapp.handlers.CustomErrorHandler',
 }
 ```

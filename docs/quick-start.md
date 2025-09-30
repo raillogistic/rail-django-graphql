@@ -21,17 +21,17 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party apps
     'graphene_django',
-    'django_graphql_auto',  # Add this line
-    
+    'rail_django_graphql',  # Add this line
+
     # Your apps
     'myapp',
 ]
 
 # GraphQL Auto-Generation Configuration
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MODELS': [
         'myapp.models.Post',
         'myapp.models.Category',
@@ -44,7 +44,7 @@ DJANGO_GRAPHQL_AUTO = {
 
 # Graphene Django Configuration
 GRAPHENE = {
-    'SCHEMA': 'django_graphql_auto.schema.schema'
+    'SCHEMA': 'rail_django_graphql.schema.schema'
 }
 ```
 
@@ -73,11 +73,11 @@ class Category(models.Model):
     name = models.CharField("Nom de la catégorie", max_length=100)
     description = models.TextField("Description", blank=True)
     created_at = models.DateTimeField("Date de création", auto_now_add=True)
-    
+
     class Meta:
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
-    
+
     def __str__(self):
         return self.name
 
@@ -85,11 +85,11 @@ class Author(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     bio = models.TextField("Biographie", blank=True)
     website = models.URLField("Site web", blank=True)
-    
+
     class Meta:
         verbose_name = "Auteur"
         verbose_name_plural = "Auteurs"
-    
+
     def __str__(self):
         return self.user.username
 
@@ -102,23 +102,23 @@ class Post(models.Model):
     published = models.BooleanField("Publié", default=False)
     created_at = models.DateTimeField("Date de création", auto_now_add=True)
     updated_at = models.DateTimeField("Date de modification", auto_now=True)
-    
+
     class Meta:
         verbose_name = "Article"
         verbose_name_plural = "Articles"
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return self.title
 
 class Tag(models.Model):
     name = models.CharField("Nom du tag", max_length=50, unique=True)
     color = models.CharField("Couleur", max_length=7, default="#007bff")
-    
+
     class Meta:
         verbose_name = "Tag"
         verbose_name_plural = "Tags"
-    
+
     def __str__(self):
         return self.name
 ```
@@ -140,24 +140,24 @@ from myapp.models import Category, Author, Post, Tag
 
 class Command(BaseCommand):
     help = 'Create sample data for testing'
-    
+
     def handle(self, *args, **options):
         # Create categories
         tech_category = Category.objects.create(
             name="Technologie",
             description="Articles sur la technologie et l'innovation"
         )
-        
+
         lifestyle_category = Category.objects.create(
             name="Style de vie",
             description="Articles sur le style de vie et les loisirs"
         )
-        
+
         # Create tags
         python_tag = Tag.objects.create(name="Python", color="#3776ab")
         django_tag = Tag.objects.create(name="Django", color="#092e20")
         graphql_tag = Tag.objects.create(name="GraphQL", color="#e10098")
-        
+
         # Create user and author
         user = User.objects.create_user(
             username='john_doe',
@@ -165,13 +165,13 @@ class Command(BaseCommand):
             first_name='John',
             last_name='Doe'
         )
-        
+
         author = Author.objects.create(
             user=user,
             bio="Développeur passionné par les technologies web modernes.",
             website="https://johndoe.dev"
         )
-        
+
         # Create posts
         post1 = Post.objects.create(
             title="Introduction à GraphQL avec Django",
@@ -181,7 +181,7 @@ class Command(BaseCommand):
             published=True
         )
         post1.tags.add(python_tag, django_tag, graphql_tag)
-        
+
         post2 = Post.objects.create(
             title="Les meilleures pratiques Django en 2024",
             content="Django continue d'évoluer avec de nouvelles fonctionnalités...",
@@ -190,13 +190,14 @@ class Command(BaseCommand):
             published=True
         )
         post2.tags.add(python_tag, django_tag)
-        
+
         self.stdout.write(
             self.style.SUCCESS('Sample data created successfully!')
         )
 ```
 
 Run the command:
+
 ```bash
 python manage.py create_sample_data
 ```
@@ -214,6 +215,7 @@ Visit `http://localhost:8000/graphql/` to access GraphiQL interface.
 ### Basic Queries
 
 #### 1. Get All Posts
+
 ```graphql
 query {
   posts {
@@ -251,6 +253,7 @@ query {
 ```
 
 #### 2. Get Single Post
+
 ```graphql
 query {
   post(id: "1") {
@@ -270,6 +273,7 @@ query {
 ```
 
 #### 3. Filter Posts by Category
+
 ```graphql
 query {
   posts(category: "1") {
@@ -287,6 +291,7 @@ query {
 ```
 
 #### 4. Search Posts
+
 ```graphql
 query {
   posts(title_Icontains: "GraphQL") {
@@ -304,12 +309,15 @@ query {
 ### Basic Mutations
 
 #### 1. Create a New Category
+
 ```graphql
 mutation {
-  createCategory(input: {
-    name: "Science"
-    description: "Articles scientifiques et recherche"
-  }) {
+  createCategory(
+    input: {
+      name: "Science"
+      description: "Articles scientifiques et recherche"
+    }
+  ) {
     category {
       id
       name
@@ -322,15 +330,18 @@ mutation {
 ```
 
 #### 2. Create a New Post
+
 ```graphql
 mutation {
-  createPost(input: {
-    title: "Mon Premier Article GraphQL"
-    content: "Ceci est le contenu de mon premier article créé via GraphQL..."
-    authorId: 1
-    categoryId: 1
-    published: true
-  }) {
+  createPost(
+    input: {
+      title: "Mon Premier Article GraphQL"
+      content: "Ceci est le contenu de mon premier article créé via GraphQL..."
+      authorId: 1
+      categoryId: 1
+      published: true
+    }
+  ) {
     post {
       id
       title
@@ -344,13 +355,10 @@ mutation {
 ```
 
 #### 3. Update a Post
+
 ```graphql
 mutation {
-  updatePost(input: {
-    id: 1
-    title: "Titre Mis à Jour"
-    published: true
-  }) {
+  updatePost(input: { id: 1, title: "Titre Mis à Jour", published: true }) {
     post {
       id
       title
@@ -363,11 +371,10 @@ mutation {
 ```
 
 #### 4. Delete a Post
+
 ```graphql
 mutation {
-  deletePost(input: {
-    id: 1
-  }) {
+  deletePost(input: { id: 1 }) {
     success
     errors
   }
@@ -380,7 +387,7 @@ mutation {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MODELS': [
         'myapp.models.Post',
         'myapp.models.Category',
@@ -403,7 +410,7 @@ DJANGO_GRAPHQL_AUTO = {
 # myapp/models.py
 class Post(models.Model):
     # ... existing fields ...
-    
+
     class GraphQLMeta:
         permissions = {
             'create': ['myapp.add_post'],
@@ -416,7 +423,7 @@ class Post(models.Model):
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # ... existing config ...
     'CACHING': {
         'ENABLE': True,
@@ -442,7 +449,7 @@ CACHES = {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # ... existing config ...
     'RATE_LIMITING': {
         'ENABLE': True,
@@ -459,7 +466,7 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # ... existing config ...
     'LOGGING': {
         'ENABLE_QUERY_LOGGING': True,
@@ -481,7 +488,7 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto': {
+        'rail_django_graphql': {
             'handlers': ['file'],
             'level': 'INFO',
             'propagate': True,
@@ -518,21 +525,25 @@ query {
 ## 🚀 Next Steps
 
 ### 1. Explore Advanced Features
+
 - **File Uploads**: [File Upload Guide](features/file-uploads-media.md)
 - **Real-time Subscriptions**: [Subscription Guide](features/subscriptions.md)
 - **Custom Extensions**: [Extension Development](development/developer-guide.md)
 
 ### 2. Production Deployment
+
 - **Security Configuration**: [Security Guide](features/security.md)
 - **Performance Optimization**: [Performance Guide](setup/performance.md)
 - **Monitoring Setup**: [Monitoring Guide](setup/monitoring.md)
 
 ### 3. Integration Examples
+
 - **React Frontend**: [React Integration](examples/react-integration.md)
 - **Vue.js Frontend**: [Vue Integration](examples/vue-integration.md)
 - **Mobile Apps**: [Mobile Integration](examples/mobile-integration.md)
 
 ### 4. Community Resources
+
 - **GitHub Repository**: [Source Code](https://github.com/your-org/django-graphql-auto)
 - **Documentation**: [Full Documentation](README.md)
 - **Examples**: [Real-world Examples](examples/)
@@ -543,20 +554,23 @@ query {
 ### Common Issues
 
 #### Schema Not Generated
+
 ```python
 # Check if models are properly configured
 python manage.py shell
->>> from django_graphql_auto.core.schema_generator import SchemaGenerator
+>>> from rail_django_graphql.core.schema_generator import SchemaGenerator
 >>> generator = SchemaGenerator(debug=True)
 >>> schema = generator.generate_schema()
 ```
 
 #### GraphiQL Not Loading
+
 - Ensure `DEBUG = True` in development
 - Check that `graphene_django` is installed
 - Verify URL configuration
 
 #### Permission Errors
+
 ```python
 # Check user permissions
 python manage.py shell
@@ -567,6 +581,7 @@ python manage.py shell
 ```
 
 #### Performance Issues
+
 - Enable query optimization in settings
 - Add database indexes for filtered fields
 - Use pagination for large datasets

@@ -5,6 +5,7 @@ The Django GraphQL Auto-Generation System provides comprehensive error handling 
 ## 🎯 Overview
 
 The error handling system automatically:
+
 - ✅ **Field Extraction**: Identifies which field caused the error
 - ✅ **Database Constraints**: Handles UNIQUE, NOT NULL, and FOREIGN KEY violations
 - ✅ **Validation Errors**: Processes Django model validation errors
@@ -28,8 +29,8 @@ All mutation errors follow a consistent structure:
 
 ```graphql
 type MutationError {
-  field: String      # Field name where error occurred (null for general errors)
-  message: String!   # Human-readable error message
+  field: String # Field name where error occurred (null for general errors)
+  message: String! # Human-readable error message
 }
 
 type CreatePostMutation {
@@ -76,6 +77,7 @@ def clean(self):
 ```
 
 **GraphQL Response:**
+
 ```json
 {
   "field": "title",
@@ -90,9 +92,10 @@ def clean(self):
 ```
 
 **GraphQL Response:**
+
 ```json
 {
-  "field": "email", 
+  "field": "email",
   "message": "A User with this email already exists."
 }
 ```
@@ -104,6 +107,7 @@ def clean(self):
 ```
 
 **GraphQL Response:**
+
 ```json
 {
   "field": "category",
@@ -119,12 +123,13 @@ Automatically detects and extracts field names from UNIQUE constraint failures:
 
 ```graphql
 mutation {
-  createUser(input: {
-    email: "existing@example.com"
-    username: "duplicate_user"
-  }) {
+  createUser(
+    input: { email: "existing@example.com", username: "duplicate_user" }
+  ) {
     ok
-    user { id }
+    user {
+      id
+    }
     errors {
       field
       message
@@ -134,6 +139,7 @@ mutation {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -160,6 +166,7 @@ Handles required field violations:
 ```
 
 **GraphQL Response:**
+
 ```json
 {
   "field": "title",
@@ -176,6 +183,7 @@ Handles invalid foreign key references:
 ```
 
 **GraphQL Response:**
+
 ```json
 {
   "field": null,
@@ -190,7 +198,7 @@ Handles invalid foreign key references:
 ```python
 class Post(models.Model):
     title = models.CharField(max_length=100)
-    
+
     def clean(self):
         if len(self.title) < 3:
             raise ValidationError({
@@ -199,6 +207,7 @@ class Post(models.Model):
 ```
 
 **GraphQL Response:**
+
 ```json
 {
   "field": "title",
@@ -218,9 +227,10 @@ class PostForm(forms.ModelForm):
 ```
 
 **GraphQL Response:**
+
 ```json
 {
-  "field": "title", 
+  "field": "title",
   "message": "Title cannot contain spam"
 }
 ```
@@ -241,13 +251,17 @@ class Post(models.Model):
 
 ```graphql
 mutation {
-  createPost(input: {
-    title: "Test Post"
-    author: "999"      # Non-existent user
-    category: "888"    # Non-existent category
-  }) {
+  createPost(
+    input: {
+      title: "Test Post"
+      author: "999" # Non-existent user
+      category: "888" # Non-existent category
+    }
+  ) {
     ok
-    post { id }
+    post {
+      id
+    }
     errors {
       field
       message
@@ -257,6 +271,7 @@ mutation {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -269,7 +284,7 @@ mutation {
           "message": "Invalid author: The selected user does not exist."
         },
         {
-          "field": "category", 
+          "field": "category",
           "message": "Invalid category: The selected category does not exist."
         }
       ]
@@ -333,12 +348,12 @@ Multiple validation errors in a single response:
 // React example
 const handleMutation = async (input) => {
   const result = await createPost({ variables: { input } });
-  
+
   if (!result.data.createPost.ok) {
     const errors = result.data.createPost.errors;
-    
+
     // Handle field-specific errors
-    errors.forEach(error => {
+    errors.forEach((error) => {
       if (error.field) {
         setFieldError(error.field, error.message);
       } else {
@@ -353,11 +368,13 @@ const handleMutation = async (input) => {
 
 ```jsx
 // Display field-specific errors
-{errors.map(error => (
-  <div key={error.field || 'general'} className="error">
-    {error.field && <strong>{error.field}:</strong>} {error.message}
-  </div>
-))}
+{
+  errors.map((error) => (
+    <div key={error.field || "general"} className="error">
+      {error.field && <strong>{error.field}:</strong>} {error.message}
+    </div>
+  ));
+}
 ```
 
 ### 3. Form Validation
@@ -366,15 +383,15 @@ const handleMutation = async (input) => {
 // Validate before submission
 const validateForm = (data) => {
   const errors = [];
-  
+
   if (!data.title) {
-    errors.push({ field: 'title', message: 'Title is required' });
+    errors.push({ field: "title", message: "Title is required" });
   }
-  
+
   if (!data.email || !isValidEmail(data.email)) {
-    errors.push({ field: 'email', message: 'Valid email is required' });
+    errors.push({ field: "email", message: "Valid email is required" });
   }
-  
+
   return errors;
 };
 ```
@@ -388,6 +405,7 @@ const validateForm = (data) => {
 **Problem:** Error shows `field: null` when it should show a specific field.
 
 **Solution:** Check if the error message contains recognizable patterns:
+
 - Database constraint format: `UNIQUE constraint failed: table.field`
 - Foreign key format: `ModelName with id 'X' does not exist`
 
@@ -396,6 +414,7 @@ const validateForm = (data) => {
 **Problem:** Error messages are too technical.
 
 **Solution:** The system automatically converts technical errors to user-friendly messages:
+
 - `UNIQUE constraint failed` → `"A {Model} with this {field} already exists."`
 - `NOT NULL constraint failed` → `"This field is required."`
 
@@ -409,7 +428,7 @@ const validateForm = (data) => {
 # Good
 raise ValidationError({'field_name': 'Error message'})
 
-# Bad  
+# Bad
 raise ValidationError('Generic error message')
 ```
 
@@ -427,7 +446,7 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.generators.mutations': {
+        'rail_django_graphql.generators.mutations': {
             'handlers': ['console'],
             'level': 'INFO',
         },
@@ -436,6 +455,7 @@ LOGGING = {
 ```
 
 **Debug Output:**
+
 ```
 INFO CreateMutation exception: IntegrityError: UNIQUE constraint failed: app_user.email
 INFO Extracted field name: email
@@ -448,7 +468,7 @@ INFO Extracted field name from foreign key error: category
 ### Custom Error Processing
 
 ```python
-from django_graphql_auto.generators.mutations import CreateMutation
+from rail_django_graphql.generators.mutations import CreateMutation
 
 class CustomCreateMutation(CreateMutation):
     @classmethod

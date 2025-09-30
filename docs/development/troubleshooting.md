@@ -19,11 +19,13 @@ This guide helps you diagnose and resolve common issues when using the Django Gr
 ### Issue: Schema Not Generated
 
 **Symptoms:**
+
 - GraphQL schema is empty or missing types
 - No queries or mutations available
 - Error: "Schema contains no types"
 
 **Possible Causes:**
+
 1. Models not properly registered
 2. Missing `GraphQLMeta` configuration
 3. Import errors in models
@@ -39,18 +41,18 @@ from django.apps import AppConfig
 class YourAppConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'your_app'
-    
+
     def ready(self):
         # Import models to ensure they're registered
         from . import models
 
 # 2. Check model registration
 # models.py
-from django_graphql_auto.registry import model_registry
+from rail_django_graphql.registry import model_registry
 
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         enable_queries = True
         enable_mutations = True
@@ -59,7 +61,7 @@ class YourModel(models.Model):
 print(model_registry.get_registered_models())
 
 # 3. Debug schema generation
-from django_graphql_auto.schema import build_schema
+from rail_django_graphql.schema import build_schema
 
 try:
     schema = build_schema()
@@ -74,8 +76,9 @@ except Exception as e:
 ### Issue: Import Errors
 
 **Symptoms:**
+
 - `ImportError` or `ModuleNotFoundError`
-- "No module named 'django_graphql_auto'"
+- "No module named 'rail_django_graphql'"
 - Circular import errors
 
 **Solutions:**
@@ -89,13 +92,13 @@ pip list | grep django-graphql-auto
 INSTALLED_APPS = [
     # ... other apps
     'graphene_django',
-    'django_graphql_auto',
+    'rail_django_graphql',
     'your_app',  # Make sure your app is included
 ]
 
 # 3. Fix circular imports
 # Instead of importing in models.py
-from django_graphql_auto.decorators import graphql_model
+from rail_django_graphql.decorators import graphql_model
 
 @graphql_model
 class MyModel(models.Model):
@@ -110,6 +113,7 @@ class MyAppConfig(AppConfig):
 ### Issue: Database Connection Errors
 
 **Symptoms:**
+
 - "Database connection failed"
 - "Table doesn't exist" errors
 - Migration-related issues
@@ -135,6 +139,7 @@ python manage.py shell
 ### Issue: Missing Fields in GraphQL Types
 
 **Symptoms:**
+
 - Some model fields don't appear in GraphQL schema
 - Fields are None in GraphQL responses
 - Type definitions incomplete
@@ -143,7 +148,7 @@ python manage.py shell
 
 ```python
 # Debug field generation
-from django_graphql_auto.generators.types import TypeGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 from your_app.models import YourModel
 
 generator = TypeGenerator()
@@ -167,27 +172,27 @@ if meta:
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
     secret = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         # Include specific fields
         only_fields = ['name']  # Only 'name' will be included
-        
+
         # Or exclude specific fields
         exclude_fields = ['secret']  # 'secret' will be excluded
-        
+
         # Enable all fields (default)
         # exclude_fields = []
         # only_fields = []
 
 # 2. Handle custom field types
-from django_graphql_auto.scalars import register_scalar
+from rail_django_graphql.scalars import register_scalar
 import graphene
 
 # Register custom scalar for unsupported field types
 register_scalar(YourCustomField, graphene.String)
 
 # 3. Debug field introspection
-from django_graphql_auto.introspection import ModelIntrospector
+from rail_django_graphql.introspection import ModelIntrospector
 
 introspector = ModelIntrospector()
 field_info = introspector.get_field_info(YourModel, 'problematic_field')
@@ -197,6 +202,7 @@ print(f"Field info: {field_info}")
 ### Issue: Incorrect Field Types
 
 **Symptoms:**
+
 - GraphQL fields have wrong types (String instead of Int, etc.)
 - Type conversion errors
 - Scalar type mismatches
@@ -205,7 +211,7 @@ print(f"Field info: {field_info}")
 
 ```python
 # 1. Check field type mapping
-from django_graphql_auto.type_mapping import get_graphql_type
+from rail_django_graphql.type_mapping import get_graphql_type
 from django.db import models
 
 # Debug type mapping
@@ -214,7 +220,7 @@ graphql_type = get_graphql_type(field)
 print(f"Django field: {field} -> GraphQL type: {graphql_type}")
 
 # 2. Register custom type mappings
-from django_graphql_auto.type_mapping import register_type_mapping
+from rail_django_graphql.type_mapping import register_type_mapping
 import graphene
 
 # Map custom Django field to GraphQL type
@@ -223,7 +229,7 @@ register_type_mapping(YourCustomField, graphene.String)
 # 3. Override field types in model
 class YourModel(models.Model):
     special_field = models.TextField()
-    
+
     class GraphQLMeta:
         field_types = {
             'special_field': graphene.String(description="Special text field")
@@ -235,6 +241,7 @@ class YourModel(models.Model):
 ### Issue: Query Execution Errors
 
 **Symptoms:**
+
 - "Field doesn't exist" errors
 - Permission denied errors
 - Validation errors during queries
@@ -282,7 +289,7 @@ print("Data:", result.get('data'))
 # 1. Check field permissions
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         # Configure field permissions
         field_permissions = {
@@ -290,11 +297,11 @@ class YourModel(models.Model):
         }
 
 # 2. Handle query errors gracefully
-from django_graphql_auto.exceptions import GraphQLError
+from rail_django_graphql.exceptions import GraphQLError
 
 class CustomQuery(graphene.ObjectType):
     your_model = graphene.Field(YourModelType, id=graphene.ID())
-    
+
     def resolve_your_model(self, info, id):
         try:
             return YourModel.objects.get(id=id)
@@ -308,13 +315,14 @@ def resolve_your_models(self, info, **kwargs):
     # Validate arguments
     if 'limit' in kwargs and kwargs['limit'] > 100:
         raise GraphQLError("Limit cannot exceed 100")
-    
+
     return YourModel.objects.all()[:kwargs.get('limit', 10)]
 ```
 
 ### Issue: Mutation Validation Errors
 
 **Symptoms:**
+
 - "Validation failed" errors
 - Required field errors
 - Data type conversion errors
@@ -345,6 +353,7 @@ mutation CreatePost($input: CreatePostInput!) {
 **Common Error Scenarios:**
 
 #### 1. Validation Errors with Field Extraction
+
 ```python
 # Input with validation error
 {
@@ -371,6 +380,7 @@ mutation CreatePost($input: CreatePostInput!) {
 ```
 
 #### 2. Database Constraint Errors
+
 ```python
 # Duplicate entry error
 {
@@ -397,6 +407,7 @@ mutation CreatePost($input: CreatePostInput!) {
 ```
 
 #### 3. Foreign Key Validation Errors
+
 ```python
 # Invalid foreign key reference
 {
@@ -426,7 +437,7 @@ mutation CreatePost($input: CreatePostInput!) {
 
 ```python
 # 1. Debug mutation input validation
-from django_graphql_auto.mutations import get_mutation_class
+from rail_django_graphql.mutations import get_mutation_class
 
 MutationClass = get_mutation_class(YourModel, 'create')
 mutation = MutationClass()
@@ -447,18 +458,18 @@ except Exception as e:
 class YourModel(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nom")
     email = models.EmailField(verbose_name="Adresse email")
-    
+
     def clean(self):
         if not self.name:
             raise ValidationError({
                 'name': "Le nom est requis"
             })
-        
+
         if len(self.name) < 3:
             raise ValidationError({
                 'name': "Le nom doit contenir au moins 3 caractères"
             })
-    
+
     class GraphQLMeta:
         # Enable model validation
         enable_model_validation = True
@@ -466,13 +477,13 @@ class YourModel(models.Model):
 # 3. Handle validation errors in mutations
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django_graphql_auto.mutations import BaseMutation
+from rail_django_graphql.mutations import BaseMutation
 
 class CustomCreateMutation(BaseMutation):
     class Meta:
         model = YourModel
         operation = 'create'
-    
+
     @classmethod
     def perform_mutation(cls, root, info, **input_data):
         try:
@@ -494,7 +505,7 @@ class CustomCreateMutation(BaseMutation):
                     'message': str(e),
                     'code': 'VALIDATION_ERROR'
                 })
-            
+
             return cls(
                 ok=False,
                 errors=errors
@@ -504,7 +515,7 @@ class CustomCreateMutation(BaseMutation):
             error_message = str(e)
             field = None
             code = 'INTEGRITY_ERROR'
-            
+
             # Extract field from constraint error
             if 'UNIQUE constraint failed' in error_message:
                 # Extract field name from error message
@@ -513,7 +524,7 @@ class CustomCreateMutation(BaseMutation):
                 if match:
                     field = match.group(1)
                 code = 'DUPLICATE_ENTRY'
-            
+
             return cls(
                 ok=False,
                 errors=[{
@@ -526,7 +537,7 @@ class CustomCreateMutation(BaseMutation):
 # 4. Testing error scenarios
 def test_mutation_errors():
     """Test various error scenarios with enhanced error handling"""
-    
+
     # Test validation error
     result = schema.execute('''
         mutation {
@@ -540,11 +551,11 @@ def test_mutation_errors():
             }
         }
     ''')
-    
+
     assert not result.data['createPost']['ok']
     assert result.data['createPost']['errors'][0]['field'] == 'title'
     assert result.data['createPost']['errors'][0]['code'] == 'VALIDATION_ERROR'
-    
+
     # Test duplicate entry error
     result = schema.execute('''
         mutation {
@@ -558,7 +569,7 @@ def test_mutation_errors():
             }
         }
     ''')
-    
+
     assert not result.data['createUser']['ok']
     assert result.data['createUser']['errors'][0]['field'] == 'username'
     assert result.data['createUser']['errors'][0]['code'] == 'DUPLICATE_ENTRY'
@@ -569,6 +580,7 @@ def test_mutation_errors():
 ### Issue: Filters Not Working
 
 **Symptoms:**
+
 - Filter arguments ignored
 - "Unknown filter" errors
 - Incorrect filter results
@@ -577,7 +589,7 @@ def test_mutation_errors():
 
 ```python
 # Debug filter generation
-from django_graphql_auto.filters import FilterGenerator
+from rail_django_graphql.filters import FilterGenerator
 from your_app.models import YourModel
 
 generator = FilterGenerator()
@@ -602,11 +614,11 @@ print(f"Filtered results: {filtered.count()}")
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         # Enable filtering
         enable_filtering = True
-        
+
         # Configure available filters
         filter_fields = {
             'name': ['exact', 'icontains', 'startswith'],
@@ -614,7 +626,7 @@ class YourModel(models.Model):
         }
 
 # 2. Custom filter implementation
-from django_graphql_auto.filters import BaseFilter
+from rail_django_graphql.filters import BaseFilter
 
 class CustomFilter(BaseFilter):
     def filter_custom_field(self, queryset, value):
@@ -622,7 +634,7 @@ class CustomFilter(BaseFilter):
         return queryset.filter(custom_condition=value)
 
 # Register custom filter
-from django_graphql_auto.filters import register_filter
+from rail_django_graphql.filters import register_filter
 register_filter(YourModel, 'custom', CustomFilter)
 
 # 3. Debug filter application
@@ -644,6 +656,7 @@ logger.setLevel(logging.DEBUG)
 ### Issue: Complex Filter Combinations
 
 **Symptoms:**
+
 - AND/OR combinations not working
 - Nested filter errors
 - Performance issues with complex filters
@@ -653,7 +666,7 @@ logger.setLevel(logging.DEBUG)
 ```python
 # 1. Use Q objects for complex filtering
 from django.db.models import Q
-from django_graphql_auto.filters import ComplexFilter
+from rail_django_graphql.filters import ComplexFilter
 
 class YourModelFilter(ComplexFilter):
     class Meta:
@@ -663,7 +676,7 @@ class YourModelFilter(ComplexFilter):
             'status': ['exact', 'in'],
             'created_at': ['gte', 'lte'],
         }
-    
+
     def filter_complex_condition(self, queryset, value):
         """Custom complex filter."""
         return queryset.filter(
@@ -673,7 +686,7 @@ class YourModelFilter(ComplexFilter):
 # 2. Configure filter combinations
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         filter_config = {
             'enable_and_or': True,
@@ -687,7 +700,7 @@ from django.db import models
 class YourModel(models.Model):
     name = models.CharField(max_length=100, db_index=True)  # Add index
     status = models.CharField(max_length=20, db_index=True)
-    
+
     class Meta:
         indexes = [
             models.Index(fields=['name', 'status']),  # Composite index
@@ -699,6 +712,7 @@ class YourModel(models.Model):
 ### Issue: Related Objects Not Loading
 
 **Symptoms:**
+
 - Related fields return null
 - N+1 query problems
 - "RelatedObjectDoesNotExist" errors
@@ -707,15 +721,15 @@ class YourModel(models.Model):
 
 ```python
 # 1. Configure relationship loading
-from django_graphql_auto.optimization import QueryOptimizer
+from rail_django_graphql.optimization import QueryOptimizer
 
 class YourModel(models.Model):
     author = models.ForeignKey(Author, on_delete=models.CASCADE)
-    
+
     class GraphQLMeta:
         # Enable relationship optimization
         optimize_queries = True
-        
+
         # Configure prefetching
         select_related = ['author']
         prefetch_related = ['tags', 'comments']
@@ -737,7 +751,7 @@ with override_settings(DEBUG=True):
             }
         }
     ''')
-    
+
     # Check executed queries
     print(f"Number of queries: {len(connection.queries)}")
     for query in connection.queries:
@@ -748,7 +762,7 @@ class YourModelType(DjangoObjectType):
     class Meta:
         model = YourModel
         fields = '__all__'
-    
+
     def resolve_author(self, info):
         try:
             return self.author
@@ -759,6 +773,7 @@ class YourModelType(DjangoObjectType):
 ### Issue: Circular Relationship Errors
 
 **Symptoms:**
+
 - "Maximum recursion depth exceeded"
 - Circular import errors
 - Infinite loops in schema generation
@@ -781,20 +796,20 @@ class Comment(models.Model):
 # 2. Configure relationship depth limits
 class YourModel(models.Model):
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True)
-    
+
     class GraphQLMeta:
         # Limit recursion depth
         max_relationship_depth = 3
-        
+
         # Exclude circular relationships
         exclude_relationships = ['parent__parent__parent']
 
 # 3. Use lazy loading for complex relationships
-from django_graphql_auto.types import LazyType
+from rail_django_graphql.types import LazyType
 
 class PostType(DjangoObjectType):
     comments = graphene.List(LazyType('CommentType'))
-    
+
     class Meta:
         model = Post
         fields = '__all__'
@@ -805,6 +820,7 @@ class PostType(DjangoObjectType):
 ### Issue: Slow Query Performance
 
 **Symptoms:**
+
 - Long response times
 - High database load
 - Memory usage issues
@@ -837,15 +853,15 @@ from django.db import connection
 def profile_query(query_string):
     start_time = time.time()
     start_queries = len(connection.queries)
-    
+
     result = schema.execute(query_string)
-    
+
     end_time = time.time()
     end_queries = len(connection.queries)
-    
+
     print(f"Execution time: {end_time - start_time:.2f}s")
     print(f"Database queries: {end_queries - start_queries}")
-    
+
     return result
 
 # 3. Analyze query complexity
@@ -862,17 +878,17 @@ complexity_rule = QueryComplexityRule(max_complexity=1000)
 # 1. Optimize database queries
 class YourModel(models.Model):
     name = models.CharField(max_length=100, db_index=True)
-    
+
     class GraphQLMeta:
         # Enable query optimization
         optimize_queries = True
-        
+
         # Configure pagination
         pagination = {
             'page_size': 20,
             'max_page_size': 100,
         }
-        
+
         # Limit query depth
         max_query_depth = 5
 
@@ -881,7 +897,7 @@ class YourModel(models.Model):
     name = models.CharField(max_length=100)
     status = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         indexes = [
             models.Index(fields=['name']),
@@ -891,28 +907,29 @@ class YourModel(models.Model):
 
 # 3. Implement caching
 from django.core.cache import cache
-from django_graphql_auto.caching import CacheManager
+from rail_django_graphql.caching import CacheManager
 
 class CachedYourModelType(DjangoObjectType):
     class Meta:
         model = YourModel
         fields = '__all__'
-    
+
     @staticmethod
     def resolve_expensive_field(root, info):
         cache_key = f"expensive_field_{root.id}"
         result = cache.get(cache_key)
-        
+
         if result is None:
             result = expensive_calculation(root)
             cache.set(cache_key, result, timeout=300)  # 5 minutes
-        
+
         return result
 ```
 
 ### Issue: Memory Usage Problems
 
 **Symptoms:**
+
 - High memory consumption
 - Out of memory errors
 - Slow garbage collection
@@ -921,11 +938,11 @@ class CachedYourModelType(DjangoObjectType):
 
 ```python
 # 1. Implement pagination
-from django_graphql_auto.pagination import CursorPagination
+from rail_django_graphql.pagination import CursorPagination
 
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         # Enable pagination
         enable_pagination = True
@@ -934,7 +951,7 @@ class YourModel(models.Model):
         max_page_size = 100
 
 # 2. Use iterator for large datasets
-from django_graphql_auto.resolvers import IteratorResolver
+from rail_django_graphql.resolvers import IteratorResolver
 
 class YourModelResolver(IteratorResolver):
     def resolve_large_dataset(self, info, **kwargs):
@@ -942,13 +959,13 @@ class YourModelResolver(IteratorResolver):
         return YourModel.objects.iterator(chunk_size=1000)
 
 # 3. Optimize object creation
-from django_graphql_auto.optimization import ObjectPool
+from rail_django_graphql.optimization import ObjectPool
 
 class OptimizedYourModelType(DjangoObjectType):
     class Meta:
         model = YourModel
         fields = '__all__'
-    
+
     @classmethod
     def get_node(cls, info, id):
         # Use object pooling for frequently accessed objects
@@ -960,6 +977,7 @@ class OptimizedYourModelType(DjangoObjectType):
 ### Issue: Settings Not Applied
 
 **Symptoms:**
+
 - Configuration changes ignored
 - Default behavior instead of custom settings
 - Settings validation errors
@@ -969,7 +987,7 @@ class OptimizedYourModelType(DjangoObjectType):
 ```python
 # 1. Verify settings structure
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'SCHEMA_GENERATION': {
         'AUTO_GENERATE_SCHEMA': True,
         'INCLUDE_DJANGO_CONTRIB_MODELS': False,
@@ -980,12 +998,12 @@ DJANGO_GRAPHQL_AUTO = {
     },
     'FILTERING': {
         'ENABLE_FILTERING': True,
-        'DEFAULT_FILTER_BACKEND': 'django_graphql_auto.filters.DjangoFilterBackend',
+        'DEFAULT_FILTER_BACKEND': 'rail_django_graphql.filters.DjangoFilterBackend',
     }
 }
 
 # 2. Validate settings
-from django_graphql_auto.settings import validate_settings
+from rail_django_graphql.settings import validate_settings
 
 try:
     validate_settings()
@@ -994,7 +1012,7 @@ except Exception as e:
     print(f"Settings validation failed: {e}")
 
 # 3. Debug settings loading
-from django_graphql_auto.settings import app_settings
+from rail_django_graphql.settings import app_settings
 
 print("Current settings:")
 for key, value in app_settings.items():
@@ -1004,6 +1022,7 @@ for key, value in app_settings.items():
 ### Issue: Model Configuration Conflicts
 
 **Symptoms:**
+
 - Conflicting GraphQLMeta settings
 - Inheritance issues with configuration
 - Settings not inherited properly
@@ -1014,10 +1033,10 @@ for key, value in app_settings.items():
 # 1. Use proper inheritance
 class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         abstract = True
-    
+
     class GraphQLMeta:
         # Base configuration
         enable_queries = True
@@ -1026,14 +1045,14 @@ class BaseModel(models.Model):
 
 class YourModel(BaseModel):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta(BaseModel.GraphQLMeta):
         # Extend base configuration
         include_fields = ['created_at']  # Override exclusion
         filter_fields = ['name']
 
 # 2. Debug configuration inheritance
-from django_graphql_auto.configuration import get_model_config
+from rail_django_graphql.configuration import get_model_config
 
 config = get_model_config(YourModel)
 print("Final configuration:")
@@ -1043,16 +1062,16 @@ for key, value in config.items():
 # 3. Resolve configuration conflicts
 class YourModel(models.Model):
     name = models.CharField(max_length=100)
-    
+
     class GraphQLMeta:
         # Explicit configuration to avoid conflicts
         enable_queries = True
         enable_mutations = True
-        
+
         # Clear field configuration
         exclude_fields = []
         only_fields = []
-        
+
         # Explicit filter configuration
         enable_filtering = True
         filter_fields = {
@@ -1068,7 +1087,7 @@ class YourModel(models.Model):
 # settings.py
 DEBUG = True
 
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'DEBUG': True,
     'ENABLE_INTROSPECTION': True,
     'ENABLE_PLAYGROUND': True,
@@ -1086,8 +1105,8 @@ GRAPHENE = {
 
 ```python
 # Debug script
-from django_graphql_auto.schema import SchemaBuilder
-from django_graphql_auto.registry import model_registry
+from rail_django_graphql.schema import SchemaBuilder
+from rail_django_graphql.registry import model_registry
 
 # Check registered models
 print("Registered models:")
@@ -1099,13 +1118,13 @@ builder = SchemaBuilder()
 try:
     schema = builder.build()
     print("Schema built successfully")
-    
+
     # Print schema types
     print("Schema types:")
     for type_name in schema.type_map.keys():
         if not type_name.startswith('__'):
             print(f"  {type_name}")
-            
+
 except Exception as e:
     print(f"Schema building failed: {e}")
     import traceback
@@ -1155,6 +1174,7 @@ print("Query result:", result)
 ### Q: Why is my schema empty?
 
 **A:** Common causes:
+
 1. Models not imported in `apps.py`
 2. Missing `GraphQLMeta` configuration
 3. All fields excluded in configuration
@@ -1165,7 +1185,7 @@ print("Query result:", result)
 **A:** Register custom scalar mappings:
 
 ```python
-from django_graphql_auto.scalars import register_scalar
+from rail_django_graphql.scalars import register_scalar
 import graphene
 
 register_scalar(YourCustomField, graphene.String)
@@ -1174,6 +1194,7 @@ register_scalar(YourCustomField, graphene.String)
 ### Q: Why are my filters not working?
 
 **A:** Check:
+
 1. `enable_filtering = True` in `GraphQLMeta`
 2. Fields included in `filter_fields`
 3. Correct filter syntax in GraphQL query
@@ -1182,6 +1203,7 @@ register_scalar(YourCustomField, graphene.String)
 ### Q: How do I optimize query performance?
 
 **A:** Use:
+
 1. Database indexes on filtered/ordered fields
 2. `select_related` and `prefetch_related`
 3. Pagination for large datasets
@@ -1191,6 +1213,7 @@ register_scalar(YourCustomField, graphene.String)
 ### Q: Can I customize the generated mutations?
 
 **A:** Yes, several ways:
+
 1. Override mutation classes
 2. Use custom mutation mixins
 3. Implement custom validation
@@ -1217,7 +1240,7 @@ class YourModel(models.Model):
 ```python
 class YourModel(models.Model):
     file = models.FileField(upload_to='uploads/')
-    
+
     class GraphQLMeta:
         enable_file_uploads = True
 ```
@@ -1227,20 +1250,20 @@ class YourModel(models.Model):
 **A:** Override mutation methods:
 
 ```python
-from django_graphql_auto.mutations import CreateMutation
+from rail_django_graphql.mutations import CreateMutation
 
 class CustomCreateMutation(CreateMutation):
     class Meta:
         model = YourModel
-    
+
     @classmethod
     def perform_mutation(cls, root, info, **input_data):
         # Add custom logic here
         instance = super().perform_mutation(root, info, **input_data)
-        
+
         # Post-creation logic
         send_notification(instance)
-        
+
         return instance
 ```
 

@@ -60,22 +60,22 @@ query {
 **Solution - Query Optimization:**
 
 ```python
-from django_graphql_auto.optimization import QueryOptimizer
+from rail_django_graphql.optimization import QueryOptimizer
 
 class Post(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
     author = models.ForeignKey(Author, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class GraphQLMeta:
         # Enable automatic query optimization
         optimize_queries = True
-        
+
         # Configure relationship prefetching
         select_related = ['author']  # For ForeignKey and OneToOne
         prefetch_related = ['comments__author']  # For reverse ForeignKey and ManyToMany
-        
+
         # Advanced optimization
         optimization_config = {
             'max_prefetch_depth': 3,
@@ -87,7 +87,7 @@ class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     content = models.TextField()
     author = models.ForeignKey(Author, on_delete=models.CASCADE)
-    
+
     class GraphQLMeta:
         select_related = ['author', 'post']
 ```
@@ -95,23 +95,23 @@ class Comment(models.Model):
 **Custom Query Optimization:**
 
 ```python
-from django_graphql_auto.resolvers import OptimizedResolver
+from rail_django_graphql.resolvers import OptimizedResolver
 from django.db.models import Prefetch
 
 class PostResolver(OptimizedResolver):
     """Custom resolver with advanced optimization."""
-    
+
     def get_queryset(self, info, **kwargs):
         """Get optimized queryset based on requested fields."""
         queryset = Post.objects.all()
-        
+
         # Analyze requested fields from GraphQL info
         requested_fields = self.get_requested_fields(info)
-        
+
         # Dynamic optimization based on requested fields
         if 'author' in requested_fields:
             queryset = queryset.select_related('author')
-        
+
         if 'comments' in requested_fields:
             # Optimize comments prefetching
             comments_prefetch = Prefetch(
@@ -119,27 +119,27 @@ class PostResolver(OptimizedResolver):
                 queryset=Comment.objects.select_related('author')
             )
             queryset = queryset.prefetch_related(comments_prefetch)
-        
+
         if 'tags' in requested_fields:
             queryset = queryset.prefetch_related('tags')
-        
+
         return queryset
-    
+
     def get_requested_fields(self, info):
         """Extract requested fields from GraphQL info."""
         from graphql.execution.collect_fields import collect_fields
-        
+
         fields = collect_fields(
             info.schema,
             info.fragments,
             info.field_nodes[0].selection_set,
             info.variable_values
         )
-        
+
         return list(fields.keys())
 
 # Register custom resolver
-from django_graphql_auto.registry import resolver_registry
+from rail_django_graphql.registry import resolver_registry
 resolver_registry.register(Post, PostResolver)
 ```
 
@@ -156,25 +156,25 @@ class Post(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     view_count = models.IntegerField(default=0)
-    
+
     class Meta:
         indexes = [
             # Single field indexes for filtering
             models.Index(fields=['status']),
             models.Index(fields=['author']),
             models.Index(fields=['-created_at']),  # For ordering
-            
+
             # Composite indexes for common filter combinations
             models.Index(fields=['status', '-created_at']),
             models.Index(fields=['author', 'status']),
-            
+
             # Partial indexes for specific conditions
             models.Index(
                 fields=['title'],
                 condition=models.Q(status='published'),
                 name='published_posts_title_idx'
             ),
-            
+
             # Functional indexes (PostgreSQL)
             models.Index(
                 fields=['title'],
@@ -182,7 +182,7 @@ class Post(models.Model):
                 opclasses=['varchar_pattern_ops']
             ),
         ]
-        
+
         # Database constraints for performance
         constraints = [
             models.CheckConstraint(
@@ -190,7 +190,7 @@ class Post(models.Model):
                 name='positive_view_count'
             ),
         ]
-    
+
     class GraphQLMeta:
         # Configure filtering to use indexes
         filter_fields = {
@@ -199,7 +199,7 @@ class Post(models.Model):
             'created_at': ['gte', 'lte', 'range'],
             'title': ['icontains', 'istartswith'],
         }
-        
+
         # Default ordering to use index
         ordering = ['-created_at']
 ```
@@ -212,11 +212,11 @@ from django.test.utils import override_settings
 
 def analyze_query_performance():
     """Analyze query performance and index usage."""
-    
+
     with override_settings(DEBUG=True):
         # Clear previous queries
         connection.queries_log.clear()
-        
+
         # Execute GraphQL query
         result = schema.execute('''
             query {
@@ -229,12 +229,12 @@ def analyze_query_performance():
                 }
             }
         ''')
-        
+
         # Analyze queries
         for query in connection.queries:
             print(f"SQL: {query['sql']}")
             print(f"Time: {query['time']}s")
-            
+
             # Check if indexes are used (PostgreSQL)
             if 'EXPLAIN' in query['sql'].upper():
                 print("Execution plan available")
@@ -243,13 +243,13 @@ def analyze_query_performance():
 def explain_query(queryset):
     """Get query execution plan."""
     from django.db import connection
-    
+
     sql, params = queryset.query.sql_with_params()
-    
+
     with connection.cursor() as cursor:
         cursor.execute(f"EXPLAIN ANALYZE {sql}", params)
         plan = cursor.fetchall()
-        
+
         for row in plan:
             print(row[0])
 ```
@@ -270,10 +270,10 @@ DATABASES = {
             # Connection pooling
             'MAX_CONNS': 20,
             'MIN_CONNS': 5,
-            
+
             # Connection timeout
             'CONN_MAX_AGE': 600,  # 10 minutes
-            
+
             # Query optimization
             'OPTIONS': {
                 'statement_timeout': '30000',  # 30 seconds
@@ -299,34 +299,34 @@ DATABASES['default']['POOL_OPTIONS'] = {
 Implement DataLoader pattern for efficient batch loading:
 
 ```python
-from django_graphql_auto.loaders import DataLoader
+from rail_django_graphql.loaders import DataLoader
 from collections import defaultdict
 
 class AuthorLoader(DataLoader):
     """Batch load authors to avoid N+1 queries."""
-    
+
     def batch_load_fn(self, author_ids):
         """Load authors in batch."""
         authors = Author.objects.filter(id__in=author_ids)
         author_map = {author.id: author for author in authors}
-        
+
         # Return authors in the same order as requested IDs
         return [author_map.get(author_id) for author_id in author_ids]
 
 class CommentsByPostLoader(DataLoader):
     """Batch load comments by post IDs."""
-    
+
     def batch_load_fn(self, post_ids):
         """Load comments for multiple posts."""
         comments = Comment.objects.filter(
             post_id__in=post_ids
         ).select_related('author')
-        
+
         # Group comments by post_id
         comments_by_post = defaultdict(list)
         for comment in comments:
             comments_by_post[comment.post_id].append(comment)
-        
+
         # Return comments in the same order as post_ids
         return [comments_by_post.get(post_id, []) for post_id in post_ids]
 
@@ -335,11 +335,11 @@ class PostType(DjangoObjectType):
     class Meta:
         model = Post
         fields = '__all__'
-    
+
     def resolve_author(self, info):
         """Resolve author using DataLoader."""
         return info.context.loaders['author'].load(self.author_id)
-    
+
     def resolve_comments(self, info):
         """Resolve comments using DataLoader."""
         return info.context.loaders['comments_by_post'].load(self.id)
@@ -349,7 +349,7 @@ class GraphQLContext:
     def __init__(self, request):
         self.request = request
         self.user = getattr(request, 'user', None)
-        
+
         # Initialize DataLoaders
         self.loaders = {
             'author': AuthorLoader(),
@@ -367,49 +367,49 @@ class OptimizedGraphQLView(GraphQLView):
 ### Query Complexity Analysis
 
 ```python
-from django_graphql_auto.complexity import QueryComplexityAnalyzer
+from rail_django_graphql.complexity import QueryComplexityAnalyzer
 
 class ComplexityAnalyzer(QueryComplexityAnalyzer):
     """Analyze and limit query complexity."""
-    
+
     def __init__(self, max_complexity=1000):
         self.max_complexity = max_complexity
-    
+
     def analyze_query(self, query_ast, variables=None):
         """Analyze query complexity."""
         complexity = self.calculate_complexity(query_ast, variables)
-        
+
         if complexity > self.max_complexity:
             raise GraphQLError(
                 f"Query complexity {complexity} exceeds maximum {self.max_complexity}"
             )
-        
+
         return complexity
-    
+
     def calculate_complexity(self, node, variables=None, depth=0):
         """Calculate complexity score for a query node."""
         if depth > 10:  # Prevent infinite recursion
             return 1000  # High penalty for deep queries
-        
+
         complexity = 1  # Base complexity
-        
+
         # Add complexity for each field
         if hasattr(node, 'selection_set') and node.selection_set:
             for selection in node.selection_set.selections:
                 if hasattr(selection, 'name'):
                     field_name = selection.name.value
-                    
+
                     # Higher complexity for relationship fields
                     if self.is_relationship_field(field_name):
                         complexity += 5
-                    
+
                     # Recursive complexity calculation
                     complexity += self.calculate_complexity(
                         selection, variables, depth + 1
                     )
-        
+
         return complexity
-    
+
     def is_relationship_field(self, field_name):
         """Check if field represents a relationship."""
         # Implementation depends on your schema structure
@@ -432,21 +432,21 @@ schema = graphene.Schema(
 ### Query Batching
 
 ```python
-from django_graphql_auto.batching import QueryBatcher
+from rail_django_graphql.batching import QueryBatcher
 
 class GraphQLBatcher(QueryBatcher):
     """Batch multiple GraphQL queries into a single request."""
-    
+
     def __init__(self, max_batch_size=10):
         self.max_batch_size = max_batch_size
-    
+
     def batch_queries(self, queries):
         """Execute multiple queries in a single batch."""
         if len(queries) > self.max_batch_size:
             raise GraphQLError(f"Batch size {len(queries)} exceeds maximum {self.max_batch_size}")
-        
+
         results = []
-        
+
         # Use database transaction for consistency
         with transaction.atomic():
             for query in queries:
@@ -465,7 +465,7 @@ class GraphQLBatcher(QueryBatcher):
                         'data': None,
                         'errors': [str(e)]
                     })
-        
+
         return results
 
 # Batch execution endpoint
@@ -478,10 +478,10 @@ def graphql_batch_view(request):
     """Handle batched GraphQL requests."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method allowed'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
-        
+
         if isinstance(data, list):
             # Batch request
             batcher = GraphQLBatcher()
@@ -498,7 +498,7 @@ def graphql_batch_view(request):
                 'data': result.data,
                 'errors': [str(e) for e in result.errors] if result.errors else None
             })
-    
+
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 ```
@@ -509,16 +509,16 @@ def graphql_batch_view(request):
 
 ```python
 from django.core.cache import cache
-from django_graphql_auto.caching import QueryCache
+from rail_django_graphql.caching import QueryCache
 import hashlib
 import json
 
 class GraphQLQueryCache(QueryCache):
     """Cache GraphQL query results."""
-    
+
     def __init__(self, default_timeout=300):
         self.default_timeout = default_timeout
-    
+
     def get_cache_key(self, query, variables=None, user=None):
         """Generate cache key for query."""
         key_data = {
@@ -526,23 +526,23 @@ class GraphQLQueryCache(QueryCache):
             'variables': variables or {},
             'user_id': user.id if user and user.is_authenticated else None
         }
-        
+
         key_string = json.dumps(key_data, sort_keys=True)
         return f"graphql_query:{hashlib.md5(key_string.encode()).hexdigest()}"
-    
+
     def get_cached_result(self, query, variables=None, user=None):
         """Get cached query result."""
         cache_key = self.get_cache_key(query, variables, user)
         return cache.get(cache_key)
-    
+
     def cache_result(self, query, variables, user, result, timeout=None):
         """Cache query result."""
         if result.errors:
             return  # Don't cache error results
-        
+
         cache_key = self.get_cache_key(query, variables, user)
         cache.set(cache_key, result.data, timeout or self.default_timeout)
-    
+
     def invalidate_cache(self, patterns=None):
         """Invalidate cached results."""
         if patterns:
@@ -558,41 +558,41 @@ class CachedGraphQLView(GraphQLView):
     def __init__(self):
         super().__init__()
         self.query_cache = GraphQLQueryCache()
-    
+
     def execute_graphql_request(self, request, data, query, variables, operation_name, show_graphiql=False):
         """Execute GraphQL request with caching."""
-        
+
         # Check cache first
         cached_result = self.query_cache.get_cached_result(
             query, variables, request.user
         )
-        
+
         if cached_result:
             return ExecutionResult(data=cached_result)
-        
+
         # Execute query
         result = super().execute_graphql_request(
             request, data, query, variables, operation_name, show_graphiql
         )
-        
+
         # Cache successful results
         if not result.errors:
             self.query_cache.cache_result(
                 query, variables, request.user, result
             )
-        
+
         return result
 ```
 
 ### Field-Level Caching
 
 ```python
-from django_graphql_auto.caching import FieldCache
+from rail_django_graphql.caching import FieldCache
 from functools import wraps
 
 def cached_field(timeout=300, key_func=None):
     """Decorator for caching individual field results."""
-    
+
     def decorator(resolver_func):
         @wraps(resolver_func)
         def wrapper(root, info, **kwargs):
@@ -601,38 +601,38 @@ def cached_field(timeout=300, key_func=None):
                 cache_key = key_func(root, info, **kwargs)
             else:
                 cache_key = f"{root.__class__.__name__}:{root.id}:{resolver_func.__name__}"
-            
+
             # Check cache
             cached_value = cache.get(cache_key)
             if cached_value is not None:
                 return cached_value
-            
+
             # Execute resolver
             result = resolver_func(root, info, **kwargs)
-            
+
             # Cache result
             cache.set(cache_key, result, timeout)
-            
+
             return result
-        
+
         return wrapper
     return decorator
 
 # Usage in resolvers
 class PostType(DjangoObjectType):
     expensive_calculation = graphene.String()
-    
+
     class Meta:
         model = Post
         fields = '__all__'
-    
+
     @cached_field(timeout=600)  # Cache for 10 minutes
     def resolve_expensive_calculation(self, info):
         """Expensive calculation that should be cached."""
         import time
         time.sleep(1)  # Simulate expensive operation
         return f"Expensive result for post {self.id}"
-    
+
     @cached_field(
         timeout=300,
         key_func=lambda root, info, **kwargs: f"comment_count:{root.id}"
@@ -647,11 +647,11 @@ class PostType(DjangoObjectType):
 ```python
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django_graphql_auto.caching import CacheInvalidator
+from rail_django_graphql.caching import CacheInvalidator
 
 class SmartCacheInvalidator(CacheInvalidator):
     """Intelligent cache invalidation based on model changes."""
-    
+
     def __init__(self):
         self.invalidation_rules = {
             'Post': {
@@ -667,30 +667,30 @@ class SmartCacheInvalidator(CacheInvalidator):
                 'related_fields': ['posts'],
             }
         }
-    
+
     def invalidate_for_model(self, model_class, instance=None, action='update'):
         """Invalidate cache for model changes."""
         model_name = model_class.__name__
         rules = self.invalidation_rules.get(model_name, {})
-        
+
         # Invalidate direct patterns
         patterns = rules.get('patterns', [])
         if instance:
             patterns.extend([f"{model_name.lower()}:{instance.id}:*"])
-        
+
         for pattern in patterns:
             cache.delete_pattern(pattern)
-        
+
         # Invalidate related models
         if instance and action in ['update', 'delete']:
             self._invalidate_related_models(instance, rules)
-    
+
     def _invalidate_related_models(self, instance, rules):
         """Invalidate cache for related models."""
         for field_name in rules.get('related_fields', []):
             if hasattr(instance, field_name):
                 related_objects = getattr(instance, field_name)
-                
+
                 if hasattr(related_objects, 'all'):
                     # Many-to-many or reverse foreign key
                     for related_obj in related_objects.all():
@@ -715,45 +715,45 @@ def invalidate_cache_on_model_change(sender, instance, **kwargs):
 ### Cursor-Based Pagination
 
 ```python
-from django_graphql_auto.pagination import CursorPagination
+from rail_django_graphql.pagination import CursorPagination
 import base64
 import json
 
 class OptimizedCursorPagination(CursorPagination):
     """Optimized cursor-based pagination."""
-    
+
     def __init__(self, max_page_size=100, default_page_size=20):
         self.max_page_size = max_page_size
         self.default_page_size = default_page_size
-    
+
     def paginate_queryset(self, queryset, cursor=None, first=None, last=None):
         """Paginate queryset with cursor-based pagination."""
-        
+
         # Validate page size
         page_size = first or last or self.default_page_size
         if page_size > self.max_page_size:
             raise GraphQLError(f"Page size {page_size} exceeds maximum {self.max_page_size}")
-        
+
         # Apply cursor filtering
         if cursor:
             cursor_data = self.decode_cursor(cursor)
             if cursor_data:
                 queryset = queryset.filter(id__gt=cursor_data['id'])
-        
+
         # Apply ordering for consistent pagination
         queryset = queryset.order_by('id')
-        
+
         # Fetch one extra item to determine if there are more pages
         items = list(queryset[:page_size + 1])
         has_next_page = len(items) > page_size
-        
+
         if has_next_page:
             items = items[:-1]
-        
+
         # Generate cursors
         start_cursor = self.encode_cursor({'id': items[0].id}) if items else None
         end_cursor = self.encode_cursor({'id': items[-1].id}) if items else None
-        
+
         return {
             'items': items,
             'page_info': {
@@ -763,12 +763,12 @@ class OptimizedCursorPagination(CursorPagination):
                 'end_cursor': end_cursor,
             }
         }
-    
+
     def encode_cursor(self, data):
         """Encode cursor data."""
         json_string = json.dumps(data, sort_keys=True)
         return base64.b64encode(json_string.encode()).decode()
-    
+
     def decode_cursor(self, cursor):
         """Decode cursor data."""
         try:
@@ -781,9 +781,9 @@ class OptimizedCursorPagination(CursorPagination):
 class PostConnection(graphene.Connection):
     class Meta:
         node = PostType
-    
+
     total_count = graphene.Int()
-    
+
     def resolve_total_count(self, info):
         return self.length
 
@@ -792,15 +792,15 @@ class Query(graphene.ObjectType):
         PostConnection,
         description="Get all posts with pagination"
     )
-    
+
     def resolve_all_posts(self, info, **kwargs):
         queryset = Post.objects.all()
-        
+
         # Apply filtering
         filters = kwargs.get('filters', {})
         if filters:
             queryset = apply_filters(queryset, filters)
-        
+
         # Apply pagination
         paginator = OptimizedCursorPagination()
         return paginator.paginate_queryset(queryset, **kwargs)
@@ -809,36 +809,36 @@ class Query(graphene.ObjectType):
 ### Offset-Based Pagination with Optimization
 
 ```python
-from django_graphql_auto.pagination import OffsetPagination
+from rail_django_graphql.pagination import OffsetPagination
 from django.core.paginator import Paginator
 
 class OptimizedOffsetPagination(OffsetPagination):
     """Optimized offset-based pagination."""
-    
+
     def __init__(self, max_page_size=100, default_page_size=20):
         self.max_page_size = max_page_size
         self.default_page_size = default_page_size
-    
+
     def paginate_queryset(self, queryset, page=1, page_size=None):
         """Paginate queryset with offset-based pagination."""
-        
+
         page_size = page_size or self.default_page_size
         if page_size > self.max_page_size:
             raise GraphQLError(f"Page size {page_size} exceeds maximum {self.max_page_size}")
-        
+
         # Use Django's Paginator with optimization
         paginator = Paginator(queryset, page_size)
-        
+
         # Optimize count query for large datasets
         if queryset.count() > 10000:
             # Use approximate count for very large datasets
             paginator._count = self.get_approximate_count(queryset)
-        
+
         try:
             page_obj = paginator.page(page)
         except EmptyPage:
             raise GraphQLError(f"Page {page} is out of range")
-        
+
         return {
             'items': list(page_obj.object_list),
             'page_info': {
@@ -850,11 +850,11 @@ class OptimizedOffsetPagination(OffsetPagination):
                 'has_previous': page_obj.has_previous(),
             }
         }
-    
+
     def get_approximate_count(self, queryset):
         """Get approximate count for large datasets."""
         from django.db import connection
-        
+
         # PostgreSQL specific optimization
         if connection.vendor == 'postgresql':
             with connection.cursor() as cursor:
@@ -864,7 +864,7 @@ class OptimizedOffsetPagination(OffsetPagination):
                 )
                 row = cursor.fetchone()
                 return row[0] if row else queryset.count()
-        
+
         # Fallback to exact count
         return queryset.count()
 ```
@@ -874,30 +874,30 @@ class OptimizedOffsetPagination(OffsetPagination):
 ### Memory-Efficient Query Processing
 
 ```python
-from django_graphql_auto.memory import MemoryOptimizer
+from rail_django_graphql.memory import MemoryOptimizer
 import gc
 
 class MemoryEfficientResolver:
     """Memory-efficient resolver for large datasets."""
-    
+
     def __init__(self, chunk_size=1000):
         self.chunk_size = chunk_size
-    
+
     def resolve_large_dataset(self, queryset, info):
         """Resolve large dataset with memory optimization."""
-        
+
         # Use iterator to avoid loading all objects into memory
         for chunk in self.chunked_queryset(queryset):
             # Process chunk
             yield from chunk
-            
+
             # Force garbage collection after each chunk
             gc.collect()
-    
+
     def chunked_queryset(self, queryset):
         """Split queryset into chunks."""
         count = queryset.count()
-        
+
         for start in range(0, count, self.chunk_size):
             end = min(start + self.chunk_size, count)
             chunk = queryset[start:end]
@@ -905,11 +905,11 @@ class MemoryEfficientResolver:
 
 class MemoryMonitor:
     """Monitor memory usage during GraphQL execution."""
-    
+
     def __init__(self):
         import psutil
         self.process = psutil.Process()
-    
+
     def get_memory_usage(self):
         """Get current memory usage."""
         memory_info = self.process.memory_info()
@@ -917,7 +917,7 @@ class MemoryMonitor:
             'rss': memory_info.rss / 1024 / 1024,  # MB
             'vms': memory_info.vms / 1024 / 1024,  # MB
         }
-    
+
     def check_memory_limit(self, limit_mb=1000):
         """Check if memory usage exceeds limit."""
         usage = self.get_memory_usage()
@@ -929,32 +929,32 @@ class MemoryOptimizedGraphQLView(GraphQLView):
     def __init__(self):
         super().__init__()
         self.memory_monitor = MemoryMonitor()
-    
+
     def execute_graphql_request(self, request, data, query, variables, operation_name, show_graphiql=False):
         """Execute GraphQL request with memory monitoring."""
-        
+
         # Check initial memory
         initial_memory = self.memory_monitor.get_memory_usage()
-        
+
         try:
             # Execute query
             result = super().execute_graphql_request(
                 request, data, query, variables, operation_name, show_graphiql
             )
-            
+
             # Check memory after execution
             self.memory_monitor.check_memory_limit()
-            
+
             return result
-        
+
         finally:
             # Force garbage collection
             gc.collect()
-            
+
             # Log memory usage
             final_memory = self.memory_monitor.get_memory_usage()
             memory_diff = final_memory['rss'] - initial_memory['rss']
-            
+
             if memory_diff > 100:  # Log if memory increased by more than 100MB
                 logger.warning(f"High memory usage: {memory_diff:.1f}MB increase")
 ```
@@ -962,38 +962,38 @@ class MemoryOptimizedGraphQLView(GraphQLView):
 ### Object Pool for Frequently Used Objects
 
 ```python
-from django_graphql_auto.pooling import ObjectPool
+from rail_django_graphql.pooling import ObjectPool
 from threading import Lock
 
 class GraphQLObjectPool:
     """Object pool for frequently accessed GraphQL objects."""
-    
+
     def __init__(self, max_size=1000):
         self.max_size = max_size
         self.pools = {}
         self.lock = Lock()
-    
+
     def get_or_create(self, model_class, obj_id):
         """Get object from pool or create new one."""
         pool_key = f"{model_class.__name__}:{obj_id}"
-        
+
         with self.lock:
             if pool_key in self.pools:
                 return self.pools[pool_key]
-            
+
             # Create new object
             try:
                 obj = model_class.objects.get(id=obj_id)
-                
+
                 # Add to pool if not full
                 if len(self.pools) < self.max_size:
                     self.pools[pool_key] = obj
-                
+
                 return obj
-            
+
             except model_class.DoesNotExist:
                 return None
-    
+
     def invalidate(self, model_class, obj_id=None):
         """Invalidate objects in pool."""
         with self.lock:
@@ -1009,7 +1009,7 @@ class GraphQLObjectPool:
                 ]
                 for key in keys_to_remove:
                     del self.pools[key]
-    
+
     def clear(self):
         """Clear entire pool."""
         with self.lock:
@@ -1023,7 +1023,7 @@ class PostType(DjangoObjectType):
     class Meta:
         model = Post
         fields = '__all__'
-    
+
     @staticmethod
     def get_node(info, id):
         """Get node using object pool."""
@@ -1041,41 +1041,41 @@ def invalidate_object_pool(sender, instance, **kwargs):
 ### Performance Monitoring
 
 ```python
-from django_graphql_auto.monitoring import PerformanceMonitor
+from rail_django_graphql.monitoring import PerformanceMonitor
 import time
 from django.db import connection
 
 class GraphQLPerformanceMonitor:
     """Monitor GraphQL query performance."""
-    
+
     def __init__(self):
         self.metrics = {}
-    
+
     def start_monitoring(self, query_name):
         """Start monitoring a query."""
         self.metrics[query_name] = {
             'start_time': time.time(),
             'start_queries': len(connection.queries),
         }
-    
+
     def end_monitoring(self, query_name):
         """End monitoring and return metrics."""
         if query_name not in self.metrics:
             return None
-        
+
         start_data = self.metrics[query_name]
-        
+
         metrics = {
             'execution_time': time.time() - start_data['start_time'],
             'database_queries': len(connection.queries) - start_data['start_queries'],
             'query_name': query_name,
         }
-        
+
         # Clean up
         del self.metrics[query_name]
-        
+
         return metrics
-    
+
     def log_slow_queries(self, metrics, threshold=1.0):
         """Log slow queries."""
         if metrics['execution_time'] > threshold:
@@ -1088,22 +1088,22 @@ class GraphQLPerformanceMonitor:
 # Performance monitoring middleware
 class PerformanceMiddleware:
     """GraphQL middleware for performance monitoring."""
-    
+
     def __init__(self):
         self.monitor = GraphQLPerformanceMonitor()
-    
+
     def resolve(self, next, root, info, **args):
         """Monitor resolver performance."""
         field_name = info.field_name
-        
+
         # Start monitoring
         self.monitor.start_monitoring(field_name)
-        
+
         try:
             # Execute resolver
             result = next(root, info, **args)
             return result
-        
+
         finally:
             # End monitoring and log metrics
             metrics = self.monitor.end_monitoring(field_name)
@@ -1121,11 +1121,11 @@ schema = graphene.Schema(
 ### Query Analysis and Optimization Suggestions
 
 ```python
-from django_graphql_auto.analysis import QueryAnalyzer
+from rail_django_graphql.analysis import QueryAnalyzer
 
 class GraphQLQueryAnalyzer:
     """Analyze GraphQL queries and provide optimization suggestions."""
-    
+
     def analyze_query(self, query_ast, schema):
         """Analyze query and return optimization suggestions."""
         analysis = {
@@ -1134,73 +1134,73 @@ class GraphQLQueryAnalyzer:
             'field_count': self.count_fields(query_ast),
             'suggestions': []
         }
-        
+
         # Generate suggestions
         if analysis['complexity'] > 500:
             analysis['suggestions'].append(
                 "Consider reducing query complexity by limiting nested fields"
             )
-        
+
         if analysis['depth'] > 8:
             analysis['suggestions'].append(
                 "Query depth is high, consider using pagination for nested lists"
             )
-        
+
         if analysis['field_count'] > 50:
             analysis['suggestions'].append(
                 "Large number of fields requested, consider splitting into multiple queries"
             )
-        
+
         # Check for N+1 potential
         n_plus_one_risk = self.check_n_plus_one_risk(query_ast, schema)
         if n_plus_one_risk:
             analysis['suggestions'].extend(n_plus_one_risk)
-        
+
         return analysis
-    
+
     def check_n_plus_one_risk(self, query_ast, schema):
         """Check for potential N+1 query problems."""
         suggestions = []
-        
+
         # Analyze field selections for relationship patterns
         relationship_fields = self.find_relationship_fields(query_ast, schema)
-        
+
         for field_path in relationship_fields:
             suggestions.append(
                 f"Potential N+1 query risk at {field_path}. "
                 f"Consider using select_related or prefetch_related"
             )
-        
+
         return suggestions
-    
+
     def find_relationship_fields(self, node, schema, path=""):
         """Find fields that represent database relationships."""
         relationship_fields = []
-        
+
         if hasattr(node, 'selection_set') and node.selection_set:
             for selection in node.selection_set.selections:
                 if hasattr(selection, 'name'):
                     field_name = selection.name.value
                     current_path = f"{path}.{field_name}" if path else field_name
-                    
+
                     # Check if field is a relationship (simplified check)
                     if self.is_likely_relationship(field_name):
                         relationship_fields.append(current_path)
-                    
+
                     # Recurse into nested selections
                     relationship_fields.extend(
                         self.find_relationship_fields(selection, schema, current_path)
                     )
-        
+
         return relationship_fields
-    
+
     def is_likely_relationship(self, field_name):
         """Check if field name suggests a database relationship."""
         relationship_indicators = [
             'author', 'user', 'post', 'comment', 'tag', 'category',
             'all', 'list', 'connection', 'related'
         ]
-        
+
         return any(indicator in field_name.lower() for indicator in relationship_indicators)
 
 # Use in GraphQL view
@@ -1208,23 +1208,23 @@ class AnalyzedGraphQLView(GraphQLView):
     def __init__(self):
         super().__init__()
         self.analyzer = GraphQLQueryAnalyzer()
-    
+
     def execute_graphql_request(self, request, data, query, variables, operation_name, show_graphiql=False):
         """Execute GraphQL request with query analysis."""
-        
+
         # Parse and analyze query
         try:
             from graphql import parse
             query_ast = parse(query)
             analysis = self.analyzer.analyze_query(query_ast, self.schema)
-            
+
             # Log analysis results
             if analysis['suggestions']:
                 logger.info(f"Query optimization suggestions: {analysis['suggestions']}")
-        
+
         except Exception as e:
             logger.warning(f"Query analysis failed: {e}")
-        
+
         # Execute query
         return super().execute_graphql_request(
             request, data, query, variables, operation_name, show_graphiql
@@ -1270,7 +1270,7 @@ CACHES = {
 }
 
 # GraphQL optimization settings
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'PERFORMANCE': {
         'ENABLE_QUERY_OPTIMIZATION': True,
         'ENABLE_CACHING': True,
@@ -1308,7 +1308,7 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.performance': {
+        'rail_django_graphql.performance': {
             'handlers': ['file'],
             'level': 'INFO',
             'propagate': True,
@@ -1329,17 +1329,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 class GraphQLLoadTester:
     """Load test GraphQL endpoints."""
-    
+
     def __init__(self, endpoint_url, concurrent_requests=10):
         self.endpoint_url = endpoint_url
         self.concurrent_requests = concurrent_requests
-    
+
     async def run_load_test(self, query, variables=None, duration=60):
         """Run load test for specified duration."""
-        
+
         start_time = time.time()
         end_time = start_time + duration
-        
+
         results = {
             'total_requests': 0,
             'successful_requests': 0,
@@ -1347,24 +1347,24 @@ class GraphQLLoadTester:
             'response_times': [],
             'errors': []
         }
-        
+
         async with aiohttp.ClientSession() as session:
             tasks = []
-            
+
             while time.time() < end_time:
                 # Create batch of concurrent requests
                 for _ in range(self.concurrent_requests):
                     task = self.execute_query(session, query, variables, results)
                     tasks.append(task)
-                
+
                 # Wait for batch to complete
                 await asyncio.gather(*tasks, return_exceptions=True)
                 tasks.clear()
-        
+
         # Calculate statistics
         avg_response_time = sum(results['response_times']) / len(results['response_times'])
         requests_per_second = results['total_requests'] / duration
-        
+
         return {
             'duration': duration,
             'total_requests': results['total_requests'],
@@ -1374,28 +1374,28 @@ class GraphQLLoadTester:
             'average_response_time': avg_response_time,
             'errors': results['errors'][:10]  # First 10 errors
         }
-    
+
     async def execute_query(self, session, query, variables, results):
         """Execute single GraphQL query."""
-        
+
         payload = {
             'query': query,
             'variables': variables or {}
         }
-        
+
         start_time = time.time()
-        
+
         try:
             async with session.post(
                 self.endpoint_url,
                 json=payload,
                 headers={'Content-Type': 'application/json'}
             ) as response:
-                
+
                 response_time = time.time() - start_time
                 results['response_times'].append(response_time)
                 results['total_requests'] += 1
-                
+
                 if response.status == 200:
                     data = await response.json()
                     if not data.get('errors'):
@@ -1406,7 +1406,7 @@ class GraphQLLoadTester:
                 else:
                     results['failed_requests'] += 1
                     results['errors'].append(f"HTTP {response.status}")
-        
+
         except Exception as e:
             results['failed_requests'] += 1
             results['errors'].append(str(e))
@@ -1414,7 +1414,7 @@ class GraphQLLoadTester:
 # Usage
 async def main():
     tester = GraphQLLoadTester('http://localhost:8000/graphql/')
-    
+
     query = '''
         query {
             allPosts(first: 10) {
@@ -1430,9 +1430,9 @@ async def main():
             }
         }
     '''
-    
+
     results = await tester.run_load_test(query, duration=60)
-    
+
     print(f"Load test results:")
     print(f"  Duration: {results['duration']}s")
     print(f"  Total requests: {results['total_requests']}")

@@ -31,6 +31,7 @@ The Django GraphQL Auto-Generation System automatically creates mutations for al
 Creates a new instance of the specified model.
 
 **Pattern:**
+
 ```graphql
 mutation Create{ModelName}($input: Create{ModelName}Input!) {
   create{ModelName}(input: $input) {
@@ -48,6 +49,7 @@ mutation Create{ModelName}($input: Create{ModelName}Input!) {
 ```
 
 **Example - Create User:**
+
 ```graphql
 mutation CreateUser($input: CreateUserInput!) {
   createUser(input: $input) {
@@ -71,6 +73,7 @@ mutation CreateUser($input: CreateUserInput!) {
 ```
 
 **Input Type:**
+
 ```graphql
 input CreateUserInput {
   username: String!
@@ -82,6 +85,7 @@ input CreateUserInput {
 ```
 
 **Success Response:**
+
 ```json
 {
   "data": {
@@ -103,6 +107,7 @@ input CreateUserInput {
 ```
 
 **Error Response:**
+
 ```json
 {
   "data": {
@@ -131,6 +136,7 @@ input CreateUserInput {
 Updates an existing instance of the specified model.
 
 **Pattern:**
+
 ```graphql
 mutation Update{ModelName}($input: Update{ModelName}Input!) {
   update{ModelName}(input: $input) {
@@ -148,6 +154,7 @@ mutation Update{ModelName}($input: Update{ModelName}Input!) {
 ```
 
 **Example - Update Post:**
+
 ```graphql
 mutation UpdatePost($input: UpdatePostInput!) {
   updatePost(input: $input) {
@@ -169,6 +176,7 @@ mutation UpdatePost($input: UpdatePostInput!) {
 ```
 
 **Input Type:**
+
 ```graphql
 input UpdatePostInput {
   id: ID!
@@ -184,6 +192,7 @@ input UpdatePostInput {
 Deletes an existing instance of the specified model.
 
 **Pattern:**
+
 ```graphql
 mutation Delete{ModelName}($input: Delete{ModelName}Input!) {
   delete{ModelName}(input: $input) {
@@ -199,6 +208,7 @@ mutation Delete{ModelName}($input: Delete{ModelName}Input!) {
 ```
 
 **Example - Delete Comment:**
+
 ```graphql
 mutation DeleteComment($input: DeleteCommentInput!) {
   deleteComment(input: $input) {
@@ -214,6 +224,7 @@ mutation DeleteComment($input: DeleteCommentInput!) {
 ```
 
 **Input Type:**
+
 ```graphql
 input DeleteCommentInput {
   id: ID!
@@ -225,6 +236,7 @@ input DeleteCommentInput {
 Method mutations are automatically generated from custom methods defined on Django models.
 
 **Pattern:**
+
 ```graphql
 mutation {ModelName}{MethodName}($input: {ModelName}{MethodName}Input!) {
   {modelName}{MethodName}(input: $input) {
@@ -242,6 +254,7 @@ mutation {ModelName}{MethodName}($input: {ModelName}{MethodName}Input!) {
 ```
 
 **Example - User Activation:**
+
 ```graphql
 mutation UserActivate($input: UserActivateInput!) {
   userActivate(input: $input) {
@@ -261,6 +274,7 @@ mutation UserActivate($input: UserActivateInput!) {
 ```
 
 **Example - Post Publishing:**
+
 ```graphql
 mutation PostPublish($input: PostPublishInput!) {
   postPublish(input: $input) {
@@ -281,6 +295,7 @@ mutation PostPublish($input: PostPublishInput!) {
 ```
 
 **Example - Order Shipping:**
+
 ```graphql
 mutation OrderShip($input: OrderShipInput!) {
   orderShip(input: $input) {
@@ -301,6 +316,7 @@ mutation OrderShip($input: OrderShipInput!) {
 ```
 
 **Input Type with Parameters:**
+
 ```graphql
 input OrderShipInput {
   id: ID!
@@ -317,27 +333,28 @@ All mutations return a consistent error format with enhanced field-specific info
 
 ```graphql
 type MutationError {
-  field: String        # The specific field that caused the error (null for general errors)
-  message: String!     # Human-readable error message in French
-  code: String!        # Error code for programmatic handling
+  field: String # The specific field that caused the error (null for general errors)
+  message: String! # Human-readable error message in French
+  code: String! # Error code for programmatic handling
 }
 ```
 
 ### Error Codes
 
-| Code | Description | Field Extraction | Example |
-|------|-------------|------------------|---------|
-| `VALIDATION_ERROR` | Field validation failed | ✅ Automatic | Empty required field, invalid format |
-| `DUPLICATE_ENTRY` | Unique constraint violation | ✅ Enhanced | Username already exists |
-| `NOT_NULL_CONSTRAINT` | Required field is null | ✅ Enhanced | Missing required field |
-| `FOREIGN_KEY_ERROR` | Referenced object doesn't exist | ✅ Enhanced | Invalid category ID |
-| `PERMISSION_DENIED` | User lacks required permissions | ❌ Manual | Insufficient privileges |
-| `RATE_LIMIT_EXCEEDED` | Too many requests | ❌ Manual | API rate limit hit |
-| `GENERAL_ERROR` | Unexpected error occurred | ❌ Manual | System error |
+| Code                  | Description                     | Field Extraction | Example                              |
+| --------------------- | ------------------------------- | ---------------- | ------------------------------------ |
+| `VALIDATION_ERROR`    | Field validation failed         | ✅ Automatic     | Empty required field, invalid format |
+| `DUPLICATE_ENTRY`     | Unique constraint violation     | ✅ Enhanced      | Username already exists              |
+| `NOT_NULL_CONSTRAINT` | Required field is null          | ✅ Enhanced      | Missing required field               |
+| `FOREIGN_KEY_ERROR`   | Referenced object doesn't exist | ✅ Enhanced      | Invalid category ID                  |
+| `PERMISSION_DENIED`   | User lacks required permissions | ❌ Manual        | Insufficient privileges              |
+| `RATE_LIMIT_EXCEEDED` | Too many requests               | ❌ Manual        | API rate limit hit                   |
+| `GENERAL_ERROR`       | Unexpected error occurred       | ❌ Manual        | System error                         |
 
 ### Error Examples
 
 #### Validation Error
+
 ```json
 {
   "field": "email",
@@ -347,6 +364,7 @@ type MutationError {
 ```
 
 #### Duplicate Entry Error
+
 ```json
 {
   "field": "username",
@@ -356,6 +374,7 @@ type MutationError {
 ```
 
 #### Foreign Key Error
+
 ```json
 {
   "field": "category",
@@ -365,6 +384,7 @@ type MutationError {
 ```
 
 #### Multiple Errors
+
 ```json
 [
   {
@@ -405,6 +425,7 @@ mutation Register($input: RegisterInput!) {
 ```
 
 **Input:**
+
 ```graphql
 input RegisterInput {
   username: String!
@@ -438,6 +459,7 @@ mutation Login($input: LoginInput!) {
 ```
 
 **Input:**
+
 ```graphql
 input LoginInput {
   username: String!
@@ -494,13 +516,14 @@ mutation BulkCreatePosts($input: BulkCreatePostsInput!) {
       field
       message
       code
-      index  # Index of the item that failed (for bulk operations)
+      index # Index of the item that failed (for bulk operations)
     }
   }
 }
 ```
 
 **Input:**
+
 ```graphql
 input BulkCreatePostsInput {
   posts: [CreatePostInput!]!
@@ -546,6 +569,7 @@ mutation BulkDeleteComments($input: BulkDeleteCommentsInput!) {
 ```
 
 **Input:**
+
 ```graphql
 input BulkDeleteCommentsInput {
   ids: [ID!]!
@@ -577,6 +601,7 @@ mutation UploadFile($input: UploadFileInput!) {
 ```
 
 **Input:**
+
 ```graphql
 input UploadFileInput {
   file: Upload!
@@ -609,6 +634,7 @@ mutation UploadFiles($input: UploadFilesInput!) {
 ```
 
 **Input:**
+
 ```graphql
 input UploadFilesInput {
   files: [Upload!]!
@@ -622,24 +648,24 @@ input UploadFilesInput {
 
 ```python
 # mutations.py
-from django_graphql_auto.mutations import BaseMutation
+from rail_django_graphql.mutations import BaseMutation
 import graphene
 
 class CustomBusinessLogicMutation(BaseMutation):
     class Arguments:
         input = graphene.Argument(CustomBusinessLogicInput, required=True)
-    
+
     class Meta:
         description = "Performs custom business logic operation"
-    
+
     result = graphene.Field(CustomResultType)
-    
+
     @classmethod
     def perform_mutation(cls, root, info, **input_data):
         try:
             # Custom business logic here
             result = perform_custom_operation(input_data)
-            
+
             return cls(
                 ok=True,
                 result=result,
@@ -667,7 +693,7 @@ class CustomMutation(BaseMutation):
                     'code': 'BUSINESS_LOGIC_ERROR'
                 }]
             )
-        
+
         return super()._handle_general_error(error)
 ```
 
@@ -701,18 +727,18 @@ const handleMutationResponse = (response) => {
   if (!response.ok) {
     const fieldErrors = {};
     const generalErrors = [];
-    
-    response.errors.forEach(error => {
+
+    response.errors.forEach((error) => {
       if (error.field) {
         fieldErrors[error.field] = error.message;
       } else {
         generalErrors.push(error.message);
       }
     });
-    
+
     return { fieldErrors, generalErrors };
   }
-  
+
   return { success: true, data: response };
 };
 ```
@@ -727,15 +753,15 @@ const [updatePost] = useMutation(UPDATE_POST_MUTATION, {
       ok: true,
       post: {
         ...existingPost,
-        ...updatedFields
+        ...updatedFields,
       },
-      errors: []
-    }
+      errors: [],
+    },
   },
   onError: (error) => {
     // Handle network errors
-    console.error('Mutation failed:', error);
-  }
+    console.error("Mutation failed:", error);
+  },
 });
 ```
 

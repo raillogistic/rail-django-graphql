@@ -150,7 +150,7 @@ tests/
 pytest
 
 # Tests with coverage
-pytest --cov=django_graphql_auto --cov-report=html
+pytest --cov=rail_django_graphql --cov-report=html
 
 # Parallel tests
 pytest -n auto
@@ -188,10 +188,10 @@ python_files = test_*.py
 python_classes = Test*
 python_functions = test_*
 testpaths = tests
-addopts = 
+addopts =
     --reuse-db
     --nomigrations
-    --cov=django_graphql_auto
+    --cov=rail_django_graphql
     --cov-report=html
     --cov-report=term-missing
     --cov-fail-under=80
@@ -217,7 +217,7 @@ def test_model_introspector_get_fields():
     """Test for retrieving model fields."""
     introspector = ModelIntrospector()
     fields = introspector.get_fields(TestModel)
-    
+
     assert 'name' in fields
     assert fields['name']['type'] == 'CharField'
 ```
@@ -232,7 +232,7 @@ def test_complete_schema_generation():
     """Test for complete schema generation."""
     generator = AutoSchemaGenerator()
     schema = generator.generate_schema([TestModel])
-    
+
     assert schema is not None
     assert_schema_has_type(schema, 'TestModelType')
 ```
@@ -248,7 +248,7 @@ def test_schema_generation_performance():
     with PerformanceProfiler() as profiler:
         generator = AutoSchemaGenerator()
         schema = generator.generate_schema(large_model_list)
-    
+
     assert profiler.execution_time < 5.0  # 5 seconds max
     assert profiler.memory_usage < 100 * 1024 * 1024  # 100MB max
 ```
@@ -262,7 +262,7 @@ Validation of security mechanisms.
 def test_sql_injection_protection():
     """Test for SQL injection protection."""
     malicious_query = "'; DROP TABLE users; --"
-    
+
     with pytest.raises(ValidationError):
         execute_graphql_query(malicious_query)
 ```
@@ -306,7 +306,7 @@ with PerformanceProfiler() as profiler:
 @pytest.fixture
 def mock_model_introspector():
     """Mock for ModelIntrospector."""
-    with patch('django_graphql_auto.core.ModelIntrospector') as mock:
+    with patch('rail_django_graphql.core.ModelIntrospector') as mock:
         mock.return_value.get_fields.return_value = {}
         yield mock
 ```
@@ -317,13 +317,13 @@ def mock_model_introspector():
 
 ```bash
 # Generate HTML report
-pytest --cov=django_graphql_auto --cov-report=html
+pytest --cov=rail_django_graphql --cov-report=html
 
 # Terminal report
-pytest --cov=django_graphql_auto --cov-report=term-missing
+pytest --cov=rail_django_graphql --cov-report=term-missing
 
 # XML report (for CI/CD)
-pytest --cov=django_graphql_auto --cov-report=xml
+pytest --cov=rail_django_graphql --cov-report=xml
 ```
 
 ### Performance Metrics
@@ -350,35 +350,39 @@ python manage.py run_test_suite \
 ### Writing Tests
 
 1. **Descriptive Naming**
+
    ```python
    def test_model_introspector_handles_foreign_key_relationships():
        """Specific and descriptive test."""
    ```
 
 2. **AAA Structure (Arrange, Act, Assert)**
+
    ```python
    def test_example():
        # Arrange
        model = TestModel.objects.create(name="test")
-       
+
        # Act
        result = introspector.analyze(model)
-       
+
        # Assert
        assert result.is_valid
    ```
 
 3. **Independent Tests**
+
    - Each test must be independent
    - Use fixtures for isolation
    - Clean up after each test
 
 4. **Clear Assertions**
+
    ```python
    # Good
    assert user.is_active is True
    assert len(results) == 3
-   
+
    # Avoid
    assert user
    assert results
@@ -387,11 +391,13 @@ python manage.py run_test_suite \
 ### Test Performance
 
 1. **Fast Tests**
+
    - Use mocks for external dependencies
    - In-memory database
    - Avoid unnecessary sleep()
 
 2. **Parallelization**
+
    ```bash
    pytest -n auto  # Uses all available CPUs
    ```
@@ -404,11 +410,13 @@ python manage.py run_test_suite \
 ### Organization
 
 1. **Logical Grouping**
+
    - Tests by component
    - Tests by functionality
    - Tests by level (unit/integration)
 
 2. **Tags and Markers**
+
    ```python
    @pytest.mark.slow
    @pytest.mark.database

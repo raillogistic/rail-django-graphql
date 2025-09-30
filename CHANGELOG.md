@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - **Enhanced Error Handling System**: Field-specific error extraction and reporting
   - Automatic field detection for validation errors with enhanced mapping
   - Database constraint error handling with field extraction
@@ -15,7 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Comprehensive error codes for programmatic handling
   - French error messages with field-specific context
   - Enhanced error response format with `field`, `message`, and `code` properties
-  
 - **Error Handling Features**
   - `VALIDATION_ERROR`: Field validation failures with automatic field extraction
   - `DUPLICATE_ENTRY`: Unique constraint violations with enhanced field detection
@@ -23,8 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `FOREIGN_KEY_ERROR`: Referenced object validation with field identification
   - `PERMISSION_DENIED`: Access control errors with context
   - `RATE_LIMIT_EXCEEDED`: API rate limiting with detailed information
-  
 - **Documentation Enhancements**
+
   - Comprehensive error handling documentation (`docs/features/error-handling.md`)
   - Detailed error handling examples (`docs/examples/error-handling-examples.md`)
   - Updated API reference with new error response format
@@ -40,14 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File validation and content type detection
   - Quarantine system for suspicious files
   - Performance monitoring and optimization
-  
 - **File Upload GraphQL Operations**
   - `uploadFile` mutation for single file uploads
   - `uploadMultipleFiles` mutation for batch uploads
   - `fileProcessingStatus` query for upload status tracking
   - `listFiles` query with filtering and pagination
   - `deleteFile` mutation with security validation
-  
 - **Security Features**
   - ClamAV virus scanner integration
   - File type validation and MIME type checking
@@ -55,13 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Quarantine system for infected files
   - Security monitoring and audit logging
   - Configurable file size and type restrictions
-  
 - **Media Processing**
   - Automatic thumbnail generation for images
   - Image optimization and format conversion
   - Configurable processing pipelines
   - Async processing with status tracking
-  
 - **Storage Backends**
   - Local filesystem storage with configurable paths
   - AWS S3 integration with IAM support
@@ -70,13 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable storage policies and retention
 
 ### Enhanced
+
 - **Documentation System**: Complete file upload documentation
   - Comprehensive API reference for file operations
   - Security documentation with best practices
   - Feature documentation with examples
   - Installation guide with system dependencies
   - Practical examples for all file operations
-  
 - **Configuration System**: Extended settings for file uploads
   - `FILE_UPLOADS` configuration section
   - Virus scanning configuration
@@ -84,24 +80,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Performance and security tuning options
 
 ### Added
+
 - Comprehensive API reference documentation
 - Enhanced feature documentation for filtering, method mutations, and bulk operations
 - French verbose name support throughout the documentation
 
 ### Changed
+
 - Updated all documentation to reflect current feature set
 - Enhanced quick-start guide with new features
 
 ## [1.3.5] - 2024-01-15 - Phase 3.5: Method Mutations & Bulk Operations
 
 ### Added
+
 - **Method Mutations System**: Execute custom Django model methods as GraphQL mutations
   - `@graphql_mutation` decorator for marking methods as GraphQL mutations
   - Automatic parameter detection and GraphQL schema generation
   - Support for method parameters with type hints
   - Return value handling for complex method responses
   - Error handling and validation for method execution
-  
 - **Bulk Operations System**: Efficient batch processing for large datasets
   - `bulkCreate<Model>` mutations for creating multiple objects
   - `bulkUpdate<Model>` mutations for updating multiple objects with different values
@@ -109,7 +107,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Configurable batch sizes and transaction management
   - Partial success support with detailed error reporting
   - Performance optimization with memory management
-  
 - **Enhanced Configuration System**: Extended settings for new features
   - `enable_method_mutations`: Toggle method mutation generation
   - `enable_bulk_operations`: Toggle bulk operation generation
@@ -118,25 +115,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `bulk_transaction_timeout`: Configure transaction timeout
 
 ### Enhanced
+
 - **Django Built-in Filtering**: Comprehensive filter support
   - String operators: `exact`, `iexact`, `contains`, `icontains`, `startswith`, `endswith`, `regex`
   - Numeric operators: `gt`, `gte`, `lt`, `lte`, `range`, `in`
   - Date/time operators: Range filtering and comparison operators
   - Relationship filtering: Deep filtering across foreign keys and many-to-many fields
   - Logical operators: `AND`, `OR`, `NOT` for complex filter combinations
-  
 - **Nested Operations**: Improved relationship handling
   - Enhanced nested object creation and updates
   - Better validation for nested relationships
   - Improved error handling for complex nested structures
 
 ### Fixed
+
 - Improved quote handling in GraphQL input sanitization
 - Enhanced error messages for validation failures
 - Better memory management for large bulk operations
 - Optimized database queries for relationship filtering
 
 ### Documentation
+
 - Added comprehensive method mutations documentation (`docs/features/method-mutations.md`)
 - Added detailed bulk operations guide (`docs/features/bulk-operations.md`)
 - Created complete API reference (`docs/api-reference.md`)
@@ -145,6 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added French verbose name examples throughout documentation
 
 ### Performance
+
 - Optimized bulk operations with batch processing
 - Improved query performance for filtered results
 - Enhanced memory usage for large dataset operations
@@ -153,28 +153,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0] - 2024-01-01 - Phase 3: Advanced Features
 
 ### Added
+
 - **Advanced Filtering System**: Comprehensive filtering capabilities
   - Field-level filtering with multiple operators
   - Relationship filtering across models
   - Date and time range filtering
   - Custom filter implementations
-  
 - **Nested Operations**: Create and update related objects
   - Nested object creation in mutations
   - Relationship management in single operations
   - Configurable nesting depth and permissions
-  
 - **Enhanced Quote Handling**: Robust input sanitization
   - Automatic quote normalization in GraphQL inputs
   - JSON content support with proper escaping
   - Special character protection and validation
 
 ### Enhanced
+
 - **Schema Generation**: Improved type generation and validation
 - **Error Handling**: More detailed error messages and validation
 - **Performance**: Optimized query generation and execution
 
 ### Fixed
+
 - Quote handling in complex nested inputs
 - Validation errors for relationship fields
 - Memory usage optimization for large schemas
@@ -182,27 +183,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.0] - 2023-12-01 - Phase 2: Core Mutations
 
 ### Added
+
 - **CRUD Mutations**: Complete create, read, update, delete operations
   - `create<Model>` mutations with comprehensive input validation
   - `update<Model>` mutations with partial update support
   - `delete<Model>` mutations with cascade handling
-  
 - **Input Validation**: Robust validation system
   - Django model validation integration
   - Custom validation rules support
   - Detailed error reporting and field-level errors
-  
 - **Relationship Handling**: Foreign key and many-to-many support
   - Automatic relationship field generation
   - ID-based relationship assignment
   - Validation for relationship constraints
 
 ### Enhanced
+
 - **Type System**: Improved GraphQL type generation from Django models
 - **Error Handling**: Standardized error response format
 - **Documentation**: Comprehensive mutation examples and usage guides
 
 ### Fixed
+
 - Type resolution for complex Django field types
 - Validation handling for optional fields
 - Relationship field naming consistency
@@ -210,27 +212,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.0] - 2023-11-01 - Phase 1: Foundation & Queries
 
 ### Added
+
 - **Automatic Schema Generation**: Generate GraphQL schemas from Django models
   - Model introspection and metadata extraction
   - Automatic type generation for all Django field types
   - Relationship mapping and type resolution
-  
 - **Query System**: Comprehensive query capabilities
   - Single object queries by ID
   - List queries with filtering support
   - Paginated queries with Relay-style connections
-  
 - **Configuration System**: Flexible configuration options
   - App-based model selection
   - Field inclusion/exclusion controls
   - Custom naming conventions
-  
 - **Basic Filtering**: Initial filtering implementation
   - Field-level exact match filtering
   - Basic relationship filtering
   - Simple query optimization
 
 ### Technical Foundation
+
 - **Model Introspection**: Advanced Django model analysis
 - **Type Generation**: Robust GraphQL type creation
 - **Schema Assembly**: Modular schema building system
@@ -239,6 +240,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2023-10-01 - Initial Release
 
 ### Added
+
 - **Project Foundation**: Initial project structure and core architecture
 - **Basic Schema Generation**: Minimal GraphQL schema from Django models
 - **Simple Queries**: Basic object retrieval functionality
@@ -246,6 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Configuration**: Basic configuration system
 
 ### Technical Features
+
 - Django integration and model discovery
 - GraphQL schema generation pipeline
 - Basic type mapping for Django fields
@@ -275,11 +278,13 @@ This project follows [Semantic Versioning](https://semver.org/):
 ### Upgrading to 1.3.5
 
 #### Method Mutations
+
 To use the new method mutations feature:
 
 1. Add the `@graphql_mutation` decorator to your model methods:
+
 ```python
-from django_graphql_auto.decorators import graphql_mutation
+from rail_django_graphql.decorators import graphql_mutation
 
 class MyModel(models.Model):
     @graphql_mutation
@@ -289,8 +294,9 @@ class MyModel(models.Model):
 ```
 
 2. Enable method mutations in settings:
+
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_method_mutations': True,
     }
@@ -298,11 +304,13 @@ DJANGO_GRAPHQL_AUTO = {
 ```
 
 #### Bulk Operations
+
 To use bulk operations:
 
 1. Enable in settings:
+
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_bulk_operations': True,
         'bulk_batch_size': 100,
@@ -311,6 +319,7 @@ DJANGO_GRAPHQL_AUTO = {
 ```
 
 2. Use the generated bulk mutations in your GraphQL queries:
+
 ```graphql
 mutation {
   bulkCreateMyModel(input: { objects: [...] }) {
@@ -324,15 +333,18 @@ mutation {
 ### Upgrading to 1.3.0
 
 #### Advanced Filtering
+
 The new filtering system is automatically available. Update your queries to use the enhanced filter operators:
 
 ```graphql
 query {
-  posts(filters: {
-    title__icontains: "django"
-    createdAt__gte: "2024-01-01T00:00:00Z"
-    author__username: "john"
-  }) {
+  posts(
+    filters: {
+      title__icontains: "django"
+      createdAt__gte: "2024-01-01T00:00:00Z"
+      author__username: "john"
+    }
+  ) {
     id
     title
   }
@@ -340,10 +352,11 @@ query {
 ```
 
 #### Nested Operations
+
 Enable nested operations in your configuration:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_nested_relations': True,
         'nested_depth_limit': 3,

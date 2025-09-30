@@ -2,7 +2,7 @@ import os
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django_graphql.settings")
 django.setup()
 
 from django.db import connection
@@ -15,5 +15,5 @@ for table in tables:
     print(f"  - {table}")
 
 # Check if Client table exists
-client_tables = [t for t in tables if 'client' in t.lower()]
+client_tables = [t for t in tables if "client" in t.lower()]
 print(f"\nClient-related tables: {client_tables}")

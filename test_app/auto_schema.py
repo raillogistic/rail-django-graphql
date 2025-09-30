@@ -2,8 +2,8 @@
 Auto-generated GraphQL schema for test_app using the Django GraphQL Auto-Generation system.
 """
 
-from django_graphql_auto.core.schema import SchemaBuilder
-from django_graphql_auto.core.settings import SchemaSettings, MutationGeneratorSettings
+from rail_django_graphql.core.schema import SchemaBuilder
+from rail_django_graphql.core.settings import SchemaSettings, MutationGeneratorSettings
 
 # Configure the auto-generation settings
 mutation_settings = MutationGeneratorSettings(
@@ -16,7 +16,7 @@ mutation_settings = MutationGeneratorSettings(
 
 schema_settings = SchemaSettings(
     auto_refresh_on_model_change=True,
-    excluded_apps=['admin', 'auth', 'contenttypes', 'sessions'],
+    excluded_apps=["admin", "auth", "contenttypes", "sessions"],
 )
 
 # Build the auto-generated schema

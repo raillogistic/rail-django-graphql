@@ -9,7 +9,7 @@ import django
 from datetime import datetime
 
 # Configuration Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'rail_django_graphql.settings')
 django.setup()
 
 from django.core.cache import cache

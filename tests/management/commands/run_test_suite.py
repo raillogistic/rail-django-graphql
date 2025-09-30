@@ -144,7 +144,7 @@ class Command(BaseCommand):
             try:
                 import coverage
                 self.coverage = coverage.Coverage(
-                    source=['django_graphql_auto'],
+                    source=['rail_django_graphql'],
                     omit=[
                         '*/tests/*',
                         '*/migrations/*',

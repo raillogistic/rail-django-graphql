@@ -3,7 +3,7 @@ print("Starting test...")
 import os
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django_graphql.settings")
 django.setup()
 
 print("Django setup complete")

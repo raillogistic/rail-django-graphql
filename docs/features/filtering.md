@@ -46,31 +46,31 @@ class PostFilterInput(graphene.InputObjectType):
     title__icontains = graphene.String()
     title__startswith = graphene.String()
     title__endswith = graphene.String()
-    
+
     content = graphene.String()
     content__icontains = graphene.String()
-    
+
     published = graphene.Boolean()
-    
+
     view_count = graphene.Int()
     view_count__gt = graphene.Int()
     view_count__gte = graphene.Int()
     view_count__lt = graphene.Int()
     view_count__lte = graphene.Int()
     view_count__in = graphene.List(graphene.Int)
-    
+
     created_at = graphene.DateTime()
     created_at__gt = graphene.DateTime()
     created_at__gte = graphene.DateTime()
     created_at__lt = graphene.DateTime()
     created_at__lte = graphene.DateTime()
     created_at__range = graphene.List(graphene.DateTime)
-    
+
     # Relationship filters
     author = UserFilterInput()
     author__id = graphene.ID()
     author__username = graphene.String()
-    
+
     # Logical operators
     AND = graphene.List(lambda: PostFilterInput)
     OR = graphene.List(lambda: PostFilterInput)
@@ -81,11 +81,13 @@ class PostFilterInput(graphene.InputObjectType):
 
 ```graphql
 query {
-  posts(filters: {
-    title__icontains: "django"
-    published: true
-    view_count__gte: 100
-  }) {
+  posts(
+    filters: {
+      title__icontains: "django"
+      published: true
+      view_count__gte: 100
+    }
+  ) {
     id
     title
     view_count
@@ -120,22 +122,20 @@ STRING_OPERATORS = {
 
 ```graphql
 query {
-  posts(filters: {
-    # Exact match
-    title: "Django Tutorial"
-    
-    # Case-insensitive contains
-    title__icontains: "graphql"
-    
-    # Starts with
-    title__startswith: "How to"
-    
-    # Multiple values
-    title__in: ["Tutorial 1", "Tutorial 2", "Tutorial 3"]
-    
-    # Null check
-    content__isnull: false
-  }) {
+  posts(
+    filters: {
+      # Exact match
+      title: "Django Tutorial"
+      # Case-insensitive contains
+      title__icontains: "graphql"
+      # Starts with
+      title__startswith: "How to"
+      # Multiple values
+      title__in: ["Tutorial 1", "Tutorial 2", "Tutorial 3"]
+      # Null check
+      content__isnull: false
+    }
+  ) {
     id
     title
   }
@@ -162,16 +162,16 @@ NUMERIC_OPERATORS = {
 
 ```graphql
 query {
-  posts(filters: {
-    # Greater than
-    view_count__gt: 1000
-    
-    # Range
-    view_count__range: [100, 500]
-    
-    # Multiple values
-    view_count__in: [10, 50, 100, 200]
-  }) {
+  posts(
+    filters: {
+      # Greater than
+      view_count__gt: 1000
+      # Range
+      view_count__range: [100, 500]
+      # Multiple values
+      view_count__in: [10, 50, 100, 200]
+    }
+  ) {
     id
     title
     view_count
@@ -193,10 +193,7 @@ BOOLEAN_OPERATORS = {
 
 ```graphql
 query {
-  posts(filters: {
-    published: true
-    featured__isnull: false
-  }) {
+  posts(filters: { published: true, featured__isnull: false }) {
     id
     title
     published
@@ -212,19 +209,18 @@ Filter by related model fields:
 
 ```graphql
 query {
-  posts(filters: {
-    # Filter by author ID
-    author__id: "1"
-    
-    # Filter by author username
-    author__username: "john_doe"
-    
-    # Filter by author email domain
-    author__email__endswith: "@company.com"
-    
-    # Nested relationship filtering
-    author__profile__country: "US"
-  }) {
+  posts(
+    filters: {
+      # Filter by author ID
+      author__id: "1"
+      # Filter by author username
+      author__username: "john_doe"
+      # Filter by author email domain
+      author__email__endswith: "@company.com"
+      # Nested relationship filtering
+      author__profile__country: "US"
+    }
+  ) {
     id
     title
     author {
@@ -247,20 +243,19 @@ class Post(models.Model):
 
 ```graphql
 query {
-  posts(filters: {
-    # Posts with specific tag
-    tags__name: "django"
-    
-    # Posts with tag ID in list
-    tags__id__in: ["1", "2", "3"]
-    
-    # Posts in specific category
-    categories__slug: "tutorials"
-    
-    # Posts with multiple conditions on related fields
-    tags__name__icontains: "python"
-    categories__is_active: true
-  }) {
+  posts(
+    filters: {
+      # Posts with specific tag
+      tags__name: "django"
+      # Posts with tag ID in list
+      tags__id__in: ["1", "2", "3"]
+      # Posts in specific category
+      categories__slug: "tutorials"
+      # Posts with multiple conditions on related fields
+      tags__name__icontains: "python"
+      categories__is_active: true
+    }
+  ) {
     id
     title
     tags {
@@ -281,10 +276,10 @@ query {
   users(filters: {
     # Users who have published posts
     posts__published: true
-    
+
     # Users with posts containing specific content
     posts__title__icontains: "tutorial"
-    
+
     # Users with posts created in date range
     posts__created_at__range: ["2024-01-01", "2024-12-31"]
   }) {
@@ -329,28 +324,24 @@ DATETIME_OPERATORS = {
 
 ```graphql
 query {
-  posts(filters: {
-    # Exact date
-    created_at__date: "2024-01-15"
-    
-    # Year filtering
-    created_at__year: 2024
-    
-    # Month filtering
-    created_at__month: 1
-    
-    # Date range
-    created_at__range: ["2024-01-01T00:00:00Z", "2024-01-31T23:59:59Z"]
-    
-    # Recent posts (last 7 days)
-    created_at__gte: "2024-01-08T00:00:00Z"
-    
-    # Posts from specific weekday (Monday = 2)
-    created_at__week_day: 2
-    
-    # Posts from Q1
-    created_at__quarter: 1
-  }) {
+  posts(
+    filters: {
+      # Exact date
+      created_at__date: "2024-01-15"
+      # Year filtering
+      created_at__year: 2024
+      # Month filtering
+      created_at__month: 1
+      # Date range
+      created_at__range: ["2024-01-01T00:00:00Z", "2024-01-31T23:59:59Z"]
+      # Recent posts (last 7 days)
+      created_at__gte: "2024-01-08T00:00:00Z"
+      # Posts from specific weekday (Monday = 2)
+      created_at__week_day: 2
+      # Posts from Q1
+      created_at__quarter: 1
+    }
+  ) {
     id
     title
     created_at
@@ -364,18 +355,19 @@ The system provides convenient time-based filters:
 
 ```graphql
 query {
-  posts(filters: {
-    # Predefined time ranges
-    created_at__today: true
-    created_at__yesterday: true
-    created_at__this_week: true
-    created_at__this_month: true
-    created_at__this_year: true
-    
-    # Relative time filtering
-    created_at__days_ago: 7      # Posts from 7 days ago
-    created_at__hours_ago: 24    # Posts from 24 hours ago
-  }) {
+  posts(
+    filters: {
+      # Predefined time ranges
+      created_at__today: true
+      created_at__yesterday: true
+      created_at__this_week: true
+      created_at__this_month: true
+      created_at__this_year: true
+      # Relative time filtering
+      created_at__days_ago: 7 # Posts from 7 days ago
+      created_at__hours_ago: 24 # Posts from 24 hours ago
+    }
+  ) {
     id
     title
     created_at
@@ -389,37 +381,24 @@ query {
 
 ```graphql
 query {
-  posts(filters: {
-    # AND operation (default behavior)
-    title__icontains: "django"
-    published: true
-    
-    # Explicit OR operation
-    OR: [
-      { title__icontains: "django" }
-      { title__icontains: "graphql" }
-    ]
-    
-    # NOT operation
-    NOT: {
-      author__username: "spam_user"
-    }
-    
-    # Complex nested logic
-    AND: [
-      {
-        OR: [
-          { title__icontains: "tutorial" }
-          { title__icontains: "guide" }
-        ]
-      }
-      {
-        NOT: {
-          tags__name: "deprecated"
+  posts(
+    filters: {
+      # AND operation (default behavior)
+      title__icontains: "django"
+      published: true
+      # Explicit OR operation
+      OR: [{ title__icontains: "django" }, { title__icontains: "graphql" }]
+      # NOT operation
+      NOT: { author__username: "spam_user" }
+      # Complex nested logic
+      AND: [
+        {
+          OR: [{ title__icontains: "tutorial" }, { title__icontains: "guide" }]
         }
-      }
-    ]
-  }) {
+        { NOT: { tags__name: "deprecated" } }
+      ]
+    }
+  ) {
     id
     title
     author {
@@ -437,21 +416,21 @@ Create custom filter logic using the `FilterSet` class:
 
 ```python
 # filters.py
-from django_graphql_auto.filtering.base import FilterSet
-from django_graphql_auto.filtering.fields import FilterField
+from rail_django_graphql.filtering.base import FilterSet
+from rail_django_graphql.filtering.fields import FilterField
 import graphene
 
 class PostFilterSet(FilterSet):
     class Meta:
         model = Post
         fields = '__all__'
-    
+
     # Custom filter fields
     search = graphene.String()
     popular = graphene.Boolean()
     author_type = graphene.String()
     content_length = graphene.String()  # 'short', 'medium', 'long'
-    
+
     def filter_search(self, queryset, name, value):
         """Full-text search across multiple fields."""
         if value:
@@ -461,7 +440,7 @@ class PostFilterSet(FilterSet):
                 Q(tags__name__icontains=value)
             ).distinct()
         return queryset
-    
+
     def filter_popular(self, queryset, name, value):
         """Filter popular posts based on view count and likes."""
         if value:
@@ -470,7 +449,7 @@ class PostFilterSet(FilterSet):
                 Q(likes__gte=100)
             )
         return queryset
-    
+
     def filter_author_type(self, queryset, name, value):
         """Filter by author type (staff, premium, regular)."""
         if value == 'staff':
@@ -483,7 +462,7 @@ class PostFilterSet(FilterSet):
                 author__profile__is_premium=False
             )
         return queryset
-    
+
     def filter_content_length(self, queryset, name, value):
         """Filter by content length categories."""
         if value == 'short':
@@ -501,7 +480,7 @@ class PostFilterSet(FilterSet):
         return queryset
 
 # Register custom filter
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'CUSTOM_FILTERS': {
         'Post': 'myapp.filters.PostFilterSet',
     }
@@ -512,23 +491,21 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```graphql
 query {
-  posts(filters: {
-    # Use custom search filter
-    search: "django graphql tutorial"
-    
-    # Use custom popular filter
-    popular: true
-    
-    # Use custom author type filter
-    author_type: "staff"
-    
-    # Use custom content length filter
-    content_length: "long"
-    
-    # Combine with standard filters
-    published: true
-    created_at__gte: "2024-01-01"
-  }) {
+  posts(
+    filters: {
+      # Use custom search filter
+      search: "django graphql tutorial"
+      # Use custom popular filter
+      popular: true
+      # Use custom author type filter
+      author_type: "staff"
+      # Use custom content length filter
+      content_length: "long"
+      # Combine with standard filters
+      published: true
+      created_at__gte: "2024-01-01"
+    }
+  ) {
     id
     title
     view_count
@@ -550,18 +527,18 @@ The filtering system includes several performance optimizations:
 class OptimizedFilterSet(FilterSet):
     def optimize_queryset(self, queryset, filters):
         """Automatically optimize queryset based on filters."""
-        
+
         # Add select_related for foreign key filters
         if any(key.startswith('author__') for key in filters.keys()):
             queryset = queryset.select_related('author', 'author__profile')
-        
+
         # Add prefetch_related for many-to-many filters
         if any(key.startswith('tags__') for key in filters.keys()):
             queryset = queryset.prefetch_related('tags')
-        
+
         if any(key.startswith('categories__') for key in filters.keys()):
             queryset = queryset.prefetch_related('categories')
-        
+
         return queryset
 ```
 
@@ -576,7 +553,7 @@ class Post(models.Model):
     published = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     view_count = models.IntegerField(default=0, db_index=True)
-    
+
     class Meta:
         indexes = [
             # Composite indexes for common filter combinations
@@ -591,7 +568,7 @@ class Post(models.Model):
 Enable filter result caching for expensive operations:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'ENABLE_FILTER_CACHING': True,
     'FILTER_CACHE_TIMEOUT': 300,  # 5 minutes
     'FILTER_CACHE_KEY_PREFIX': 'graphql_filter',
@@ -604,36 +581,29 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```graphql
 query {
-  products(filters: {
-    # Price range
-    price__range: [10.00, 100.00]
-    
-    # In stock only
-    stock_quantity__gt: 0
-    
-    # Specific categories
-    categories__slug__in: ["electronics", "computers"]
-    
-    # Brand filtering
-    brand__name__in: ["Apple", "Samsung", "Google"]
-    
-    # Rating filtering
-    average_rating__gte: 4.0
-    
-    # Discount filtering
-    discount_percentage__gt: 10
-    
-    # Search in name and description
-    OR: [
-      { name__icontains: "smartphone" }
-      { description__icontains: "smartphone" }
-    ]
-    
-    # Exclude out of stock
-    NOT: {
-      stock_quantity: 0
+  products(
+    filters: {
+      # Price range
+      price__range: [10.00, 100.00]
+      # In stock only
+      stock_quantity__gt: 0
+      # Specific categories
+      categories__slug__in: ["electronics", "computers"]
+      # Brand filtering
+      brand__name__in: ["Apple", "Samsung", "Google"]
+      # Rating filtering
+      average_rating__gte: 4.0
+      # Discount filtering
+      discount_percentage__gt: 10
+      # Search in name and description
+      OR: [
+        { name__icontains: "smartphone" }
+        { description__icontains: "smartphone" }
+      ]
+      # Exclude out of stock
+      NOT: { stock_quantity: 0 }
     }
-  }) {
+  ) {
     id
     name
     price
@@ -653,41 +623,34 @@ query {
 
 ```graphql
 query {
-  posts(filters: {
-    # Published posts only
-    published: true
-    
-    # From last 30 days
-    created_at__gte: "2024-01-01"
-    
-    # Popular posts
-    OR: [
-      { view_count__gte: 1000 }
-      { likes_count__gte: 50 }
-      { comments_count__gte: 10 }
-    ]
-    
-    # Specific authors or author types
-    OR: [
-      { author__is_staff: true }
-      { author__username__in: ["john_doe", "jane_smith"] }
-    ]
-    
-    # Content filters
-    AND: [
-      { title__icontains: "tutorial" }
-      { content_length: "long" }
-      {
-        NOT: {
-          tags__name: "deprecated"
-        }
-      }
-    ]
-    
-    # Language and region
-    language: "en"
-    author__profile__country: "US"
-  }) {
+  posts(
+    filters: {
+      # Published posts only
+      published: true
+      # From last 30 days
+      created_at__gte: "2024-01-01"
+      # Popular posts
+      OR: [
+        { view_count__gte: 1000 }
+        { likes_count__gte: 50 }
+        { comments_count__gte: 10 }
+      ]
+      # Specific authors or author types
+      OR: [
+        { author__is_staff: true }
+        { author__username__in: ["john_doe", "jane_smith"] }
+      ]
+      # Content filters
+      AND: [
+        { title__icontains: "tutorial" }
+        { content_length: "long" }
+        { NOT: { tags__name: "deprecated" } }
+      ]
+      # Language and region
+      language: "en"
+      author__profile__country: "US"
+    }
+  ) {
     id
     title
     view_count
@@ -708,37 +671,29 @@ query {
 
 ```graphql
 query {
-  users(filters: {
-    # Active users only
-    is_active: true
-    
-    # Joined in the last year
-    date_joined__gte: "2023-01-01"
-    
-    # Users with specific roles
-    OR: [
-      { is_staff: true }
-      { groups__name: "premium_users" }
-      { user_permissions__codename: "can_publish" }
-    ]
-    
-    # Profile-based filtering
-    profile__country__in: ["US", "CA", "UK"]
-    profile__age__range: [18, 65]
-    profile__is_verified: true
-    
-    # Activity-based filtering
-    posts__published: true
-    posts__created_at__gte: "2024-01-01"
-    
-    # Exclude inactive or banned users
-    NOT: {
+  users(
+    filters: {
+      # Active users only
+      is_active: true
+      # Joined in the last year
+      date_joined__gte: "2023-01-01"
+      # Users with specific roles
       OR: [
-        { is_active: false }
-        { profile__is_banned: true }
+        { is_staff: true }
+        { groups__name: "premium_users" }
+        { user_permissions__codename: "can_publish" }
       ]
+      # Profile-based filtering
+      profile__country__in: ["US", "CA", "UK"]
+      profile__age__range: [18, 65]
+      profile__is_verified: true
+      # Activity-based filtering
+      posts__published: true
+      posts__created_at__gte: "2024-01-01"
+      # Exclude inactive or banned users
+      NOT: { OR: [{ is_active: false }, { profile__is_banned: true }] }
     }
-  }) {
+  ) {
     id
     username
     email
@@ -763,7 +718,7 @@ query {
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'FILTERING': {
         'ENABLE_FILTERS': True,
         'DEFAULT_FILTER_OPERATORS': {
@@ -787,17 +742,17 @@ DJANGO_GRAPHQL_AUTO = {
 class Post(models.Model):
     title = models.CharField(max_length=200)
     content = models.TextField()
-    
+
     class GraphQLMeta:
         filter_fields = {
             'title': ['exact', 'icontains', 'startswith'],
             'content': ['icontains'],
             'created_at': ['exact', 'gt', 'gte', 'date', 'range'],
         }
-        
+
         # Exclude certain fields from filtering
         filter_exclude = ['internal_notes', 'draft_content']
-        
+
         # Custom filter class
         filter_class = 'myapp.filters.PostFilterSet'
 ```

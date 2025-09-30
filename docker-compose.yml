@@ -5,7 +5,7 @@ services:
   db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: django_graphql_auto
+      POSTGRES_DB: rail_django_graphql
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     volumes:
@@ -38,8 +38,8 @@ services:
     build: .
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py collectstatic --noinput &&
-             gunicorn django_graphql_auto.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
+        python manage.py collectstatic --noinput &&
+        gunicorn rail_django_graphql.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 120"
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
@@ -48,11 +48,11 @@ services:
       - "8000:8000"
     environment:
       - DEBUG=False
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rail_django_graphql
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=localhost,127.0.0.1,web
       - SECRET_KEY=your-secret-key-here
-      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+      - DJANGO_SETTINGS_MODULE=rail_django_graphql.settings
     depends_on:
       db:
         condition: service_healthy
@@ -84,15 +84,15 @@ services:
   # Worker Celery pour les tâches asynchrones
   celery:
     build: .
-    command: celery -A django_graphql_auto worker -l info
+    command: celery -A rail_django_graphql worker -l info
     volumes:
       - ./media:/app/media
       - ./logs:/app/logs
     environment:
       - DEBUG=False
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rail_django_graphql
       - REDIS_URL=redis://redis:6379/0
-      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+      - DJANGO_SETTINGS_MODULE=rail_django_graphql.settings
     depends_on:
       db:
         condition: service_healthy
@@ -104,14 +104,14 @@ services:
   # Celery Beat pour les tâches planifiées
   celery-beat:
     build: .
-    command: celery -A django_graphql_auto beat -l info
+    command: celery -A rail_django_graphql beat -l info
     volumes:
       - ./logs:/app/logs
     environment:
       - DEBUG=False
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/django_graphql_auto
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/rail_django_graphql
       - REDIS_URL=redis://redis:6379/0
-      - DJANGO_SETTINGS_MODULE=django_graphql_auto.settings
+      - DJANGO_SETTINGS_MODULE=rail_django_graphql.settings
     depends_on:
       db:
         condition: service_healthy

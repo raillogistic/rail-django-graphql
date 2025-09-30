@@ -32,14 +32,14 @@ GRAPHQL_AUTO_SETTINGS = {
                 'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
                 'USER_ID_FIELD': 'id',
                 'USER_ID_CLAIM': 'user_id',
-                'USER_AUTHENTICATION_RULE': 'django_graphql_auto.authentication.default_user_authentication_rule',
-                'AUTH_TOKEN_CLASSES': ('django_graphql_auto.tokens.AccessToken',),
+                'USER_AUTHENTICATION_RULE': 'rail_django_graphql.authentication.default_user_authentication_rule',
+                'AUTH_TOKEN_CLASSES': ('rail_django_graphql.tokens.AccessToken',),
                 'TOKEN_TYPE_CLAIM': 'token_type',
                 'JTI_CLAIM': 'jti',
                 'SLIDING_TOKEN_LIFETIME': 300,  # 5 minutes
                 'SLIDING_TOKEN_REFRESH_LIFETIME': 86400,  # 1 day
             },
-            
+
             # Session Settings
             'SESSION': {
                 'ENABLE': True,
@@ -50,7 +50,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'SESSION_SAVE_EVERY_REQUEST': True,
                 'SESSION_EXPIRE_AT_BROWSER_CLOSE': False,
             },
-            
+
             # Multi-Factor Authentication
             'MFA': {
                 'ENABLE': False,
@@ -61,18 +61,18 @@ GRAPHQL_AUTO_SETTINGS = {
                 'SMS_PROVIDER': None,  # 'twilio', 'aws_sns', etc.
             },
         },
-        
+
         # Permission Configuration
         'PERMISSIONS': {
             'ENABLE': True,
             'DEFAULT_PERMISSION_CLASSES': [
-                'django_graphql_auto.permissions.IsAuthenticated',
+                'rail_django_graphql.permissions.IsAuthenticated',
             ],
             'OPERATION_PERMISSIONS': {
-                'CREATE': ['django_graphql_auto.permissions.IsAuthenticated'],
-                'READ': ['django_graphql_auto.permissions.AllowAny'],
-                'UPDATE': ['django_graphql_auto.permissions.IsOwnerOrStaff'],
-                'DELETE': ['django_graphql_auto.permissions.IsOwnerOrStaff'],
+                'CREATE': ['rail_django_graphql.permissions.IsAuthenticated'],
+                'READ': ['rail_django_graphql.permissions.AllowAny'],
+                'UPDATE': ['rail_django_graphql.permissions.IsOwnerOrStaff'],
+                'DELETE': ['rail_django_graphql.permissions.IsOwnerOrStaff'],
             },
             'FIELD_PERMISSIONS': {
                 'SENSITIVE_FIELDS': ['password', 'ssn', 'credit_card'],
@@ -89,7 +89,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 },
             },
         },
-        
+
         # Input Validation Configuration
         'INPUT_VALIDATION': {
             'ENABLE': True,
@@ -156,7 +156,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'your_app.validators.FileUploadValidator',
             ],
         },
-        
+
         # Rate Limiting Configuration
         'RATE_LIMITING': {
             'ENABLE': True,
@@ -210,7 +210,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'RETRY_AFTER_HEADER': 'Retry-After',
             },
         },
-        
+
         # Query Analysis Configuration
         'QUERY_ANALYSIS': {
             'COMPLEXITY_ANALYSIS': {
@@ -257,7 +257,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 },
             },
         },
-        
+
         # Security Headers Configuration
         'SECURITY_HEADERS': {
             'ENABLE': True,
@@ -271,7 +271,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'Permissions-Policy': 'geolocation=(), microphone=(), camera=()',
             },
         },
-        
+
         # Logging and Monitoring Configuration
         'LOGGING': {
             'ENABLE': True,
@@ -288,7 +288,7 @@ GRAPHQL_AUTO_SETTINGS = {
             'MAX_LOG_SIZE': '10MB',
             'BACKUP_COUNT': 5,
         },
-        
+
         # Development and Debug Configuration
         'DEBUG': {
             'ENABLE_IN_DEBUG': True,
@@ -381,7 +381,7 @@ SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=0, cast=int)
 
 ```python
 # authentication.py
-from django_graphql_auto.authentication import BaseAuthenticationBackend
+from rail_django_graphql.authentication import BaseAuthenticationBackend
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -390,44 +390,44 @@ class CustomJWTAuthentication(BaseAuthenticationBackend):
     """
     Backend d'authentification JWT personnalisé.
     """
-    
+
     def authenticate(self, request, token=None):
         """Authentifie un utilisateur avec un token JWT."""
         if not token:
             return None
-            
+
         try:
             payload = self.decode_token(token)
             user_id = payload.get('user_id')
-            
+
             if not user_id:
                 return None
-                
+
             user = User.objects.get(id=user_id)
-            
+
             # Vérifications personnalisées
             if not user.is_active:
                 return None
-                
+
             if self.is_token_blacklisted(token):
                 return None
-                
+
             return user
-            
+
         except (User.DoesNotExist, Exception):
             return None
-    
+
     def decode_token(self, token):
         """Décode un token JWT."""
         import jwt
         from django.conf import settings
-        
+
         return jwt.decode(
             token,
             settings.GRAPHQL_AUTO_SETTINGS['SECURITY']['AUTHENTICATION']['JWT']['SECRET_KEY'],
             algorithms=['HS256']
         )
-    
+
     def is_token_blacklisted(self, token):
         """Vérifie si un token est sur liste noire."""
         # Implémentation de la liste noire des tokens
@@ -439,28 +439,28 @@ class CustomJWTAuthentication(BaseAuthenticationBackend):
 
 ```python
 # permissions.py
-from django_graphql_auto.permissions import BasePermission
+from rail_django_graphql.permissions import BasePermission
 
 class IsOwnerOrReadOnly(BasePermission):
     """
     Permission personnalisée : propriétaire ou lecture seule.
     """
-    
+
     def has_permission(self, info, **kwargs):
         """Vérifie la permission au niveau de l'opération."""
         # Lecture autorisée pour tous
         if info.operation.operation == 'query':
             return True
-            
+
         # Écriture nécessite une authentification
         return info.context.user and info.context.user.is_authenticated
-    
+
     def has_object_permission(self, info, obj, **kwargs):
         """Vérifie la permission au niveau de l'objet."""
         # Lecture autorisée pour tous
         if info.operation.operation == 'query':
             return True
-            
+
         # Écriture autorisée seulement pour le propriétaire
         return obj.owner == info.context.user
 
@@ -468,19 +468,19 @@ class BusinessHoursPermission(BasePermission):
     """
     Permission basée sur les heures d'ouverture.
     """
-    
+
     def has_permission(self, info, **kwargs):
         """Vérifie si l'accès est autorisé pendant les heures d'ouverture."""
         from datetime import datetime, time
-        
+
         now = datetime.now().time()
         business_start = time(9, 0)  # 9:00 AM
         business_end = time(17, 0)   # 5:00 PM
-        
+
         # Staff peut accéder à tout moment
         if info.context.user and info.context.user.is_staff:
             return True
-            
+
         # Autres utilisateurs seulement pendant les heures d'ouverture
         return business_start <= now <= business_end
 ```
@@ -489,72 +489,72 @@ class BusinessHoursPermission(BasePermission):
 
 ```python
 # validators.py
-from django_graphql_auto.extensions.validation import BaseValidator
+from rail_django_graphql.extensions.validation import BaseValidator
 import re
 
 class BusinessLogicValidator(BaseValidator):
     """
     Validateur personnalisé pour la logique métier.
     """
-    
+
     def validate_field(self, field_name, value, context=None):
         """Valide un champ spécifique."""
         errors = []
-        
+
         if field_name == 'product_code':
             errors.extend(self.validate_product_code(value))
         elif field_name == 'order_total':
             errors.extend(self.validate_order_total(value, context))
         elif field_name == 'delivery_date':
             errors.extend(self.validate_delivery_date(value))
-            
+
         return errors
-    
+
     def validate_product_code(self, code):
         """Valide un code produit."""
         if not code:
             return ["Le code produit est requis"]
-            
+
         if not re.match(r'^[A-Z]{2}\d{4}$', code):
             return ["Le code produit doit suivre le format: XX0000"]
-            
+
         # Vérifier l'unicité
         from your_app.models import Product
         if Product.objects.filter(code=code).exists():
             return ["Ce code produit existe déjà"]
-            
+
         return []
-    
+
     def validate_order_total(self, total, context):
         """Valide le total d'une commande."""
         if total <= 0:
             return ["Le total de la commande doit être positif"]
-            
+
         # Vérifier les limites par type d'utilisateur
         user = context.get('user') if context else None
         if user and not user.is_staff:
             max_order = 10000  # Limite pour les utilisateurs normaux
             if total > max_order:
                 return [f"Le total ne peut pas dépasser {max_order}€"]
-                
+
         return []
-    
+
     def validate_delivery_date(self, date):
         """Valide une date de livraison."""
         from datetime import datetime, timedelta
-        
+
         if not date:
             return ["La date de livraison est requise"]
-            
+
         # Doit être dans le futur
         if date <= datetime.now().date():
             return ["La date de livraison doit être dans le futur"]
-            
+
         # Pas plus de 30 jours à l'avance
         max_date = datetime.now().date() + timedelta(days=30)
         if date > max_date:
             return ["La date de livraison ne peut pas être plus de 30 jours à l'avance"]
-            
+
         return []
 ```
 
@@ -727,16 +727,16 @@ if 'test' in sys.argv or 'pytest' in sys.modules:
 # Mock services for testing
 class MockRateLimiter:
     """Mock rate limiter pour les tests."""
-    
+
     def is_allowed(self, key, limit, window):
         return True
-    
+
     def get_usage(self, key, window):
         return {'count': 0, 'remaining': 100}
 
 class MockValidator:
     """Mock validator pour les tests."""
-    
+
     def validate(self, value):
         return []
 
@@ -877,19 +877,19 @@ spec:
         runAsUser: 1000
         fsGroup: 1000
       containers:
-      - name: app
-        image: your-app:latest
-        securityContext:
-          allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: true
-          capabilities:
-            drop:
-            - ALL
-        envFrom:
-        - configMapRef:
-            name: django-graphql-security-config
-        - secretRef:
-            name: django-graphql-secrets
+        - name: app
+          image: your-app:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          envFrom:
+            - configMapRef:
+                name: django-graphql-security-config
+            - secretRef:
+                name: django-graphql-secrets
 ```
 
 ## 📚 Configuration Best Practices

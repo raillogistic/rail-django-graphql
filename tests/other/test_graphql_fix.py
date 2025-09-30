@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def test_performance_monitor():
     """Test that the PerformanceMonitor has the required method."""
-    from django_graphql_auto.extensions.optimization import get_performance_monitor
+    from rail_django_graphql.extensions.optimization import get_performance_monitor
     
     print("Testing PerformanceMonitor...")
     
@@ -40,7 +40,7 @@ def simulate_graphql_query():
     print("\nSimulating GraphQL query execution...")
     
     # This simulates what happens when the GraphQL query is executed
-    from django_graphql_auto.extensions.optimization import get_performance_monitor
+    from rail_django_graphql.extensions.optimization import get_performance_monitor
     
     monitor = get_performance_monitor()
     

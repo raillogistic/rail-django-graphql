@@ -34,7 +34,7 @@ Enable method mutations in your Django settings:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'APPS': ['your_app'],
     'MUTATION_SETTINGS': {
         'enable_method_mutations': True,  # Enable method mutations
@@ -46,10 +46,10 @@ DJANGO_GRAPHQL_AUTO = {
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enable_method_mutations` | `bool` | `False` | Enable/disable method mutations |
-| `method_mutation_prefix` | `str` | `''` | Prefix for generated mutation names |
+| Option                    | Type   | Default | Description                              |
+| ------------------------- | ------ | ------- | ---------------------------------------- |
+| `enable_method_mutations` | `bool` | `False` | Enable/disable method mutations          |
+| `method_mutation_prefix`  | `str`  | `''`    | Prefix for generated mutation names      |
 | `include_private_methods` | `bool` | `False` | Include methods starting with underscore |
 
 ## 🏗️ Defining Model Methods
@@ -65,13 +65,13 @@ class Post(models.Model):
     content = models.TextField(verbose_name="Contenu du post")
     published = models.BooleanField(default=False, verbose_name="Publié")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+
     def publish_post(self):
         """Publier le post (Publish the post)"""
         self.published = True
         self.save()
         return self
-    
+
     def archive_post(self):
         """Archiver le post (Archive the post)"""
         self.published = False
@@ -85,7 +85,7 @@ class Post(models.Model):
 class Order(models.Model):
     status = models.CharField(max_length=20, verbose_name="Statut de la commande")
     tracking_number = models.CharField(max_length=50, blank=True, verbose_name="Numéro de suivi")
-    
+
     def ship_order(self, tracking_number: str = None):
         """Expédier la commande (Ship the order)"""
         self.status = 'shipped'
@@ -93,7 +93,7 @@ class Order(models.Model):
             self.tracking_number = tracking_number
         self.save()
         return self
-    
+
     def add_note(self, note: str, priority: int = 1):
         """Ajouter une note (Add a note)"""
         # Create related note object
@@ -115,11 +115,13 @@ For a method to be converted to a GraphQL mutation, it must:
 ### Naming Convention
 
 Method mutations follow this naming pattern:
+
 ```
 {modelName}{MethodName}
 ```
 
 Examples:
+
 - `post.publish_post()` → `postPublishPost`
 - `order.ship_order()` → `orderShipOrder`
 - `user.activate_account()` → `userActivateAccount`
@@ -128,13 +130,13 @@ Examples:
 
 ```graphql
 input PostPublishPostInput {
-  id: ID!  # Always required - the instance to operate on
+  id: ID! # Always required - the instance to operate on
   # Additional parameters from method signature
 }
 
 input OrderShipOrderInput {
   id: ID!
-  trackingNumber: String  # From tracking_number parameter
+  trackingNumber: String # From tracking_number parameter
 }
 ```
 
@@ -143,7 +145,7 @@ input OrderShipOrderInput {
 ```graphql
 type PostPublishPostPayload {
   ok: Boolean!
-  post: Post  # The returned model instance
+  post: Post # The returned model instance
   errors: [String!]
 }
 ```
@@ -170,10 +172,7 @@ mutation PublishPost($id: ID!) {
 
 ```graphql
 mutation ShipOrder($id: ID!, $trackingNumber: String!) {
-  orderShipOrder(input: { 
-    id: $id
-    trackingNumber: $trackingNumber 
-  }) {
+  orderShipOrder(input: { id: $id, trackingNumber: $trackingNumber }) {
     ok
     order {
       id
@@ -198,15 +197,15 @@ mutation ShipOrder($id: ID!, $trackingNumber: String!) {
 
 ### Supported Parameter Types
 
-| Python Type | GraphQL Type | Example |
-|-------------|--------------|---------|
-| `str` | `String` | `name: str` |
-| `int` | `Int` | `count: int` |
-| `float` | `Float` | `price: float` |
-| `bool` | `Boolean` | `active: bool` |
-| `datetime` | `DateTime` | `scheduled_at: datetime` |
-| `date` | `Date` | `due_date: date` |
-| `Decimal` | `Decimal` | `amount: Decimal` |
+| Python Type | GraphQL Type | Example                  |
+| ----------- | ------------ | ------------------------ |
+| `str`       | `String`     | `name: str`              |
+| `int`       | `Int`        | `count: int`             |
+| `float`     | `Float`      | `price: float`           |
+| `bool`      | `Boolean`    | `active: bool`           |
+| `datetime`  | `DateTime`   | `scheduled_at: datetime` |
+| `date`      | `Date`       | `due_date: date`         |
+| `Decimal`   | `Decimal`    | `amount: Decimal`        |
 
 ### Optional Parameters
 
@@ -221,6 +220,7 @@ def update_priority(self, priority: int = 1, notes: str = None):
 ```
 
 Generated GraphQL:
+
 ```graphql
 input TaskUpdatePriorityInput {
   id: ID!
@@ -272,11 +272,11 @@ def process_order(self):
     # Update order status
     self.status = 'processing'
     self.save()
-    
+
     # Update inventory
     for item in self.items.all():
         item.product.reduce_stock(item.quantity)
-    
+
     return self  # Return the main object
 ```
 
@@ -289,10 +289,10 @@ def ship_order(self, tracking_number: str):
     """Expédier la commande (Ship order)"""
     if self.status != 'confirmed':
         raise ValueError("La commande doit être confirmée avant l'expédition")
-    
+
     if not tracking_number:
         raise ValueError("Le numéro de suivi est requis")
-    
+
     self.status = 'shipped'
     self.tracking_number = tracking_number
     self.save()
@@ -306,16 +306,16 @@ Method mutations now provide enhanced error responses with field-specific inform
 ```graphql
 mutation ShipOrder($id: ID!, $trackingNumber: String!) {
   orderShipOrder(input: { id: $id, trackingNumber: $trackingNumber }) {
-    ok  # false if error occurred
+    ok # false if error occurred
     order {
       # null if error occurred
       id
       status
     }
     errors {
-      field       # Specific field that caused the error (e.g., "tracking_number")
-      message     # Human-readable error message
-      code        # Error code for programmatic handling
+      field # Specific field that caused the error (e.g., "tracking_number")
+      message # Human-readable error message
+      code # Error code for programmatic handling
     }
   }
 }
@@ -326,29 +326,34 @@ mutation ShipOrder($id: ID!, $trackingNumber: String!) {
 The system automatically extracts field information for various error types:
 
 #### Validation Errors
+
 ```python
 def update_email(self, email: str):
     """Mettre à jour l'email (Update email)"""
     if not email or '@' not in email:
         raise ValueError("Format d'email invalide")
-    
+
     self.email = email
     self.save()
     return self
 ```
 
 Response:
+
 ```json
 {
-  "errors": [{
-    "field": "email",
-    "message": "Format d'email invalide",
-    "code": "VALIDATION_ERROR"
-  }]
+  "errors": [
+    {
+      "field": "email",
+      "message": "Format d'email invalide",
+      "code": "VALIDATION_ERROR"
+    }
+  ]
 }
 ```
 
 #### Database Constraint Errors
+
 ```python
 def set_username(self, username: str):
     """Définir le nom d'utilisateur (Set username)"""
@@ -358,17 +363,21 @@ def set_username(self, username: str):
 ```
 
 Response for duplicate username:
+
 ```json
 {
-  "errors": [{
-    "field": "username",
-    "message": "Ce nom d'utilisateur existe déjà",
-    "code": "DUPLICATE_ENTRY"
-  }]
+  "errors": [
+    {
+      "field": "username",
+      "message": "Ce nom d'utilisateur existe déjà",
+      "code": "DUPLICATE_ENTRY"
+    }
+  ]
 }
 ```
 
 #### Foreign Key Validation Errors
+
 ```python
 def assign_category(self, category_id: int):
     """Assigner une catégorie (Assign category)"""
@@ -382,13 +391,16 @@ def assign_category(self, category_id: int):
 ```
 
 Response:
+
 ```json
 {
-  "errors": [{
-    "field": "category",
-    "message": "La catégorie spécifiée n'existe pas",
-    "code": "FOREIGN_KEY_ERROR"
-  }]
+  "errors": [
+    {
+      "field": "category",
+      "message": "La catégorie spécifiée n'existe pas",
+      "code": "FOREIGN_KEY_ERROR"
+    }
+  ]
 }
 ```
 
@@ -418,7 +430,7 @@ Include both French and English descriptions:
 def confirm_order(self):
     """
     Confirmer la commande (Confirm the order)
-    
+
     Changes the order status to confirmed and sends
     a confirmation email to the customer.
     """
@@ -439,7 +451,7 @@ def process_payment(self, amount: float):
     self.charge_amount = amount
     self.status = 'paid'
     self.save()
-    
+
     # Create payment record
     self.payments.create(amount=amount)
     return self
@@ -454,7 +466,7 @@ def set_priority(self, priority: int):
     """Définir la priorité (Set priority)"""
     if not 1 <= priority <= 5:
         raise ValueError("La priorité doit être entre 1 et 5")
-    
+
     self.priority = priority
     self.save()
     return self
@@ -467,16 +479,16 @@ def set_priority(self, priority: int):
 Use decorators to control method exposure:
 
 ```python
-from django_graphql_auto.decorators import graphql_method
+from rail_django_graphql.decorators import graphql_method
 
 class Post(models.Model):
     # ... fields ...
-    
+
     @graphql_method
     def publish_post(self):
         """Publier le post (Publish post)"""
         return self
-    
+
     @graphql_method(enabled=False)
     def internal_method(self):
         """This method won't be exposed"""
@@ -513,7 +525,7 @@ def approve_comment(self):
     """Approuver le commentaire (Approve comment)"""
     self.is_approved = True
     self.save()
-    
+
     # Signal will be triggered by save()
     # Can be used for notifications, etc.
     return self
@@ -524,11 +536,13 @@ def approve_comment(self):
 ### Common Issues
 
 1. **Method not appearing in schema**
+
    - Check that `enable_method_mutations` is `True`
    - Ensure method returns `self` or model instance
    - Verify method is public (doesn't start with `_`)
 
 2. **Parameter types incorrect**
+
    - Add proper type hints to method parameters
    - Use supported Python types
 
@@ -550,7 +564,7 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.generators.mutations': {
+        'rail_django_graphql.generators.mutations': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },

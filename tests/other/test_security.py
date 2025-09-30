@@ -10,7 +10,7 @@ import sys
 import django
 
 # Setup Django BEFORE importing any Django modules
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django_graphql.settings")
 django.setup()
 
 from django.test import TestCase
@@ -19,16 +19,16 @@ from django.test.client import RequestFactory
 from graphene.test import Client
 import json
 
-from django_graphql_auto.schema import schema
-from django_graphql_auto.extensions.auth import JWTManager
-from django_graphql_auto.extensions.permissions import PermissionManager
-from django_graphql_auto.extensions.validation import InputValidator
-from django_graphql_auto.extensions.rate_limiting import RateLimiter
+from rail_django_graphql.schema import schema
+from rail_django_graphql.extensions.auth import JWTManager
+from rail_django_graphql.extensions.permissions import PermissionManager
+from rail_django_graphql.extensions.validation import InputValidator
+from rail_django_graphql.extensions.rate_limiting import RateLimiter
 
 
 class SecurityTestCase:
     """Test case for security features"""
-    
+
     def __init__(self):
         self.client = Client(schema)
         self.factory = RequestFactory()
@@ -36,25 +36,23 @@ class SecurityTestCase:
         self.permission_manager = PermissionManager()
         self.input_validator = InputValidator()
         self.rate_limiter = RateLimiter()
-        
+
     def setUp(self):
         """Set up test data"""
         # Create test user (check if exists first)
         try:
-            self.test_user = User.objects.get(username='testuser')
+            self.test_user = User.objects.get(username="testuser")
         except User.DoesNotExist:
             self.test_user = User.objects.create_user(
-                username='testuser',
-                email='test@example.com',
-                password='testpass123'
+                username="testuser", email="test@example.com", password="testpass123"
             )
-        
+
     def test_authentication_queries(self):
         """Test authentication-related queries and mutations"""
         print("Testing Authentication System...")
-        
+
         # Test registration
-        register_mutation = '''
+        register_mutation = """
         mutation {
             register(username: "newuser", email: "new@example.com", password: "newpass123") {
                 success
@@ -68,13 +66,13 @@ class SecurityTestCase:
                 }
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(register_mutation)
         print(f"Registration result: {result}")
-        
+
         # Test login
-        login_mutation = '''
+        login_mutation = """
         mutation {
             login(username: "testuser", password: "testpass123") {
                 success
@@ -88,13 +86,13 @@ class SecurityTestCase:
                 }
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(login_mutation)
         print(f"Login result: {result}")
-        
+
         # Test me query (requires authentication)
-        me_query = '''
+        me_query = """
         query {
             me {
                 id
@@ -104,22 +102,22 @@ class SecurityTestCase:
                 date_joined
             }
         }
-        '''
-        
+        """
+
         # Create mock request with authentication
-        request = self.factory.get('/')
+        request = self.factory.get("/")
         token = self.jwt_manager.generate_token(self.test_user)
-        request.META['HTTP_AUTHORIZATION'] = f'Bearer {token}'
-        
-        result = self.client.execute(me_query, context={'request': request})
+        request.META["HTTP_AUTHORIZATION"] = f"Bearer {token}"
+
+        result = self.client.execute(me_query, context={"request": request})
         print(f"Me query result: {result}")
-        
+
     def test_permission_system(self):
         """Test permission system"""
         print("\nTesting Permission System...")
-        
+
         # Test permission queries
-        permissions_query = '''
+        permissions_query = """
         query {
             my_permissions {
                 permissions
@@ -128,20 +126,20 @@ class SecurityTestCase:
                 is_staff
             }
         }
-        '''
-        
-        request = self.factory.get('/')
+        """
+
+        request = self.factory.get("/")
         request.user = self.test_user
-        
-        result = self.client.execute(permissions_query, context={'request': request})
+
+        result = self.client.execute(permissions_query, context={"request": request})
         print(f"Permissions query result: {result}")
-        
+
     def test_validation_system(self):
         """Test input validation"""
         print("\nTesting Validation System...")
-        
+
         # Test validation query
-        validation_query = '''
+        validation_query = """
         query {
             validate_field(field_name: "email", value: "invalid-email") {
                 field_name
@@ -150,13 +148,13 @@ class SecurityTestCase:
                 sanitized_value
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(validation_query)
         print(f"Validation query result: {result}")
-        
+
         # Test with valid email
-        validation_query_valid = '''
+        validation_query_valid = """
         query {
             validate_field(field_name: "email", value: "valid@example.com") {
                 field_name
@@ -165,17 +163,17 @@ class SecurityTestCase:
                 sanitized_value
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(validation_query_valid)
         print(f"Valid validation query result: {result}")
-        
+
     def test_security_info(self):
         """Test security information queries"""
         print("\nTesting Security Information...")
-        
+
         # Test security info query
-        security_query = '''
+        security_query = """
         query {
             security_info {
                 remaining_requests
@@ -184,13 +182,13 @@ class SecurityTestCase:
                 current_depth_limit
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(security_query)
         print(f"Security info result: {result}")
-        
+
         # Test query stats
-        stats_query = '''
+        stats_query = """
         query {
             query_stats {
                 total_queries
@@ -200,41 +198,43 @@ class SecurityTestCase:
                 success_rate
             }
         }
-        '''
-        
+        """
+
         result = self.client.execute(stats_query)
         print(f"Query stats result: {result}")
-        
+
     def test_rate_limiting(self):
         """Test rate limiting functionality"""
         print("\nTesting Rate Limiting...")
-        
+
         # Test rate limiting
         rate_limiter = RateLimiter(max_requests=3, window_seconds=60)
-        
+
         for i in range(5):
             try:
                 allowed, wait_time = rate_limiter.check_rate_limit("test_user")
-                print(f"Request {i+1}: {'Allowed' if allowed else f'Rate limited (wait {wait_time}s)'}")
+                print(
+                    f"Request {i+1}: {'Allowed' if allowed else f'Rate limited (wait {wait_time}s)'}"
+                )
             except Exception as e:
                 print(f"Request {i+1}: Rate limited - {e}")
-                
+
     def test_query_complexity(self):
         """Test query complexity analysis"""
         print("\nTesting Query Complexity...")
-        
+
         # Simple query
-        simple_query = '''
+        simple_query = """
         query {
             me {
                 id
                 username
             }
         }
-        '''
-        
+        """
+
         # Complex nested query
-        complex_query = '''
+        complex_query = """
         query {
             me {
                 id
@@ -255,29 +255,31 @@ class SecurityTestCase:
                 }
             }
         }
-        '''
-        
-        from django_graphql_auto.extensions.rate_limiting import QueryComplexityAnalyzer
+        """
+
+        from rail_django_graphql.extensions.rate_limiting import QueryComplexityAnalyzer
+
         analyzer = QueryComplexityAnalyzer(max_complexity=10)
-        
+
         # Parse queries
         from graphql import parse
+
         simple_parsed = parse(simple_query)
         complex_parsed = parse(complex_query)
-        
+
         try:
             simple_complexity = analyzer.analyze_complexity(simple_parsed)
             print(f"Simple query complexity: {simple_complexity}")
-            
+
             complex_complexity = analyzer.analyze_complexity(complex_parsed)
             print(f"Complex query complexity: {complex_complexity}")
         except Exception as e:
             print(f"Complexity analysis error: {e}")
-            
+
     def run_all_tests(self):
         """Run all security tests"""
         print("=== Django GraphQL Auto Security Tests ===\n")
-        
+
         try:
             self.setUp()
             self.test_authentication_queries()
@@ -286,15 +288,16 @@ class SecurityTestCase:
             self.test_security_info()
             self.test_rate_limiting()
             self.test_query_complexity()
-            
+
             print("\n=== All Security Tests Completed ===")
-            
+
         except Exception as e:
             print(f"Test error: {e}")
             import traceback
+
             traceback.print_exc()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_case = SecurityTestCase()
     test_case.run_all_tests()

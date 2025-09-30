@@ -5,6 +5,7 @@
 Le système de cache de `django-graphql-auto` ne s'invalidait pas automatiquement après les mutations, causant des incohérences entre les données en base et les réponses GraphQL mises en cache.
 
 ### Symptômes Observés
+
 - ✅ Les requêtes initiales fonctionnaient correctement
 - ❌ Après une mutation (création/modification), les nouvelles données n'apparaissaient pas immédiatement
 - ❌ Il fallait attendre l'expiration du cache ou le redémarrer manuellement
@@ -13,13 +14,15 @@ Le système de cache de `django-graphql-auto` ne s'invalidait pas automatiquemen
 ## 🔍 Analyse Effectuée
 
 ### 1. Investigation du Système de Cache
-- **Fichiers analysés** : `django_graphql_auto/core/cache.py`, `django_graphql_auto/extensions/cache.py`
+
+- **Fichiers analysés** : `rail_django_graphql/core/cache.py`, `rail_django_graphql/extensions/cache.py`
 - **Découvertes** :
   - `CacheInvalidator` existe mais n'est pas utilisé automatiquement
   - `GraphQLCacheManager` gère le cache mais sans invalidation post-mutation
   - Les signaux Django sont connectés mais ne se déclenchent pas pour les mutations GraphQL
 
 ### 2. Tests de Comportement
+
 - **Scripts créés** : `test_cache_behavior.py`, `test_integrated_cache.py`
 - **Résultats** :
   - Mutations réussies en base de données ✅
@@ -27,7 +30,8 @@ Le système de cache de `django-graphql-auto` ne s'invalidait pas automatiquemen
   - Données visibles uniquement après `cache.clear()` manuel
 
 ### 3. Configuration Analysée
-- **Paramètres vérifiés** : `CACHE_ENABLED = True` dans `django_graphql_auto/settings.py`
+
+- **Paramètres vérifiés** : `CACHE_ENABLED = True` dans `rail_django_graphql/settings.py`
 - **Backend de cache** : `django.core.cache.backends.locmem.LocMemCache`
 - **Conclusion** : Configuration correcte, problème dans le mécanisme d'invalidation
 
@@ -45,6 +49,7 @@ class GraphQLCacheInvalidationMiddleware(MiddlewareMixin):
 ```
 
 **Fonctionnalités** :
+
 - ✅ Détection automatique des mutations GraphQL
 - ✅ Invalidation du cache après mutations réussies
 - ✅ Support des mutations auto-générées et personnalisées
@@ -53,7 +58,7 @@ class GraphQLCacheInvalidationMiddleware(MiddlewareMixin):
 
 ### 2. Intégration dans Django
 
-**Modification** : `django_graphql_auto/settings.py`
+**Modification** : `rail_django_graphql/settings.py`
 
 ```python
 MIDDLEWARE = [
@@ -71,8 +76,8 @@ def invalidate_model_cache_integrated(model_class, instance=None):
     """
     Utilise le système de cache intégré de django-graphql-auto
     """
-    from django_graphql_auto.core.cache import CacheInvalidator
-    
+    from rail_django_graphql.core.cache import CacheInvalidator
+
     invalidator = CacheInvalidator()
     if instance:
         invalidator.invalidate_instance(instance)
@@ -91,6 +96,7 @@ def invalidate_model_cache_integrated(model_class, instance=None):
 ### 2. Résultats des Tests
 
 **Avant la solution** :
+
 ```
 ❌ Cache non invalidé après mutations
 ❌ Nouvelles données invisibles immédiatement
@@ -98,6 +104,7 @@ def invalidate_model_cache_integrated(model_class, instance=None):
 ```
 
 **Après la solution** :
+
 ```
 ✅ Cache invalidé automatiquement après chaque mutation
 ✅ Nouvelles données visibles immédiatement
@@ -117,11 +124,13 @@ def invalidate_model_cache_integrated(model_class, instance=None):
 ## 📊 Performance et Impact
 
 ### Avant
+
 - **Cohérence des données** : ❌ Problématique
 - **Expérience utilisateur** : ❌ Frustrante (données obsolètes)
 - **Maintenance** : ❌ Nécessite intervention manuelle
 
 ### Après
+
 - **Cohérence des données** : ✅ Garantie
 - **Expérience utilisateur** : ✅ Fluide et cohérente
 - **Maintenance** : ✅ Automatique et transparente
@@ -146,6 +155,7 @@ Réponse avec données fraîches
 ```
 
 ### Patterns de Mutations Détectés
+
 - `create_*` (mutations auto-générées)
 - `update_*` (mutations auto-générées)
 - `delete_*` (mutations auto-générées)
@@ -154,6 +164,7 @@ Réponse avec données fraîches
 ## 📝 Fichiers Modifiés/Créés
 
 ### Fichiers Créés
+
 1. **`cache_middleware.py`** - Middleware principal
 2. **`test_cache_behavior.py`** - Tests de comportement
 3. **`test_integrated_cache.py`** - Tests d'intégration
@@ -162,12 +173,14 @@ Réponse avec données fraîches
 6. **`SOLUTION_CACHE_RESUME.md`** - Ce document
 
 ### Fichiers Modifiés
-1. **`django_graphql_auto/settings.py`** - Ajout du middleware
+
+1. **`rail_django_graphql/settings.py`** - Ajout du middleware
 2. **`test_app/schema.py`** - Amélioration des mutations personnalisées
 
 ## 🚀 Déploiement et Configuration
 
 ### Installation
+
 1. Copier `cache_middleware.py` dans le projet
 2. Ajouter le middleware dans `MIDDLEWARE` de `settings.py`
 3. Redémarrer le serveur Django

@@ -1,6 +1,6 @@
 # File Uploads & Media Management
 
-Ce guide détaille le système de téléchargement de fichiers et de gestion des médias de `django_graphql_auto`.
+Ce guide détaille le système de téléchargement de fichiers et de gestion des médias de `rail_django_graphql`.
 
 ## Table des matières
 
@@ -40,24 +40,24 @@ GRAPHQL_AUTO = {
     'FILE_UPLOAD_ALLOWED_EXTENSIONS': [
         '.jpg', '.jpeg', '.png', '.gif', '.webp', '.pdf', '.txt'
     ],
-    
+
     # Sécurité
     'VIRUS_SCANNING_ENABLED': True,
     'VIRUS_SCANNER_TYPE': 'clamav',  # 'clamav' ou 'mock'
     'VIRUS_SCAN_TIMEOUT': 30,
     'QUARANTINE_PATH': '/var/quarantine/',
-    
+
     # Traitement d'images
     'IMAGE_PROCESSING_ENABLED': True,
     'IMAGE_MAX_WIDTH': 2048,
     'IMAGE_MAX_HEIGHT': 2048,
     'IMAGE_QUALITY': 85,
     'GENERATE_THUMBNAILS': True,
-    
+
     # Stockage
     'STORAGE_BACKEND': 'local',  # 'local', 's3'
     'MEDIA_ROOT': '/media/',
-    
+
     # CDN
     'CDN_ENABLED': False,
     'CDN_BASE_URL': 'https://cdn.example.com',
@@ -105,7 +105,7 @@ class Document(models.Model):
     file = models.FileField(upload_to='documents/', verbose_name="Fichier")
     owner = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Propriétaire")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+
     class Meta:
         verbose_name = "Document"
         verbose_name_plural = "Documents"
@@ -116,7 +116,7 @@ class Photo(models.Model):
     thumbnail = models.ImageField(upload_to='thumbnails/', verbose_name="Miniature", blank=True)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Propriétaire")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+
     class Meta:
         verbose_name = "Photo"
         verbose_name_plural = "Photos"
@@ -126,8 +126,8 @@ class Photo(models.Model):
 
 ```python
 # schema.py
-from django_graphql_auto.generators.file_uploads import FileUploadGenerator
-from django_graphql_auto.core.settings import GraphQLAutoSettings
+from rail_django_graphql.generators.file_uploads import FileUploadGenerator
+from rail_django_graphql.core.settings import GraphQLAutoSettings
 
 settings = GraphQLAutoSettings()
 file_generator = FileUploadGenerator(settings)
@@ -204,7 +204,7 @@ mutation UploadPhoto($file: Upload!, $title: String!) {
 ### Traitement d'images
 
 ```python
-from django_graphql_auto.extensions.media import MediaManager, ThumbnailSize
+from rail_django_graphql.extensions.media import MediaManager, ThumbnailSize
 
 # Initialisation du gestionnaire de médias
 media_manager = MediaManager(settings)
@@ -233,7 +233,7 @@ for thumbnail in media_info.thumbnails:
 ### Génération de miniatures
 
 ```python
-from django_graphql_auto.extensions.media import ImageProcessor, ThumbnailSize
+from rail_django_graphql.extensions.media import ImageProcessor, ThumbnailSize
 
 processor = ImageProcessor(settings)
 
@@ -245,7 +245,7 @@ thumbnails = processor.generate_all_thumbnails(uploaded_file)
 
 # Tailles disponibles
 # ThumbnailSize.SMALL: 150x150
-# ThumbnailSize.MEDIUM: 300x300  
+# ThumbnailSize.MEDIUM: 300x300
 # ThumbnailSize.LARGE: 600x600
 ```
 
@@ -277,7 +277,7 @@ converted_file = processor.convert_format(
 ### Validation des fichiers
 
 ```python
-from django_graphql_auto.generators.file_uploads import FileValidator, FileInfo
+from rail_django_graphql.generators.file_uploads import FileValidator, FileInfo
 
 validator = FileValidator(settings)
 
@@ -304,7 +304,7 @@ validator.validate_image_dimensions(
 ### Scan antivirus
 
 ```python
-from django_graphql_auto.extensions.virus_scanner import VirusScanner, ThreatDetected
+from rail_django_graphql.extensions.virus_scanner import VirusScanner, ThreatDetected
 
 scanner = VirusScanner(settings)
 
@@ -338,7 +338,7 @@ scanner.delete_quarantine_file('/var/quarantine/suspicious_file.bin')
 ### Stockage local
 
 ```python
-from django_graphql_auto.extensions.media import LocalStorageBackend
+from rail_django_graphql.extensions.media import LocalStorageBackend
 
 backend = LocalStorageBackend(settings)
 
@@ -358,7 +358,7 @@ backend.delete_file(filename)
 ### Stockage S3
 
 ```python
-from django_graphql_auto.extensions.media import S3StorageBackend
+from rail_django_graphql.extensions.media import S3StorageBackend
 
 backend = S3StorageBackend(settings)
 
@@ -370,7 +370,7 @@ url = backend.get_file_url(filename)
 ### CDN
 
 ```python
-from django_graphql_auto.extensions.media import CDNManager
+from rail_django_graphql.extensions.media import CDNManager
 
 cdn = CDNManager(settings)
 
@@ -396,20 +396,20 @@ cdn.invalidate_cache(['images/photo.jpg'])
 ```python
 # tasks.py (avec Celery)
 from celery import shared_task
-from django_graphql_auto.extensions.media import MediaManager
+from rail_django_graphql.extensions.media import MediaManager
 
 @shared_task
 def process_uploaded_image(file_path, model_id):
     """Traitement asynchrone d'image téléchargée."""
     media_manager = MediaManager(settings)
-    
+
     # Traitement de l'image
     media_info = media_manager.process_existing_image(
         file_path,
         generate_thumbnails=True,
         optimize_quality=80
     )
-    
+
     # Mise à jour du modèle
     model_instance = YourModel.objects.get(id=model_id)
     model_instance.processed_image = media_info.filename
@@ -425,12 +425,12 @@ def get_media_metadata(file_path):
     """Récupération des métadonnées avec cache."""
     cache_key = f"media_metadata:{file_path}"
     metadata = cache.get(cache_key)
-    
+
     if metadata is None:
         processor = ImageProcessor(settings)
         metadata = processor.extract_metadata(file_path)
         cache.set(cache_key, metadata, timeout=3600)  # 1 heure
-    
+
     return metadata
 ```
 
@@ -440,7 +440,7 @@ def get_media_metadata(file_path):
 
 ```javascript
 // Téléchargement simple avec Apollo Client
-import { gql, useMutation } from '@apollo/client';
+import { gql, useMutation } from "@apollo/client";
 
 const UPLOAD_DOCUMENT = gql`
   mutation UploadDocument($file: Upload!, $title: String!) {
@@ -458,31 +458,31 @@ const UPLOAD_DOCUMENT = gql`
 
 function DocumentUpload() {
   const [uploadDocument] = useMutation(UPLOAD_DOCUMENT);
-  
+
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
-    
+
     try {
       const { data } = await uploadDocument({
         variables: {
           file,
-          title: 'Mon document'
-        }
+          title: "Mon document",
+        },
       });
-      
+
       if (data.uploadDocumentFile.success) {
-        console.log('Fichier téléchargé:', data.uploadDocumentFile.fileInfo);
+        console.log("Fichier téléchargé:", data.uploadDocumentFile.fileInfo);
       } else {
-        console.error('Erreur:', data.uploadDocumentFile.errorMessage);
+        console.error("Erreur:", data.uploadDocumentFile.errorMessage);
       }
     } catch (error) {
-      console.error('Erreur de téléchargement:', error);
+      console.error("Erreur de téléchargement:", error);
     }
   };
-  
+
   return (
-    <input 
-      type="file" 
+    <input
+      type="file"
       onChange={handleFileUpload}
       accept=".pdf,.txt,.jpg,.png"
     />
@@ -515,29 +515,32 @@ const UPLOAD_MULTIPLE_PHOTOS = gql`
 
 function MultiplePhotoUpload() {
   const [uploadPhotos] = useMutation(UPLOAD_MULTIPLE_PHOTOS);
-  
+
   const handleMultipleUpload = async (event) => {
     const files = Array.from(event.target.files);
-    
+
     try {
       const { data } = await uploadPhotos({
         variables: {
           files,
-          title: 'Album photos'
-        }
+          title: "Album photos",
+        },
       });
-      
-      console.log(`${data.uploadMultiplePhotoFiles.successfulUploads.length} fichiers téléchargés`);
-      console.log(`${data.uploadMultiplePhotoFiles.failedUploads.length} échecs`);
-      
+
+      console.log(
+        `${data.uploadMultiplePhotoFiles.successfulUploads.length} fichiers téléchargés`
+      );
+      console.log(
+        `${data.uploadMultiplePhotoFiles.failedUploads.length} échecs`
+      );
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error("Erreur:", error);
     }
   };
-  
+
   return (
-    <input 
-      type="file" 
+    <input
+      type="file"
       multiple
       onChange={handleMultipleUpload}
       accept="image/*"
@@ -549,43 +552,45 @@ function MultiplePhotoUpload() {
 ### Composant React avec prévisualisation
 
 ```javascript
-import React, { useState } from 'react';
+import React, { useState } from "react";
 
 function ImageUploadWithPreview() {
   const [preview, setPreview] = useState(null);
   const [uploadImage] = useMutation(UPLOAD_PHOTO);
-  
+
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
-    
+
     if (file) {
       // Prévisualisation
       const reader = new FileReader();
       reader.onload = (e) => setPreview(e.target.result);
       reader.readAsDataURL(file);
-      
+
       // Téléchargement
       uploadImage({
         variables: {
           file,
-          title: file.name
-        }
+          title: file.name,
+        },
       }).then(({ data }) => {
         if (data.uploadPhotoFile.success) {
-          console.log('Image téléchargée avec miniatures:', 
-            data.uploadPhotoFile.fileInfo.thumbnails);
+          console.log(
+            "Image téléchargée avec miniatures:",
+            data.uploadPhotoFile.fileInfo.thumbnails
+          );
         }
       });
     }
   };
-  
+
   return (
     <div>
       <input type="file" accept="image/*" onChange={handleFileSelect} />
       {preview && (
         <div>
           <h3>Prévisualisation :</h3>
-          <img src={preview} alt="Preview" style={{maxWidth: '300px'}} />
+          <img src={preview} alt="Preview" style={{ maxWidth: "300px" }} />
         </div>
       )}
     </div>
@@ -600,7 +605,7 @@ function ImageUploadWithPreview() {
 ```python
 class FileUploadGenerator:
     def __init__(self, settings: GraphQLAutoSettings)
-    
+
     def generate_file_upload_mutations(self, model: Model, **options) -> str
     def generate_single_file_upload_mutation(self, model: Model) -> str
     def generate_multiple_file_upload_mutation(self, model: Model) -> str
@@ -613,7 +618,7 @@ class FileUploadGenerator:
 ```python
 class MediaManager:
     def __init__(self, settings: GraphQLAutoSettings)
-    
+
     def process_and_save_image(self, file, **options) -> MediaInfo
     def get_media_info(self, file) -> MediaInfo
     def delete_media(self, media_info: MediaInfo) -> bool
@@ -625,7 +630,7 @@ class MediaManager:
 ```python
 class ImageProcessor:
     def __init__(self, settings: GraphQLAutoSettings)
-    
+
     def resize_image(self, file, max_width: int, max_height: int) -> InMemoryUploadedFile
     def optimize_image(self, file, quality: int) -> InMemoryUploadedFile
     def generate_thumbnail(self, file, size: ThumbnailSize) -> InMemoryUploadedFile
@@ -639,7 +644,7 @@ class ImageProcessor:
 ```python
 class VirusScanner:
     def __init__(self, settings: GraphQLAutoSettings)
-    
+
     def scan_file(self, file_path: str) -> ScanResult
     def scan_uploaded_file(self, file) -> ScanResult
     def get_quarantine_files(self) -> List[Dict[str, str]]
@@ -661,22 +666,28 @@ class StorageBackend:
 ### Problèmes courants
 
 1. **Erreur de taille de fichier**
+
    ```
    FileValidationError: Le fichier est trop volumineux
    ```
+
    - Vérifiez `FILE_UPLOAD_MAX_SIZE` dans les settings
    - Vérifiez les limites du serveur web (nginx, Apache)
 
 2. **Erreur de type de fichier**
+
    ```
    FileValidationError: Type de fichier non autorisé
    ```
+
    - Vérifiez `FILE_UPLOAD_ALLOWED_TYPES` et `FILE_UPLOAD_ALLOWED_EXTENSIONS`
 
 3. **Erreur ClamAV**
+
    ```
    VirusScanError: ClamAV n'est pas disponible
    ```
+
    - Installez ClamAV : `sudo apt-get install clamav`
    - Ou utilisez le scanner factice : `VIRUS_SCANNER_TYPE = 'mock'`
 
@@ -693,9 +704,9 @@ class StorageBackend:
 import logging
 
 # Activation des logs pour le système de fichiers
-logging.getLogger('django_graphql_auto.generators.file_uploads').setLevel(logging.DEBUG)
-logging.getLogger('django_graphql_auto.extensions.media').setLevel(logging.DEBUG)
-logging.getLogger('django_graphql_auto.extensions.virus_scanner').setLevel(logging.DEBUG)
+logging.getLogger('rail_django_graphql.generators.file_uploads').setLevel(logging.DEBUG)
+logging.getLogger('rail_django_graphql.extensions.media').setLevel(logging.DEBUG)
+logging.getLogger('rail_django_graphql.extensions.virus_scanner').setLevel(logging.DEBUG)
 ```
 
 ### Tests de performance
@@ -708,13 +719,13 @@ from django.test import TestCase
 class FileUploadPerformanceTest(TestCase):
     def test_large_file_upload(self):
         start_time = time.time()
-        
+
         # Téléchargement d'un fichier de 10MB
         result = self.upload_large_file()
-        
+
         end_time = time.time()
         upload_time = end_time - start_time
-        
+
         self.assertLess(upload_time, 30)  # Moins de 30 secondes
         self.assertTrue(result.success)
 ```

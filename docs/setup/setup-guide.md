@@ -33,21 +33,25 @@
 Choose your preferred installation method:
 
 #### Using pip (Recommended)
+
 ```bash
 pip install django-graphql-auto
 ```
 
 #### Using pipenv
+
 ```bash
 pipenv install django-graphql-auto
 ```
 
 #### Using poetry
+
 ```bash
 poetry add django-graphql-auto
 ```
 
 #### Development Installation
+
 ```bash
 git clone https://github.com/your-org/django-graphql-auto.git
 cd django-graphql-auto
@@ -57,6 +61,7 @@ pip install -e .
 ### 2. Install Dependencies
 
 The package automatically installs core dependencies:
+
 - `graphene-django>=3.0.0`
 - `django-filter>=22.1`
 - `django-cors-headers>=4.0.0`
@@ -83,6 +88,7 @@ pip install sentry-sdk
 ### 3. System Dependencies
 
 #### Ubuntu/Debian
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
@@ -96,11 +102,13 @@ sudo apt-get install -y \
 ```
 
 #### macOS
+
 ```bash
 brew install libmagic clamav jpeg libpng webp
 ```
 
 #### Windows
+
 ```powershell
 # Install using chocolatey
 choco install imagemagick
@@ -124,14 +132,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third-party apps
     'graphene_django',
     'corsheaders',
-    
+
     # Django GraphQL Auto
-    'django_graphql_auto',
-    
+    'rail_django_graphql',
+
     # Your apps
     'your_app',
 ]
@@ -150,42 +158,42 @@ MIDDLEWARE = [
 
 # GraphQL Configuration
 GRAPHENE = {
-    'SCHEMA': 'django_graphql_auto.schema.schema',
+    'SCHEMA': 'rail_django_graphql.schema.schema',
     'MIDDLEWARE': [
-        'django_graphql_auto.middleware.AuthenticationMiddleware',
-        'django_graphql_auto.middleware.PermissionMiddleware',
-        'django_graphql_auto.middleware.RateLimitingMiddleware',
+        'rail_django_graphql.middleware.AuthenticationMiddleware',
+        'rail_django_graphql.middleware.PermissionMiddleware',
+        'rail_django_graphql.middleware.RateLimitingMiddleware',
     ],
 }
 
 # Django GraphQL Auto Configuration
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     # Schema Generation
     'AUTO_GENERATE_SCHEMA': True,
     'SCHEMA_OUTPUT_DIR': 'generated_schema/',
     'NAMING_CONVENTION': 'snake_case',
-    
+
     # Feature Toggles
     'ENABLE_MUTATIONS': True,
     'ENABLE_SUBSCRIPTIONS': False,
     'ENABLE_FILTERS': True,
     'ENABLE_FILE_UPLOADS': True,
     'ENABLE_PERMISSIONS': True,
-    
+
     # Model Configuration
     'APPS_TO_INCLUDE': ['your_app'],  # Specify your apps
     'APPS_TO_EXCLUDE': ['admin', 'auth', 'contenttypes', 'sessions'],
     'MODELS_TO_EXCLUDE': [],
-    
+
     # Pagination
     'PAGINATION_SIZE': 20,
     'MAX_QUERY_DEPTH': 10,
-    
+
     # Performance
     'ENABLE_QUERY_OPTIMIZATION': True,
     'ENABLE_CACHING': False,  # Enable if Redis is configured
     'CACHE_TIMEOUT': 300,
-    
+
     # Security
     'ENABLE_RATE_LIMITING': True,
     'RATE_LIMIT_PER_MINUTE': 100,
@@ -234,12 +242,12 @@ from django.views.decorators.csrf import csrf_exempt
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    
+
     # GraphQL endpoint
     path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=True))),
-    
+
     # Optional: Include auto-generated URLs
-    path('api/', include('django_graphql_auto.urls')),
+    path('api/', include('rail_django_graphql.urls')),
 ]
 
 # Serve media files in development
@@ -269,22 +277,22 @@ chmod 700 var/quarantine
 # settings.py
 
 # JWT Authentication (if using)
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'AUTHENTICATION': {
-        'BACKEND': 'django_graphql_auto.auth.JWTAuthentication',
+        'BACKEND': 'rail_django_graphql.auth.JWTAuthentication',
         'JWT_SECRET_KEY': 'your-secret-key',
         'JWT_EXPIRATION_DELTA': timedelta(hours=24),
         'JWT_REFRESH_EXPIRATION_DELTA': timedelta(days=7),
     },
-    
+
     'PERMISSIONS': {
         'DEFAULT_PERMISSION_CLASSES': [
-            'django_graphql_auto.permissions.IsAuthenticated',
+            'rail_django_graphql.permissions.IsAuthenticated',
         ],
         'FIELD_LEVEL_PERMISSIONS': True,
         'OBJECT_LEVEL_PERMISSIONS': True,
     },
-    
+
     'SECURITY': {
         'ENABLE_QUERY_DEPTH_ANALYSIS': True,
         'ENABLE_QUERY_COMPLEXITY_ANALYSIS': True,
@@ -311,7 +319,7 @@ CACHES = {
 }
 
 # Enable caching in GraphQL Auto
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'ENABLE_CACHING': True,
     'CACHE_TIMEOUT': 300,
     'CACHE_KEY_PREFIX': 'graphql_auto',
@@ -321,6 +329,7 @@ DJANGO_GRAPHQL_AUTO.update({
 ### Cloud Storage Configuration
 
 #### AWS S3
+
 ```python
 # settings.py
 FILE_UPLOADS.update({
@@ -333,6 +342,7 @@ FILE_UPLOADS.update({
 ```
 
 #### Google Cloud Storage
+
 ```python
 # settings.py
 FILE_UPLOADS.update({
@@ -355,11 +365,11 @@ class Category(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nom de la catégorie")
     description = models.TextField(blank=True, verbose_name="Description")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
-    
+
     class Meta:
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
-    
+
     def __str__(self):
         return self.name
 
@@ -371,12 +381,12 @@ class Post(models.Model):
     published = models.BooleanField(default=False, verbose_name="Publié")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Créé le")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Modifié le")
-    
+
     class Meta:
         verbose_name = "Article"
         verbose_name_plural = "Articles"
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return self.title
 ```
@@ -447,13 +457,15 @@ query {
 
 # Create new post
 mutation {
-  createPost(input: {
-    title: "My First Post"
-    content: "This is the content of my first post."
-    authorId: 1
-    categoryId: 1
-    published: true
-  }) {
+  createPost(
+    input: {
+      title: "My First Post"
+      content: "This is the content of my first post."
+      authorId: 1
+      categoryId: 1
+      published: true
+    }
+  ) {
     post {
       id
       title
@@ -494,12 +506,12 @@ def test_graphql_endpoint():
       }
     }
     """
-    
+
     response = requests.post(
         'http://localhost:8000/graphql/',
         json={'query': query}
     )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert 'data' in data
@@ -525,29 +537,33 @@ curl -X POST \
 ### Common Issues
 
 #### 1. Schema Not Generated
+
 ```bash
 # Check if apps are properly configured
 python manage.py shell
->>> from django_graphql_auto.core.schema_generator import SchemaGenerator
+>>> from rail_django_graphql.core.schema_generator import SchemaGenerator
 >>> generator = SchemaGenerator()
 >>> generator.generate_schema()
 ```
 
 #### 2. GraphQL Endpoint Not Working
+
 - Verify `GRAPHENE` settings in `settings.py`
 - Check URL configuration
 - Ensure CORS is properly configured
 
 #### 3. File Upload Issues
+
 - Check file permissions on upload directories
 - Verify system dependencies are installed
 - Check `FILE_UPLOADS` configuration
 
 #### 4. Permission Errors
+
 ```python
 # Check permission configuration
 python manage.py shell
->>> from django_graphql_auto.security.permissions import PermissionChecker
+>>> from rail_django_graphql.security.permissions import PermissionChecker
 >>> checker = PermissionChecker()
 >>> checker.check_permissions(user, 'query', 'Post')
 ```
@@ -558,7 +574,7 @@ Enable debug mode for detailed error messages:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'DEBUG': True,
     'ENABLE_QUERY_LOGGING': True,
     'LOG_LEVEL': 'DEBUG',
@@ -569,7 +585,7 @@ DJANGO_GRAPHQL_AUTO.update({
 
 ```python
 # Enable query optimization
-DJANGO_GRAPHQL_AUTO.update({
+rail_django_graphql.update({
     'ENABLE_QUERY_OPTIMIZATION': True,
     'ENABLE_CACHING': True,
     'CACHE_TIMEOUT': 300,

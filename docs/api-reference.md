@@ -33,10 +33,10 @@ schema {
 type Query {
   # Single object queries
   <model>(id: ID!): <Model>Type
-  
+
   # List queries with filtering
   <models>(filters: <Model>FilterInput, orderBy: [String], limit: Int, offset: Int): [<Model>Type]
-  
+
   # Paginated queries
   <model>Pages(first: Int, after: String, filters: <Model>FilterInput): <Model>Connection
 }
@@ -46,10 +46,10 @@ type Mutation {
   create<Model>(input: Create<Model>Input!): Create<Model>Payload
   update<Model>(input: Update<Model>Input!): Update<Model>Payload
   delete<Model>(id: ID!): Delete<Model>Payload
-  
+
   # Method mutations (when enabled)
   <model><Method>(id: ID!, ...args): <Model><Method>Payload
-  
+
   # Bulk operations (when enabled)
   bulkCreate<Model>(input: BulkCreate<Model>Input!): BulkCreate<Model>Payload
   bulkUpdate<Model>(input: BulkUpdate<Model>Input!): BulkUpdate<Model>Payload
@@ -64,11 +64,13 @@ type Mutation {
 Retrieve a single object by its ID.
 
 #### Syntax
+
 ```graphql
 <model>(id: ID!): <Model>Type
 ```
 
 #### Example
+
 ```graphql
 query GetPost($id: ID!) {
   post(id: $id) {
@@ -90,6 +92,7 @@ query GetPost($id: ID!) {
 ```
 
 #### Variables
+
 ```json
 {
   "id": "1"
@@ -101,6 +104,7 @@ query GetPost($id: ID!) {
 Retrieve multiple objects with optional filtering, ordering, and pagination.
 
 #### Syntax
+
 ```graphql
 <models>(
   filters: <Model>FilterInput
@@ -112,14 +116,15 @@ Retrieve multiple objects with optional filtering, ordering, and pagination.
 
 #### Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `filters` | `<Model>FilterInput` | Filter criteria for the query |
-| `orderBy` | `[String]` | Field names for ordering (prefix with `-` for descending) |
-| `limit` | `Int` | Maximum number of objects to return |
-| `offset` | `Int` | Number of objects to skip |
+| Parameter | Type                 | Description                                               |
+| --------- | -------------------- | --------------------------------------------------------- |
+| `filters` | `<Model>FilterInput` | Filter criteria for the query                             |
+| `orderBy` | `[String]`           | Field names for ordering (prefix with `-` for descending) |
+| `limit`   | `Int`                | Maximum number of objects to return                       |
+| `offset`  | `Int`                | Number of objects to skip                                 |
 
 #### Example
+
 ```graphql
 query GetPosts($filters: PostFilterInput, $orderBy: [String], $limit: Int) {
   posts(filters: $filters, orderBy: $orderBy, limit: $limit) {
@@ -135,6 +140,7 @@ query GetPosts($filters: PostFilterInput, $orderBy: [String], $limit: Int) {
 ```
 
 #### Variables
+
 ```json
 {
   "filters": {
@@ -152,6 +158,7 @@ query GetPosts($filters: PostFilterInput, $orderBy: [String], $limit: Int) {
 Retrieve objects using cursor-based pagination (Relay-style).
 
 #### Syntax
+
 ```graphql
 <model>Pages(
   first: Int
@@ -163,6 +170,7 @@ Retrieve objects using cursor-based pagination (Relay-style).
 ```
 
 #### Example
+
 ```graphql
 query GetPostPages($first: Int, $after: String, $filters: PostFilterInput) {
   postPages(first: $first, after: $after, filters: $filters) {
@@ -194,11 +202,13 @@ query GetPostPages($first: Int, $after: String, $filters: PostFilterInput) {
 Create a new object.
 
 #### Syntax
+
 ```graphql
 create<Model>(input: Create<Model>Input!): Create<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation CreatePost($input: CreatePostInput!) {
   createPost(input: $input) {
@@ -216,6 +226,7 @@ mutation CreatePost($input: CreatePostInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -233,11 +244,13 @@ mutation CreatePost($input: CreatePostInput!) {
 Update an existing object.
 
 #### Syntax
+
 ```graphql
 update<Model>(input: Update<Model>Input!): Update<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation UpdatePost($input: UpdatePostInput!) {
   updatePost(input: $input) {
@@ -254,6 +267,7 @@ mutation UpdatePost($input: UpdatePostInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -269,11 +283,13 @@ mutation UpdatePost($input: UpdatePostInput!) {
 Delete an existing object.
 
 #### Syntax
+
 ```graphql
 delete<Model>(id: ID!): Delete<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation DeletePost($id: ID!) {
   deletePost(id: $id) {
@@ -285,6 +301,7 @@ mutation DeletePost($id: ID!) {
 ```
 
 #### Variables
+
 ```json
 {
   "id": "1"
@@ -296,6 +313,7 @@ mutation DeletePost($id: ID!) {
 Execute custom model methods as GraphQL mutations.
 
 ### Syntax
+
 ```graphql
 <model><Method>(id: ID!, ...methodArgs): <Model><Method>Payload
 ```
@@ -305,19 +323,19 @@ Execute custom model methods as GraphQL mutations.
 Enable method mutations in your Django model:
 
 ```python
-from django_graphql_auto.decorators import graphql_mutation
+from rail_django_graphql.decorators import graphql_mutation
 
 class Post(models.Model):
     title = models.CharField(max_length=200, verbose_name="Titre du post")
     published = models.BooleanField(default=False, verbose_name="Publié")
-    
+
     @graphql_mutation
     def publish_post(self):
         """Publier le post."""
         self.published = True
         self.save()
         return True
-    
+
     @graphql_mutation
     def archive_post(self, reason: str = "No reason provided"):
         """Archiver le post avec une raison."""
@@ -347,7 +365,7 @@ mutation PublishPost($id: ID!) {
       title
       published
     }
-    result  # Method return value
+    result # Method return value
     errors
   }
 }
@@ -361,7 +379,7 @@ mutation ArchivePost($id: ID!, $reason: String!) {
       archived
       archiveReason
     }
-    result  # Method return value
+    result # Method return value
     errors
   }
 }
@@ -376,11 +394,13 @@ Perform operations on multiple objects efficiently.
 Create multiple objects in a single operation.
 
 #### Syntax
+
 ```graphql
 bulkCreate<Model>(input: BulkCreate<Model>Input!): BulkCreate<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation BulkCreatePosts($input: BulkCreatePostInput!) {
   bulkCreatePost(input: $input) {
@@ -398,6 +418,7 @@ mutation BulkCreatePosts($input: BulkCreatePostInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -422,11 +443,13 @@ mutation BulkCreatePosts($input: BulkCreatePostInput!) {
 Update multiple objects with different values.
 
 #### Syntax
+
 ```graphql
 bulkUpdate<Model>(input: BulkUpdate<Model>Input!): BulkUpdate<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation BulkUpdatePosts($input: BulkUpdatePostInput!) {
   bulkUpdatePost(input: $input) {
@@ -442,6 +465,7 @@ mutation BulkUpdatePosts($input: BulkUpdatePostInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -464,11 +488,13 @@ mutation BulkUpdatePosts($input: BulkUpdatePostInput!) {
 Delete multiple objects by their IDs.
 
 #### Syntax
+
 ```graphql
 bulkDelete<Model>(input: BulkDelete<Model>Input!): BulkDelete<Model>Payload
 ```
 
 #### Example
+
 ```graphql
 mutation BulkDeletePosts($input: BulkDeletePostInput!) {
   bulkDeletePost(input: $input) {
@@ -480,6 +506,7 @@ mutation BulkDeletePosts($input: BulkDeletePostInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -498,13 +525,13 @@ Input types for creating new objects.
 input Create<Model>Input {
   # All model fields except auto-generated ones
   <field>: <FieldType>
-  
+
   # Foreign key relationships
   <foreignKey>Id: ID
-  
+
   # Many-to-many relationships
   <manyToMany>Ids: [ID]
-  
+
   # Nested object creation (when enabled)
   <foreignKey>: Create<RelatedModel>Input
   <manyToMany>: [Create<RelatedModel>Input]
@@ -518,10 +545,10 @@ Input types for updating existing objects.
 ```graphql
 input Update<Model>Input {
   id: ID!  # Required for updates
-  
+
   # All model fields (optional for updates)
   <field>: <FieldType>
-  
+
   # Relationship updates
   <foreignKey>Id: ID
   <manyToMany>Ids: [ID]
@@ -555,11 +582,13 @@ Handle file uploads with automatic validation, processing, and security scanning
 Upload a single file with validation and processing.
 
 #### Syntax
+
 ```graphql
 uploadFile(input: FileUploadInput!): FileUploadPayload
 ```
 
 #### Example
+
 ```graphql
 mutation UploadFile($input: FileUploadInput!) {
   uploadFile(input: $input) {
@@ -584,6 +613,7 @@ mutation UploadFile($input: FileUploadInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -602,11 +632,13 @@ mutation UploadFile($input: FileUploadInput!) {
 Upload multiple files in a single operation.
 
 #### Syntax
+
 ```graphql
 uploadMultipleFiles(input: MultipleFileUploadInput!): MultipleFileUploadPayload
 ```
 
 #### Example
+
 ```graphql
 mutation UploadMultipleFiles($input: MultipleFileUploadInput!) {
   uploadMultipleFiles(input: $input) {
@@ -626,6 +658,7 @@ mutation UploadMultipleFiles($input: MultipleFileUploadInput!) {
 ```
 
 #### Variables
+
 ```json
 {
   "input": {
@@ -652,16 +685,18 @@ mutation UploadMultipleFiles($input: MultipleFileUploadInput!) {
 Check the processing status of uploaded files.
 
 #### Syntax
+
 ```graphql
 fileProcessingStatus(fileId: ID!): FileProcessingStatusPayload
 ```
 
 #### Example
+
 ```graphql
 query FileProcessingStatus($fileId: ID!) {
   fileProcessingStatus(fileId: $fileId) {
-    status  # PENDING, PROCESSING, COMPLETED, FAILED
-    progress  # 0-100
+    status # PENDING, PROCESSING, COMPLETED, FAILED
+    progress # 0-100
     thumbnails {
       size
       url
@@ -683,11 +718,11 @@ The Django GraphQL Auto-Generation Library includes comprehensive performance op
 Automatically optimizes database queries to prevent N+1 problems.
 
 ```python
-from django_graphql_auto import optimize_query
+from rail_django_graphql import optimize_query
 
 class Author(models.Model):
     name = models.CharField(max_length=100)
-    
+
     @optimize_query
     def get_recent_posts(self):
         """Obtenir les posts récents (Get recent posts)"""
@@ -699,11 +734,11 @@ class Author(models.Model):
 Caches query results for improved performance.
 
 ```python
-from django_graphql_auto import cache_query
+from rail_django_graphql import cache_query
 
 class Category(models.Model):
     name = models.CharField(max_length=100)
-    
+
     @cache_query(ttl=300)  # Cache for 5 minutes
     def get_post_count(self):
         """Obtenir le nombre de posts (Get post count)"""
@@ -717,12 +752,12 @@ Access real-time performance metrics through GraphQL.
 ```graphql
 query PerformanceMetrics {
   __performance {
-    queryCount          # Number of database queries executed
-    executionTime       # Total execution time in milliseconds
-    cacheHits          # Number of cache hits
-    cacheMisses        # Number of cache misses
-    optimizedQueries   # Number of automatically optimized queries
-    complexityScore    # Query complexity score
+    queryCount # Number of database queries executed
+    executionTime # Total execution time in milliseconds
+    cacheHits # Number of cache hits
+    cacheMisses # Number of cache misses
+    optimizedQueries # Number of automatically optimized queries
+    complexityScore # Query complexity score
   }
 }
 ```
@@ -732,7 +767,7 @@ query PerformanceMetrics {
 #### Schema-Level Caching
 
 ```python
-from django_graphql_auto import GraphQLCacheManager
+from rail_django_graphql import GraphQLCacheManager
 
 cache_manager = GraphQLCacheManager()
 
@@ -774,7 +809,7 @@ cached_field = cache_manager.get_cached_field_result(field_key)
 Configure performance optimization in Django settings:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'PERFORMANCE': {
         'ENABLE_QUERY_OPTIMIZATION': True,
         'ENABLE_CACHING': True,
@@ -796,13 +831,13 @@ Enable performance monitoring middleware:
 
 ```python
 # urls.py
-from django_graphql_auto.middleware import setup_performance_monitoring
+from rail_django_graphql.middleware import setup_performance_monitoring
 
 setup_performance_monitoring()
 
 urlpatterns = [
     path('graphql/', GraphQLView.as_view(graphiql=True)),
-    path('graphql/performance/', include('django_graphql_auto.urls')),
+    path('graphql/performance/', include('rail_django_graphql.urls')),
 ]
 ```
 
@@ -832,7 +867,7 @@ python manage.py run_performance_benchmarks --output-dir reports/ --format json,
 #### QueryOptimizer
 
 ```python
-from django_graphql_auto.optimization import QueryOptimizer
+from rail_django_graphql.optimization import QueryOptimizer
 
 optimizer = QueryOptimizer()
 
@@ -849,7 +884,7 @@ suggestions = optimizer.get_optimization_suggestions(query_analysis)
 #### PerformanceMonitor
 
 ```python
-from django_graphql_auto.performance import PerformanceMonitor
+from rail_django_graphql.performance import PerformanceMonitor
 
 monitor = PerformanceMonitor()
 
@@ -948,8 +983,8 @@ type MultipleFileUploadPayload {
 }
 
 type FileProcessingStatusPayload {
-  status: FileProcessingStatus!  # PENDING, PROCESSING, COMPLETED, FAILED
-  progress: Int  # 0-100
+  status: FileProcessingStatus! # PENDING, PROCESSING, COMPLETED, FAILED
+  progress: Int # 0-100
   thumbnails: [ThumbnailInfo]
   errors: [String]
 }
@@ -968,7 +1003,7 @@ type FileInfo {
 }
 
 type ThumbnailInfo {
-  size: ThumbnailSize!  # SMALL, MEDIUM, LARGE, XLARGE
+  size: ThumbnailSize! # SMALL, MEDIUM, LARGE, XLARGE
   url: String!
   width: Int!
   height: Int!
@@ -997,7 +1032,7 @@ Input types for file upload operations.
 
 ```graphql
 input FileUploadInput {
-  file: String!  # Base64 encoded file content
+  file: String! # Base64 encoded file content
   filename: String!
   mimeType: String!
   validateVirus: Boolean = true
@@ -1059,29 +1094,29 @@ input <Model>FilterInput {
   <field>: <FieldType>
   <field>__exact: <FieldType>
   <field>__iexact: <FieldType>  # Case-insensitive
-  
+
   # String field filters
   <stringField>__contains: String
   <stringField>__icontains: String
   <stringField>__startswith: String
   <stringField>__endswith: String
   <stringField>__regex: String
-  
+
   # Numeric field filters
   <numericField>__gt: <NumericType>
   <numericField>__gte: <NumericType>
   <numericField>__lt: <NumericType>
   <numericField>__lte: <NumericType>
   <numericField>__range: [<NumericType>]
-  
+
   # List filters
   <field>__in: [<FieldType>]
   <field>__isnull: Boolean
-  
+
   # Relationship filters
   <foreignKey>: <RelatedModel>FilterInput
   <foreignKey>__<relatedField>: <RelatedFieldType>
-  
+
   # Logical operators
   AND: [<Model>FilterInput]
   OR: [<Model>FilterInput]
@@ -1124,12 +1159,12 @@ scalar String
 scalar Int
 scalar Float
 scalar Boolean
-scalar DateTime  # ISO 8601 datetime string
-scalar Date      # ISO 8601 date string
-scalar Time      # ISO 8601 time string
-scalar Decimal   # Decimal number as string
-scalar JSON      # JSON object/array
-scalar UUID      # UUID string
+scalar DateTime # ISO 8601 datetime string
+scalar Date # ISO 8601 date string
+scalar Time # ISO 8601 time string
+scalar Decimal # Decimal number as string
+scalar JSON # JSON object/array
+scalar UUID # UUID string
 ```
 
 ### Custom Scalars
@@ -1137,11 +1172,11 @@ scalar UUID      # UUID string
 Additional scalars for Django field types.
 
 ```graphql
-scalar Upload    # File upload
-scalar Email     # Email address
-scalar URL       # URL string
-scalar Slug      # URL-safe slug
-scalar Duration  # ISO 8601 duration
+scalar Upload # File upload
+scalar Email # Email address
+scalar URL # URL string
+scalar Slug # URL-safe slug
+scalar Duration # ISO 8601 duration
 ```
 
 ## ⚠️ Error Handling
@@ -1168,13 +1203,13 @@ All mutations return errors in a consistent format.
 
 ### Error Types
 
-| Error Type | Description | Example |
-|------------|-------------|---------|
-| **Validation Error** | Field validation failed | "Title cannot be empty" |
-| **Not Found Error** | Referenced object not found | "Author with ID 999 does not exist" |
+| Error Type           | Description                     | Example                                     |
+| -------------------- | ------------------------------- | ------------------------------------------- |
+| **Validation Error** | Field validation failed         | "Title cannot be empty"                     |
+| **Not Found Error**  | Referenced object not found     | "Author with ID 999 does not exist"         |
 | **Permission Error** | User lacks required permissions | "You don't have permission to create posts" |
-| **Constraint Error** | Database constraint violation | "Post with this title already exists" |
-| **Method Error** | Custom method execution failed | "Cannot publish post in draft status" |
+| **Constraint Error** | Database constraint violation   | "Post with this title already exists"       |
+| **Method Error**     | Custom method execution failed  | "Cannot publish post in draft status"       |
 
 ### Partial Success (Bulk Operations)
 
@@ -1190,15 +1225,13 @@ Bulk operations support partial success where some objects succeed while others 
           "id": "1",
           "title": "Successfully Created Post"
         },
-        null,  // Failed to create
+        null, // Failed to create
         {
           "id": "2",
           "title": "Another Successful Post"
         }
       ],
-      "errors": [
-        "Object 2: Title is required"
-      ]
+      "errors": ["Object 2: Title is required"]
     }
   }
 }
@@ -1211,19 +1244,25 @@ Bulk operations support partial success where some objects succeed while others 
 ```graphql
 # Create a post
 mutation CreatePost {
-  createPost(input: {
-    title: "Getting Started with GraphQL"
-    content: "GraphQL is a query language..."
-    published: false
-    authorId: "1"
-    tagIds: ["1", "2"]
-  }) {
+  createPost(
+    input: {
+      title: "Getting Started with GraphQL"
+      content: "GraphQL is a query language..."
+      published: false
+      authorId: "1"
+      tagIds: ["1", "2"]
+    }
+  ) {
     ok
     post {
       id
       title
-      author { username }
-      tags { name }
+      author {
+        username
+      }
+      tags {
+        name
+      }
     }
     errors
   }
@@ -1252,11 +1291,13 @@ query GetPosts {
 
 # Update a post
 mutation UpdatePost {
-  updatePost(input: {
-    id: "1"
-    title: "Updated: Getting Started with GraphQL"
-    published: true
-  }) {
+  updatePost(
+    input: {
+      id: "1"
+      title: "Updated: Getting Started with GraphQL"
+      published: true
+    }
+  ) {
     ok
     post {
       id
@@ -1282,26 +1323,24 @@ mutation DeletePost {
 
 ```graphql
 query AdvancedPostSearch {
-  posts(filters: {
-    OR: [
-      {
-        title__icontains: "tutorial"
-        published: true
-      },
-      {
-        author__username__in: ["admin", "editor"]
-        tags__name: "featured"
-      }
-    ],
-    NOT: {
-      title__startswith: "Draft:"
-    },
-    createdAt__range: ["2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z"]
-  }) {
+  posts(
+    filters: {
+      OR: [
+        { title__icontains: "tutorial", published: true }
+        { author__username__in: ["admin", "editor"], tags__name: "featured" }
+      ]
+      NOT: { title__startswith: "Draft:" }
+      createdAt__range: ["2024-01-01T00:00:00Z", "2024-12-31T23:59:59Z"]
+    }
+  ) {
     id
     title
-    author { username }
-    tags { name }
+    author {
+      username
+    }
+    tags {
+      name
+    }
     createdAt
   }
 }
@@ -1312,25 +1351,21 @@ query AdvancedPostSearch {
 ```graphql
 # Bulk create multiple posts
 mutation BulkCreatePosts {
-  bulkCreatePost(input: {
-    objects: [
-      {
-        title: "Post 1"
-        content: "Content 1..."
-        authorId: "1"
-      },
-      {
-        title: "Post 2"
-        content: "Content 2..."
-        authorId: "2"
-      }
-    ]
-  }) {
+  bulkCreatePost(
+    input: {
+      objects: [
+        { title: "Post 1", content: "Content 1...", authorId: "1" }
+        { title: "Post 2", content: "Content 2...", authorId: "2" }
+      ]
+    }
+  ) {
     ok
     objects {
       id
       title
-      author { username }
+      author {
+        username
+      }
     }
     errors
   }
@@ -1338,13 +1373,15 @@ mutation BulkCreatePosts {
 
 # Bulk update posts
 mutation BulkUpdatePosts {
-  bulkUpdatePost(input: {
-    objects: [
-      { id: "1", published: true },
-      { id: "2", published: true },
-      { id: "3", title: "Updated Title" }
-    ]
-  }) {
+  bulkUpdatePost(
+    input: {
+      objects: [
+        { id: "1", published: true }
+        { id: "2", published: true }
+        { id: "3", title: "Updated Title" }
+      ]
+    }
+  ) {
     ok
     objects {
       id
@@ -1369,7 +1406,7 @@ mutation PublishPost {
       published
       publishedAt
     }
-    result  # Method return value
+    result # Method return value
     errors
   }
 }

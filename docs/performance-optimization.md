@@ -62,11 +62,11 @@ Le système d'optimisation des performances de Django GraphQL Auto fournit:
 Le système analyse automatiquement les requêtes GraphQL et applique les optimisations appropriées:
 
 ```python
-from django_graphql_auto.extensions.optimization import optimize_query
+from rail_django_graphql.extensions.optimization import optimize_query
 
 class Query(ObjectType):
     books = List(BookType)
-    
+
     @optimize_query()  # Optimisation automatique
     def resolve_books(self, info):
         return Book.objects.all()  # Sera automatiquement optimisé
@@ -77,7 +77,7 @@ class Query(ObjectType):
 Pour un contrôle plus fin:
 
 ```python
-from django_graphql_auto.extensions.optimization import QueryOptimizationConfig
+from rail_django_graphql.extensions.optimization import QueryOptimizationConfig
 
 config = QueryOptimizationConfig(
     enable_select_related=True,
@@ -94,6 +94,7 @@ def resolve_books(self, info):
 ### Exemple d'Optimisation
 
 **Avant optimisation** (requêtes N+1):
+
 ```python
 # Cette requête génère N+1 requêtes
 def resolve_books(self, info):
@@ -103,6 +104,7 @@ def resolve_books(self, info):
 ```
 
 **Après optimisation**:
+
 ```python
 @optimize_query()
 def resolve_books(self, info):
@@ -117,7 +119,7 @@ def resolve_books(self, info):
 ### Configuration du Cache
 
 ```python
-from django_graphql_auto.extensions.caching import CacheConfig
+from rail_django_graphql.extensions.caching import CacheConfig
 
 cache_config = CacheConfig(
     enabled=True,
@@ -134,7 +136,7 @@ cache_config = CacheConfig(
 Cache les résultats complets des requêtes GraphQL:
 
 ```python
-from django_graphql_auto.extensions.caching import cache_query
+from rail_django_graphql.extensions.caching import cache_query
 
 @cache_query(timeout=600, user_specific=True)
 def resolve_books(self, info):
@@ -146,11 +148,11 @@ def resolve_books(self, info):
 Cache les valeurs individuelles des champs:
 
 ```python
-from django_graphql_auto.extensions.caching import cache_field
+from rail_django_graphql.extensions.caching import cache_field
 
 class BookType(ObjectType):
     expensive_calculation = String()
-    
+
     @cache_field(timeout=3600)
     def resolve_expensive_calculation(self, info):
         # Calcul coûteux mis en cache
@@ -171,6 +173,7 @@ book.save()  # Cache automatiquement invalidé
 ### Stratégies de Cache
 
 #### 1. Cache par Utilisateur
+
 ```python
 @cache_query(user_specific=True)
 def resolve_user_books(self, info):
@@ -179,6 +182,7 @@ def resolve_user_books(self, info):
 ```
 
 #### 2. Cache Global
+
 ```python
 @cache_query(user_specific=False)
 def resolve_public_books(self, info):
@@ -186,6 +190,7 @@ def resolve_public_books(self, info):
 ```
 
 #### 3. Cache Conditionnel
+
 ```python
 @cache_query(
     condition=lambda info: not info.context.user.is_staff,
@@ -204,7 +209,7 @@ Ajoutez le middleware dans `settings.py`:
 ```python
 MIDDLEWARE = [
     # ... autres middlewares
-    'django_graphql_auto.middleware.performance.GraphQLPerformanceMiddleware',
+    'rail_django_graphql.middleware.performance.GraphQLPerformanceMiddleware',
 ]
 ```
 
@@ -223,7 +228,7 @@ Le système collecte automatiquement:
 Configuration des alertes:
 
 ```python
-from django_graphql_auto.middleware.performance import setup_performance_monitoring
+from rail_django_graphql.middleware.performance import setup_performance_monitoring
 
 setup_performance_monitoring(
     slow_query_threshold=2.0,  # 2 secondes
@@ -239,7 +244,7 @@ Accédez aux métriques via l'API:
 
 ```python
 # Dans urls.py
-from django_graphql_auto.middleware.performance import GraphQLPerformanceView
+from rail_django_graphql.middleware.performance import GraphQLPerformanceView
 
 urlpatterns = [
     path('graphql/performance/', GraphQLPerformanceView.as_view()),
@@ -247,22 +252,23 @@ urlpatterns = [
 ```
 
 Exemple de réponse:
+
 ```json
 {
-    "current_stats": {
-        "total_requests": 1250,
-        "avg_execution_time": 0.45,
-        "cache_hit_ratio": 0.78,
-        "slow_queries": 12
-    },
-    "recent_alerts": [
-        {
-            "type": "slow_query",
-            "query": "books { author { reviews } }",
-            "execution_time": 3.2,
-            "timestamp": "2024-01-15T10:30:00Z"
-        }
-    ]
+  "current_stats": {
+    "total_requests": 1250,
+    "avg_execution_time": 0.45,
+    "cache_hit_ratio": 0.78,
+    "slow_queries": 12
+  },
+  "recent_alerts": [
+    {
+      "type": "slow_query",
+      "query": "books { author { reviews } }",
+      "execution_time": 3.2,
+      "timestamp": "2024-01-15T10:30:00Z"
+    }
+  ]
 }
 ```
 
@@ -272,7 +278,7 @@ Exemple de réponse:
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'OPTIMIZATION': {
         'ENABLED': True,
         'N_PLUS_ONE_PREVENTION': {
@@ -321,12 +327,12 @@ DJANGO_GRAPHQL_AUTO = {
 
 ```python
 # settings/production.py
-DJANGO_GRAPHQL_AUTO['CACHING']['BACKEND'] = 'redis'
-DJANGO_GRAPHQL_AUTO['MONITORING']['ENABLED'] = True
+rail_django_graphql['CACHING']['BACKEND'] = 'redis'
+rail_django_graphql['MONITORING']['ENABLED'] = True
 
 # settings/development.py
-DJANGO_GRAPHQL_AUTO['CACHING']['BACKEND'] = 'locmem'
-DJANGO_GRAPHQL_AUTO['MONITORING']['ENABLED'] = False
+rail_django_graphql['CACHING']['BACKEND'] = 'locmem'
+rail_django_graphql['MONITORING']['ENABLED'] = False
 ```
 
 ## Benchmarks et Tests
@@ -352,14 +358,14 @@ python manage.py run_performance_benchmarks \
 ```python
 # tests/test_performance.py
 from django.test import TestCase
-from django_graphql_auto.extensions.optimization import optimize_query
+from rail_django_graphql.extensions.optimization import optimize_query
 
 class PerformanceTestCase(TestCase):
     def test_n_plus_one_prevention(self):
         @optimize_query()
         def optimized_resolver(root, info):
             return Book.objects.all()
-        
+
         # Test que l'optimisation réduit le nombre de requêtes
         with self.assertNumQueries(1):  # Au lieu de N+1
             list(optimized_resolver(None, mock_info))
@@ -384,9 +390,10 @@ Les benchmarks génèrent des rapports détaillés:
 **Symptôme**: Les requêtes restent lentes malgré l'optimisation.
 
 **Solutions**:
+
 ```python
 # Vérifier la configuration
-from django_graphql_auto.extensions.optimization import get_optimizer
+from rail_django_graphql.extensions.optimization import get_optimizer
 optimizer = get_optimizer()
 print(optimizer.config.enable_select_related)  # Doit être True
 
@@ -401,6 +408,7 @@ def resolve_books(self, info):
 **Symptôme**: Le cache ne semble pas fonctionner.
 
 **Solutions**:
+
 ```python
 # Vérifier la configuration du cache Django
 from django.core.cache import cache
@@ -408,7 +416,7 @@ cache.set('test', 'value', 60)
 print(cache.get('test'))  # Doit retourner 'value'
 
 # Vérifier les statistiques de cache
-from django_graphql_auto.extensions.caching import get_cache_manager
+from rail_django_graphql.extensions.caching import get_cache_manager
 stats = get_cache_manager().get_stats()
 print(f"Hits: {stats.hits}, Misses: {stats.misses}")
 ```
@@ -418,6 +426,7 @@ print(f"Hits: {stats.hits}, Misses: {stats.misses}")
 **Symptôme**: Trop d'alertes de performance.
 
 **Solutions**:
+
 ```python
 # Ajuster les seuils
 setup_performance_monitoring(
@@ -441,11 +450,11 @@ LOGGING = {
         },
     },
     'loggers': {
-        'django_graphql_auto.optimization': {
+        'rail_django_graphql.optimization': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },
-        'django_graphql_auto.caching': {
+        'rail_django_graphql.caching': {
             'handlers': ['console'],
             'level': 'DEBUG',
         },
@@ -457,7 +466,7 @@ LOGGING = {
 
 ```python
 from django.db import connection
-from django_graphql_auto.extensions.optimization import optimize_query
+from rail_django_graphql.extensions.optimization import optimize_query
 
 @optimize_query()
 def resolve_books(self, info):
@@ -477,13 +486,13 @@ for query in connection.queries:
 #### 1. Cache Personnalisé
 
 ```python
-from django_graphql_auto.extensions.caching import GraphQLCacheManager
+from rail_django_graphql.extensions.caching import GraphQLCacheManager
 
 class CustomCacheManager(GraphQLCacheManager):
     def get_cache_key(self, query_string, variables, user_id):
         # Logique personnalisée pour les clés de cache
         return f"custom:{hash(query_string)}:{user_id}"
-    
+
     def should_cache_query(self, query_string, variables, user_id):
         # Logique personnalisée pour décider du cache
         return 'expensive_field' in query_string
@@ -503,7 +512,7 @@ def resolve_books(self, info):
 #### 3. Monitoring Personnalisé
 
 ```python
-from django_graphql_auto.middleware.performance import monitor_performance
+from rail_django_graphql.middleware.performance import monitor_performance
 
 @monitor_performance(
     track_memory=True,
@@ -523,17 +532,17 @@ Commencez avec une configuration de base et ajustez progressivement:
 
 ```python
 # Phase 1: Optimisation de base
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'OPTIMIZATION': {'ENABLED': True},
     'CACHING': {'ENABLED': False},  # Désactivé initialement
     'MONITORING': {'ENABLED': True}
 }
 
 # Phase 2: Ajout du cache
-DJANGO_GRAPHQL_AUTO['CACHING']['ENABLED'] = True
+rail_django_graphql['CACHING']['ENABLED'] = True
 
 # Phase 3: Optimisation fine
-DJANGO_GRAPHQL_AUTO['CACHING']['FIELD_CACHE']['ENABLED'] = True
+rail_django_graphql['CACHING']['FIELD_CACHE']['ENABLED'] = True
 ```
 
 ### 2. Tests de Performance Réguliers
@@ -568,7 +577,7 @@ Documentez vos optimisations personnalisées:
 def resolve_complex_books(self, info):
     """
     Résolveur optimisé pour les livres complexes.
-    
+
     Optimisations appliquées:
     - Cache de 1 heure
     - Limite de complexité à 50

@@ -17,7 +17,7 @@ graph TD
     E --> F[Field Validation]
     F --> G[Business Logic Validation]
     G --> H[Execute Operation]
-    
+
     B -->|Rate Limited| I[429 Too Many Requests]
     C -->|Too Complex| J[Query Complexity Error]
     D -->|Too Deep| K[Query Depth Error]
@@ -32,11 +32,13 @@ graph TD
 ```graphql
 # Attempt to inject malicious script
 mutation CreatePostWithXSS {
-  createPost(data: {
-    title: "<script>alert('XSS')</script>Malicious Title"
-    content: "Normal content with <img src=x onerror=alert('XSS')>"
-    description: "javascript:alert('XSS')"
-  }) {
+  createPost(
+    data: {
+      title: "<script>alert('XSS')</script>Malicious Title"
+      content: "Normal content with <img src=x onerror=alert('XSS')>"
+      description: "javascript:alert('XSS')"
+    }
+  ) {
     ok
     post {
       id
@@ -50,6 +52,7 @@ mutation CreatePostWithXSS {
 ```
 
 **Response (Sanitized):**
+
 ```json
 {
   "data": {
@@ -72,10 +75,12 @@ mutation CreatePostWithXSS {
 ```graphql
 # Attempt SQL injection in search
 query SearchPostsWithSQLInjection {
-  posts(filters: {
-    title_contains: "'; DROP TABLE posts; --"
-    content_contains: "1' OR '1'='1"
-  }) {
+  posts(
+    filters: {
+      title_contains: "'; DROP TABLE posts; --"
+      content_contains: "1' OR '1'='1"
+    }
+  ) {
     id
     title
     content
@@ -84,6 +89,7 @@ query SearchPostsWithSQLInjection {
 ```
 
 **Response (Safe):**
+
 ```json
 {
   "data": {
@@ -107,6 +113,7 @@ query ValidateUserInput {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -125,7 +132,10 @@ query ValidateUserInput {
 ```graphql
 # Validate invalid email
 query ValidateInvalidEmail {
-  validateInput(fieldName: "email", value: "<script>alert('xss')</script>invalid-email") {
+  validateInput(
+    fieldName: "email"
+    value: "<script>alert('xss')</script>invalid-email"
+  ) {
     fieldName
     isValid
     errorMessage
@@ -135,6 +145,7 @@ query ValidateInvalidEmail {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -174,6 +185,7 @@ query GetSecurityInfo {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -209,12 +221,13 @@ query ExceededRateLimit {
 ```
 
 **Response:**
+
 ```json
 {
   "errors": [
     {
       "message": "Rate limit exceeded. Try again in 300 seconds.",
-      "locations": [{"line": 2, "column": 3}],
+      "locations": [{ "line": 2, "column": 3 }],
       "path": ["posts"],
       "extensions": {
         "code": "RATE_LIMITED",
@@ -238,17 +251,17 @@ query ExceededRateLimit {
 query AuthenticatedUserQuery {
   securityInfo {
     rateLimiting {
-      remainingRequests  # 1000 requests per hour
+      remainingRequests # 1000 requests per hour
       windowResetTime
     }
   }
 }
 
-# Anonymous user - lower limits  
+# Anonymous user - lower limits
 query AnonymousUserQuery {
   securityInfo {
     rateLimiting {
-      remainingRequests  # 100 requests per hour
+      remainingRequests # 100 requests per hour
       windowResetTime
     }
   }
@@ -332,12 +345,13 @@ query ComplexQuery {
 ```
 
 **Response (Complexity Exceeded):**
+
 ```json
 {
   "errors": [
     {
       "message": "Query complexity limit exceeded. Maximum allowed: 100, actual: 150",
-      "locations": [{"line": 2, "column": 3}],
+      "locations": [{ "line": 2, "column": 3 }],
       "extensions": {
         "code": "QUERY_COMPLEXITY_EXCEEDED",
         "maxComplexity": 100,
@@ -370,6 +384,7 @@ query GetQueryStats {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -391,9 +406,11 @@ query GetQueryStats {
 ```graphql
 # Depth: 3 levels
 query ShallowQuery {
-  posts {           # Level 1
-    author {        # Level 2
-      username      # Level 3
+  posts {
+    # Level 1
+    author {
+      # Level 2
+      username # Level 3
     }
   }
 }
@@ -404,14 +421,21 @@ query ShallowQuery {
 ```graphql
 # Depth: 8 levels (exceeds limit of 6)
 query DeepQuery {
-  posts {                    # Level 1
-    author {                 # Level 2
-      profile {              # Level 3
-        company {            # Level 4
-          department {       # Level 5
-            manager {        # Level 6
-              profile {      # Level 7
-                avatar       # Level 8
+  posts {
+    # Level 1
+    author {
+      # Level 2
+      profile {
+        # Level 3
+        company {
+          # Level 4
+          department {
+            # Level 5
+            manager {
+              # Level 6
+              profile {
+                # Level 7
+                avatar # Level 8
               }
             }
           }
@@ -423,12 +447,13 @@ query DeepQuery {
 ```
 
 **Response (Depth Exceeded):**
+
 ```json
 {
   "errors": [
     {
       "message": "Query depth limit exceeded. Maximum allowed: 6, actual: 8",
-      "locations": [{"line": 2, "column": 3}],
+      "locations": [{ "line": 2, "column": 3 }],
       "extensions": {
         "code": "QUERY_DEPTH_EXCEEDED",
         "maxDepth": 6,
@@ -451,12 +476,14 @@ query DeepQuery {
 
 ```graphql
 mutation CreateUserWithValidation {
-  createUser(data: {
-    username: "newuser"
-    email: "invalid-email-format"
-    password: "weak"
-    firstName: ""
-  }) {
+  createUser(
+    data: {
+      username: "newuser"
+      email: "invalid-email-format"
+      password: "weak"
+      firstName: ""
+    }
+  ) {
     ok
     user {
       id
@@ -468,6 +495,7 @@ mutation CreateUserWithValidation {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -490,11 +518,13 @@ mutation CreateUserWithValidation {
 
 ```graphql
 mutation CreateProfileWithURL {
-  createProfile(data: {
-    website: "javascript:alert('xss')"
-    socialMedia: "not-a-url"
-    bio: "<script>malicious()</script>Clean bio content"
-  }) {
+  createProfile(
+    data: {
+      website: "javascript:alert('xss')"
+      socialMedia: "not-a-url"
+      bio: "<script>malicious()</script>Clean bio content"
+    }
+  ) {
     ok
     profile {
       id
@@ -508,6 +538,7 @@ mutation CreateProfileWithURL {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -527,9 +558,7 @@ mutation CreateProfileWithURL {
 
 ```graphql
 mutation UpdateUserPhone {
-  updateUser(id: "1", data: {
-    phoneNumber: "123-invalid-phone"
-  }) {
+  updateUser(id: "1", data: { phoneNumber: "123-invalid-phone" }) {
     ok
     user {
       phoneNumber
@@ -540,15 +569,14 @@ mutation UpdateUserPhone {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
     "updateUser": {
       "ok": false,
       "user": null,
-      "errors": [
-        "Phone number must be in valid format (e.g., +1-555-123-4567)"
-      ]
+      "errors": ["Phone number must be in valid format (e.g., +1-555-123-4567)"]
     }
   }
 }
@@ -561,16 +589,18 @@ mutation UpdateUserPhone {
 ```graphql
 # Custom validation for business rules
 mutation CreateOrderWithValidation {
-  createOrder(data: {
-    items: [
-      {productId: "1", quantity: -5},  # Negative quantity
-      {productId: "999", quantity: 2}  # Non-existent product
-    ]
-    shippingAddress: {
-      country: "XX"  # Invalid country code
+  createOrder(
+    data: {
+      items: [
+        { productId: "1", quantity: -5 } # Negative quantity
+        { productId: "999", quantity: 2 } # Non-existent product
+      ]
+      shippingAddress: {
+        country: "XX" # Invalid country code
+      }
+      paymentMethod: "invalid_method"
     }
-    paymentMethod: "invalid_method"
-  }) {
+  ) {
     ok
     order {
       id
@@ -581,6 +611,7 @@ mutation CreateOrderWithValidation {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -602,12 +633,14 @@ mutation CreateOrderWithValidation {
 
 ```graphql
 mutation CreateEventWithDates {
-  createEvent(data: {
-    title: "Conference"
-    startDate: "2024-01-20T10:00:00Z"
-    endDate: "2024-01-19T15:00:00Z"  # End before start
-    registrationDeadline: "2024-01-25T23:59:59Z"  # After event
-  }) {
+  createEvent(
+    data: {
+      title: "Conference"
+      startDate: "2024-01-20T10:00:00Z"
+      endDate: "2024-01-19T15:00:00Z" # End before start
+      registrationDeadline: "2024-01-25T23:59:59Z" # After event
+    }
+  ) {
     ok
     event {
       id
@@ -618,6 +651,7 @@ mutation CreateEventWithDates {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -673,6 +707,7 @@ query GetFullSecurityInfo {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -688,10 +723,7 @@ query GetFullSecurityInfo {
         "user": {
           "id": "1",
           "username": "johndoe",
-          "groups": [
-            {"name": "Editors"},
-            {"name": "Users"}
-          ]
+          "groups": [{ "name": "Editors" }, { "name": "Users" }]
         },
         "tokenExpiresAt": "2024-01-15T18:30:00Z",
         "sessionExpiresAt": "2024-01-15T20:00:00Z"
@@ -710,10 +742,7 @@ query GetFullSecurityInfo {
           "URLValidator",
           "PhoneValidator"
         ],
-        "customRules": [
-          "BusinessLogicValidator",
-          "DateRangeValidator"
-        ]
+        "customRules": ["BusinessLogicValidator", "DateRangeValidator"]
       }
     }
   }
@@ -749,6 +778,7 @@ query GetPerformanceMetrics {
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -813,9 +843,9 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(mutation)
-        
+
         # XSS should be sanitized
         assert result['data']['createPost']['ok'] is True
         assert '<script>' not in result['data']['createPost']['post']['title']
@@ -833,9 +863,9 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(query)
-        
+
         # Should not cause SQL injection
         assert 'errors' not in result or 'DROP TABLE' not in str(result.get('errors', []))
 
@@ -849,13 +879,13 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         # Make requests up to the limit
         for i in range(100):  # Assuming limit is 100
             result = self.client.execute(query)
             if i < 99:
                 assert 'errors' not in result or 'rate limit' not in str(result.get('errors', [])).lower()
-        
+
         # 101st request should be rate limited
         result = self.client.execute(query)
         assert 'errors' in result
@@ -886,9 +916,9 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(complex_query)
-        
+
         # Should be rejected due to complexity
         assert 'errors' in result
         assert any('complexity' in str(error).lower() for error in result['errors'])
@@ -914,9 +944,9 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(deep_query)
-        
+
         # Should be rejected due to depth
         assert 'errors' in result
         assert any('depth' in str(error).lower() for error in result['errors'])
@@ -939,12 +969,12 @@ class SecurityTestCase(TestCase):
             }
         }
         """
-        
+
         result = self.client.execute(mutation)
-        
+
         assert result['data']['createUser']['ok'] is False
         errors = result['data']['createUser']['errors']
-        
+
         # Should have validation errors for each invalid field
         assert any('username' in error.lower() for error in errors)
         assert any('email' in error.lower() for error in errors)
@@ -969,7 +999,7 @@ GRAPHQL_AUTO_SETTINGS = {
             'ALLOWED_ATTRIBUTES': {},
             'STRIP_COMMENTS': True,
         },
-        
+
         # Rate Limiting
         'RATE_LIMITING': {
             'ENABLE': True,
@@ -979,7 +1009,7 @@ GRAPHQL_AUTO_SETTINGS = {
             'WINDOW_SIZE': 3600,  # seconds
             'STORAGE': 'django.core.cache.backends.redis.RedisCache',
         },
-        
+
         # Query Analysis
         'QUERY_ANALYSIS': {
             'ENABLE_COMPLEXITY_ANALYSIS': True,
@@ -993,7 +1023,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'CONNECTION_FIELD': 10,
             },
         },
-        
+
         # Validation Rules
         'VALIDATION': {
             'EMAIL_VALIDATION': True,
@@ -1004,7 +1034,7 @@ GRAPHQL_AUTO_SETTINGS = {
                 'your_app.validators.DateRangeValidator',
             ],
         },
-        
+
         # Security Headers
         'SECURITY_HEADERS': {
             'X_CONTENT_TYPE_OPTIONS': 'nosniff',
@@ -1020,33 +1050,33 @@ GRAPHQL_AUTO_SETTINGS = {
 
 ```python
 # Custom validator implementation
-from django_graphql_auto.extensions.validation import BaseValidator
+from rail_django_graphql.extensions.validation import BaseValidator
 
 class BusinessLogicValidator(BaseValidator):
     """
     Validateur personnalisé pour la logique métier.
     """
-    
+
     def validate_order_items(self, items):
         """Valide les articles d'une commande."""
         errors = []
-        
+
         for item in items:
             if item.get('quantity', 0) <= 0:
                 errors.append("La quantité doit être supérieure à 0")
-            
+
             if not self.product_exists(item.get('productId')):
                 errors.append(f"Le produit {item.get('productId')} n'existe pas")
-        
+
         return errors
-    
+
     def validate_date_range(self, start_date, end_date):
         """Valide une plage de dates."""
         if start_date >= end_date:
             return ["La date de fin doit être postérieure à la date de début"]
-        
+
         return []
-    
+
     def product_exists(self, product_id):
         """Vérifie si un produit existe."""
         from your_app.models import Product

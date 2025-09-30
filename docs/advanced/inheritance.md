@@ -37,14 +37,14 @@ class BaseContent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_published = models.BooleanField(default=False)
-    
+
     class Meta:
         abstract = True
-    
+
     def get_absolute_url(self):
         """Returns the absolute URL for this content."""
         return f"/{self.slug}/"
-    
+
     @property
     def is_recent(self) -> bool:
         """Check if content was created recently."""
@@ -55,7 +55,7 @@ class Article(BaseContent):
     content = models.TextField()
     author = models.ForeignKey(User, on_delete=models.CASCADE)
     category = models.CharField(max_length=100)
-    
+
     def get_word_count(self) -> int:
         """Returns word count of the article."""
         return len(self.content.split())
@@ -64,7 +64,7 @@ class Video(BaseContent):
     video_file = models.FileField(upload_to='videos/')
     duration = models.DurationField()
     thumbnail = models.ImageField(upload_to='thumbnails/')
-    
+
     def get_duration_minutes(self) -> float:
         """Returns duration in minutes."""
         return self.duration.total_seconds() / 60
@@ -73,7 +73,7 @@ class Podcast(BaseContent):
     audio_file = models.FileField(upload_to='podcasts/')
     duration = models.DurationField()
     episode_number = models.PositiveIntegerField()
-    
+
     def get_episode_info(self) -> dict:
         """Returns episode information."""
         return {
@@ -96,8 +96,8 @@ interface ContentInterface {
   createdAt: DateTime!
   updatedAt: DateTime!
   isPublished: Boolean!
-  absoluteUrl: String!  # From get_absolute_url method
-  isRecent: Boolean!    # From is_recent property
+  absoluteUrl: String! # From get_absolute_url method
+  isRecent: Boolean! # From is_recent property
 }
 
 # Individual types implementing the interface
@@ -110,12 +110,12 @@ type Article implements ContentInterface {
   isPublished: Boolean!
   absoluteUrl: String!
   isRecent: Boolean!
-  
+
   # Article-specific fields
   content: String!
   author: User!
   category: String!
-  wordCount: Int!  # From get_word_count method
+  wordCount: Int! # From get_word_count method
 }
 
 type Video implements ContentInterface {
@@ -127,12 +127,12 @@ type Video implements ContentInterface {
   isPublished: Boolean!
   absoluteUrl: String!
   isRecent: Boolean!
-  
+
   # Video-specific fields
   videoFile: String!
   duration: Duration!
   thumbnail: String!
-  durationMinutes: Float!  # From get_duration_minutes method
+  durationMinutes: Float! # From get_duration_minutes method
 }
 
 type Podcast implements ContentInterface {
@@ -144,12 +144,12 @@ type Podcast implements ContentInterface {
   isPublished: Boolean!
   absoluteUrl: String!
   isRecent: Boolean!
-  
+
   # Podcast-specific fields
   audioFile: String!
   duration: Duration!
   episodeNumber: Int!
-  episodeInfo: JSON!  # From get_episode_info method
+  episodeInfo: JSON! # From get_episode_info method
 }
 
 # Union type for polymorphic queries
@@ -161,7 +161,7 @@ type Query {
   articles: [Article!]!
   videos: [Video!]!
   podcasts: [Podcast!]!
-  
+
   # Polymorphic queries
   allContent: [Content!]!
   publishedContent: [Content!]!
@@ -178,7 +178,7 @@ type Query {
 class Place(models.Model):
     name = models.CharField(max_length=50)
     address = models.CharField(max_length=80)
-    
+
     def get_coordinates(self) -> dict:
         """Returns GPS coordinates."""
         # Simulate geocoding
@@ -188,7 +188,7 @@ class Restaurant(Place):
     serves_hot_dogs = models.BooleanField(default=False)
     serves_pizza = models.BooleanField(default=False)
     cuisine_type = models.CharField(max_length=50)
-    
+
     def get_menu_info(self) -> dict:
         """Returns menu information."""
         return {
@@ -197,7 +197,7 @@ class Restaurant(Place):
             'cuisine': self.cuisine_type,
             'specialties': self.get_specialties()
         }
-    
+
     def get_specialties(self) -> list:
         """Returns list of specialties."""
         specialties = []
@@ -211,7 +211,7 @@ class Hotel(Place):
     star_rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
     room_count = models.PositiveIntegerField()
     has_pool = models.BooleanField(default=False)
-    
+
     def get_amenities(self) -> list:
         """Returns list of amenities."""
         amenities = ['WiFi', 'Parking']
@@ -220,7 +220,7 @@ class Hotel(Place):
         if self.star_rating >= 4:
             amenities.extend(['Concierge', 'Room Service'])
         return amenities
-    
+
     @property
     def is_luxury(self) -> bool:
         """Check if hotel is luxury class."""
@@ -235,7 +235,7 @@ interface PlaceInterface {
   id: ID!
   name: String!
   address: String!
-  coordinates: JSON!  # From get_coordinates method
+  coordinates: JSON! # From get_coordinates method
 }
 
 # Child types
@@ -244,14 +244,13 @@ type Restaurant implements PlaceInterface {
   name: String!
   address: String!
   coordinates: JSON!
-  
+
   # Restaurant-specific fields
   servesHotDogs: Boolean!
   servesPizza: Boolean!
   cuisineType: String!
-  menuInfo: JSON!      # From get_menu_info method
-  specialties: [String!]!  # From get_specialties method
-  
+  menuInfo: JSON! # From get_menu_info method
+  specialties: [String!]! # From get_specialties method
   # Parent relationship
   place: Place!
 }
@@ -261,14 +260,13 @@ type Hotel implements PlaceInterface {
   name: String!
   address: String!
   coordinates: JSON!
-  
+
   # Hotel-specific fields
   starRating: Int!
   roomCount: Int!
   hasPool: Boolean!
-  amenities: [String!]!  # From get_amenities method
-  isLuxury: Boolean!     # From is_luxury property
-  
+  amenities: [String!]! # From get_amenities method
+  isLuxury: Boolean! # From is_luxury property
   # Parent relationship
   place: Place!
 }
@@ -281,7 +279,7 @@ type Query {
   places: [PlaceInterface!]!
   restaurants: [Restaurant!]!
   hotels: [Hotel!]!
-  
+
   # Polymorphic queries
   allPlaces: [PlaceType!]!
   luxuryPlaces: [PlaceType!]!
@@ -300,11 +298,11 @@ class Person(models.Model):
     email = models.EmailField()
     birth_date = models.DateField()
     is_active = models.BooleanField(default=True)
-    
+
     def get_full_name(self) -> str:
         """Returns full name."""
         return f"{self.first_name} {self.last_name}"
-    
+
     @property
     def age(self) -> int:
         """Calculate age from birth date."""
@@ -316,10 +314,10 @@ class Person(models.Model):
 
 class Employee(Person):
     """Proxy model for employees with specialized methods."""
-    
+
     class Meta:
         proxy = True
-    
+
     def get_employee_info(self) -> dict:
         """Returns employee-specific information."""
         return {
@@ -329,11 +327,11 @@ class Employee(Person):
             'is_active': self.is_active,
             'age': self.age
         }
-    
+
     def get_work_email(self) -> str:
         """Generate work email address."""
         return f"{self.first_name.lower()}.{self.last_name.lower()}@company.com"
-    
+
     @property
     def is_senior(self) -> bool:
         """Check if employee is senior (age >= 40)."""
@@ -341,10 +339,10 @@ class Employee(Person):
 
 class Customer(Person):
     """Proxy model for customers with specialized methods."""
-    
+
     class Meta:
         proxy = True
-    
+
     def get_customer_info(self) -> dict:
         """Returns customer-specific information."""
         return {
@@ -353,7 +351,7 @@ class Customer(Person):
             'contact_email': self.email,
             'age_group': self.get_age_group()
         }
-    
+
     def get_age_group(self) -> str:
         """Returns age group category."""
         if self.age < 25:
@@ -364,7 +362,7 @@ class Customer(Person):
             return 'Middle Age'
         else:
             return 'Senior'
-    
+
     @property
     def marketing_segment(self) -> str:
         """Determine marketing segment."""
@@ -383,8 +381,8 @@ type Person {
   email: String!
   birthDate: Date!
   isActive: Boolean!
-  fullName: String!  # From get_full_name method
-  age: Int!          # From age property
+  fullName: String! # From get_full_name method
+  age: Int! # From age property
 }
 
 # Proxy model types with specialized methods
@@ -397,11 +395,11 @@ type Employee {
   isActive: Boolean!
   fullName: String!
   age: Int!
-  
+
   # Employee-specific methods
-  employeeInfo: JSON!    # From get_employee_info method
-  workEmail: String!     # From get_work_email method
-  isSenior: Boolean!     # From is_senior property
+  employeeInfo: JSON! # From get_employee_info method
+  workEmail: String! # From get_work_email method
+  isSenior: Boolean! # From is_senior property
 }
 
 type Customer {
@@ -413,10 +411,10 @@ type Customer {
   isActive: Boolean!
   fullName: String!
   age: Int!
-  
+
   # Customer-specific methods
-  customerInfo: JSON!      # From get_customer_info method
-  ageGroup: String!        # From get_age_group method
+  customerInfo: JSON! # From get_customer_info method
+  ageGroup: String! # From get_age_group method
   marketingSegment: String! # From marketing_segment property
 }
 
@@ -425,7 +423,7 @@ type Query {
   people: [Person!]!
   employees: [Employee!]!
   customers: [Customer!]!
-  
+
   # Filtered queries
   activeEmployees: [Employee!]!
   seniorEmployees: [Employee!]!
@@ -438,14 +436,14 @@ type Query {
 ### Advanced Query Patterns
 
 ```python
-from django_graphql_auto.generators.queries import PolymorphicQueryGenerator
+from rail_django_graphql.generators.queries import PolymorphicQueryGenerator
 
 class PolymorphicQueryGenerator:
     """Generates polymorphic queries for inheritance hierarchies."""
-    
+
     def generate_polymorphic_queries(self, base_model, child_models):
         """Generate queries that can return multiple model types."""
-        
+
         # Union type for all child models
         union_name = f"{base_model.__name__}Union"
         union_type = type(union_name, (graphene.Union,), {
@@ -453,7 +451,7 @@ class PolymorphicQueryGenerator:
                 'types': tuple(child_models)
             })
         })
-        
+
         # Polymorphic query fields
         queries = {
             # All instances across all child models
@@ -461,13 +459,13 @@ class PolymorphicQueryGenerator:
                 union_type,
                 description=f"Get all {base_model.__name__} instances"
             ),
-            
+
             # Filtered polymorphic queries
             f'published_{base_model.__name__.lower()}s': graphene.List(
                 union_type,
                 description=f"Get published {base_model.__name__} instances"
             ),
-            
+
             # Search across all types
             f'search_{base_model.__name__.lower()}s': graphene.List(
                 union_type,
@@ -475,7 +473,7 @@ class PolymorphicQueryGenerator:
                 description=f"Search {base_model.__name__} instances"
             ),
         }
-        
+
         return queries
 ```
 
@@ -553,14 +551,14 @@ query {
 ### Custom Union Definitions
 
 ```python
-from django_graphql_auto.generators.unions import UnionGenerator
+from rail_django_graphql.generators.unions import UnionGenerator
 
 class MediaUnion(graphene.Union):
     """Union type for different media types."""
-    
+
     class Meta:
         types = (Article, Video, Podcast)
-    
+
     @classmethod
     def resolve_type(cls, instance, info):
         """Resolve the actual type of the instance."""
@@ -574,10 +572,10 @@ class MediaUnion(graphene.Union):
 
 class PlaceUnion(graphene.Union):
     """Union type for different place types."""
-    
+
     class Meta:
         types = (Restaurant, Hotel)
-    
+
     @classmethod
     def resolve_type(cls, instance, info):
         """Resolve the actual type of the instance."""
@@ -591,7 +589,7 @@ class PlaceUnion(graphene.Union):
 class Query(graphene.ObjectType):
     mixed_media = graphene.List(MediaUnion)
     nearby_places = graphene.List(PlaceUnion, lat=graphene.Float(), lng=graphene.Float())
-    
+
     def resolve_mixed_media(self, info):
         """Return mixed media content."""
         from itertools import chain
@@ -600,7 +598,7 @@ class Query(graphene.ObjectType):
             Video.objects.filter(is_published=True)[:5],
             Podcast.objects.filter(is_published=True)[:5],
         ))
-    
+
     def resolve_nearby_places(self, info, lat=None, lng=None):
         """Return nearby places of different types."""
         # Simulate location-based filtering
@@ -614,11 +612,11 @@ class Query(graphene.ObjectType):
 ### Shared GraphQL Interfaces
 
 ```python
-from django_graphql_auto.generators.interfaces import InterfaceGenerator
+from rail_django_graphql.generators.interfaces import InterfaceGenerator
 
 class ContentInterface(graphene.Interface):
     """Shared interface for all content types."""
-    
+
     id = graphene.ID(required=True)
     title = graphene.String(required=True)
     slug = graphene.String(required=True)
@@ -627,7 +625,7 @@ class ContentInterface(graphene.Interface):
     is_published = graphene.Boolean(required=True)
     absolute_url = graphene.String(required=True)
     is_recent = graphene.Boolean(required=True)
-    
+
     @classmethod
     def resolve_type(cls, instance, info):
         """Resolve the concrete type implementing this interface."""
@@ -641,25 +639,25 @@ class ContentInterface(graphene.Interface):
 
 class TimestampedInterface(graphene.Interface):
     """Interface for models with timestamp fields."""
-    
+
     created_at = graphene.DateTime(required=True)
     updated_at = graphene.DateTime(required=True)
-    
+
     def resolve_created_at(self, info):
         return self.created_at
-    
+
     def resolve_updated_at(self, info):
         return self.updated_at
 
 class PublishableInterface(graphene.Interface):
     """Interface for publishable content."""
-    
+
     is_published = graphene.Boolean(required=True)
     published_at = graphene.DateTime()
-    
+
     def resolve_is_published(self, info):
         return self.is_published
-    
+
     def resolve_published_at(self, info):
         return getattr(self, 'published_at', None)
 ```
@@ -670,40 +668,40 @@ class PublishableInterface(graphene.Interface):
 
 ```python
 # settings.py
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'INHERITANCE': {
         # Enable inheritance support
         'ENABLE_INHERITANCE': True,
-        
+
         # Generate interfaces for abstract models
         'GENERATE_INTERFACES': True,
-        
+
         # Generate union types for polymorphic queries
         'GENERATE_UNIONS': True,
-        
+
         # Include parent fields in child types
         'INCLUDE_PARENT_FIELDS': True,
-        
+
         # Generate polymorphic queries
         'GENERATE_POLYMORPHIC_QUERIES': True,
-        
+
         # Interface naming convention
         'INTERFACE_SUFFIX': 'Interface',
-        
+
         # Union naming convention
         'UNION_SUFFIX': 'Union',
-        
+
         # Proxy model handling
         'HANDLE_PROXY_MODELS': True,
         'PROXY_MODEL_SUFFIX': '',
     },
-    
+
     'POLYMORPHIC_QUERIES': {
         # Query naming patterns
         'ALL_QUERY_PREFIX': 'all_',
         'SEARCH_QUERY_PREFIX': 'search_',
         'FILTER_QUERY_PREFIX': 'filter_',
-        
+
         # Enable specific query types
         'ENABLE_ALL_QUERIES': True,
         'ENABLE_SEARCH_QUERIES': True,
@@ -718,31 +716,31 @@ DJANGO_GRAPHQL_AUTO = {
 # models.py
 class BaseContent(models.Model):
     title = models.CharField(max_length=200)
-    
+
     class Meta:
         abstract = True
-    
+
     class GraphQLMeta:
         # Generate interface for this abstract model
         generate_interface = True
         interface_name = 'ContentInterface'
-        
+
         # Include these fields in the interface
         interface_fields = ['title', 'slug', 'is_published']
-        
+
         # Exclude these fields from child types
         exclude_from_children = []
 
 class Article(BaseContent):
     content = models.TextField()
-    
+
     class GraphQLMeta:
         # Implement the parent interface
         implements_interfaces = ['ContentInterface']
-        
+
         # Include in union types
         include_in_unions = ['ContentUnion', 'MediaUnion']
-        
+
         # Custom type name
         type_name = 'ArticleType'
 ```
@@ -764,7 +762,7 @@ query ComplexInheritanceQuery {
       createdAt
       isRecent
     }
-    
+
     # Type-specific fields
     ... on Article {
       content
@@ -775,21 +773,21 @@ query ComplexInheritanceQuery {
       category
       wordCount
     }
-    
+
     ... on Video {
       videoFile
       duration
       thumbnail
       durationMinutes
     }
-    
+
     ... on Podcast {
       audioFile
       episodeNumber
       episodeInfo
     }
   }
-  
+
   # Query specific types
   articles(first: 5, isPublished: true) {
     edges {
@@ -803,7 +801,7 @@ query ComplexInheritanceQuery {
       }
     }
   }
-  
+
   # Polymorphic search
   searchContent(query: "technology") {
     __typename
@@ -829,7 +827,7 @@ query PlacesQuery {
       coordinates
     }
   }
-  
+
   # Specific place types
   restaurants {
     name
@@ -837,26 +835,26 @@ query PlacesQuery {
     cuisineType
     menuInfo
     specialties
-    
+
     # Access parent fields
     place {
       coordinates
     }
   }
-  
+
   hotels {
     name
     starRating
     roomCount
     amenities
     isLuxury
-    
+
     # Access parent fields
     place {
       coordinates
     }
   }
-  
+
   # Union query
   allPlaces {
     __typename
@@ -883,7 +881,7 @@ query ProxyModelQuery {
     age
     email
   }
-  
+
   # Proxy models with specialized methods
   employees {
     fullName
@@ -891,20 +889,20 @@ query ProxyModelQuery {
     isSenior
     employeeInfo
   }
-  
+
   customers {
     fullName
     ageGroup
     marketingSegment
     customerInfo
   }
-  
+
   # Filtered proxy queries
   seniorEmployees {
     fullName
     employeeInfo
   }
-  
+
   customersByAgeGroup(ageGroup: "Adult") {
     fullName
     marketingSegment

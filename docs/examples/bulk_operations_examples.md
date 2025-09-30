@@ -9,7 +9,7 @@ This guide explains how to enable and use bulk operations in the Django GraphQL 
 Add the following configuration to your Django settings:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_bulk_operations': True,  # Enable bulk create, update, delete operations
         'bulk_batch_size': 100,  # Maximum number of items in bulk operations (default: 100)
@@ -23,7 +23,7 @@ DJANGO_GRAPHQL_AUTO = {
 Once enabled, the following bulk mutations are automatically generated for each model:
 
 - `bulk_create_{model_name}` - Create multiple instances
-- `bulk_update_{model_name}` - Update multiple instances  
+- `bulk_update_{model_name}` - Update multiple instances
 - `bulk_delete_{model_name}` - Delete multiple instances
 
 ## 📝 Usage Examples
@@ -32,22 +32,24 @@ Once enabled, the following bulk mutations are automatically generated for each 
 
 ```graphql
 mutation BulkCreatePosts {
-  bulkCreatePost(inputs: [
-    {
-      title: "First Post"
-      content: "Content of first post"
-      status: "draft"
-      authorId: 1
-      categoryId: 1
-    }
-    {
-      title: "Second Post"
-      content: "Content of second post"
-      status: "published"
-      authorId: 1
-      categoryId: 2
-    }
-  ]) {
+  bulkCreatePost(
+    inputs: [
+      {
+        title: "First Post"
+        content: "Content of first post"
+        status: "draft"
+        authorId: 1
+        categoryId: 1
+      }
+      {
+        title: "Second Post"
+        content: "Content of second post"
+        status: "published"
+        authorId: 1
+        categoryId: 2
+      }
+    ]
+  ) {
     ok
     objects {
       id
@@ -63,21 +65,12 @@ mutation BulkCreatePosts {
 
 ```graphql
 mutation BulkUpdatePosts {
-  bulkUpdatePost(inputs: [
-    {
-      id: "1"
-      data: {
-        status: "published"
-        title: "Updated First Post"
-      }
-    }
-    {
-      id: "2"
-      data: {
-        status: "archived"
-      }
-    }
-  ]) {
+  bulkUpdatePost(
+    inputs: [
+      { id: "1", data: { status: "published", title: "Updated First Post" } }
+      { id: "2", data: { status: "archived" } }
+    ]
+  ) {
     ok
     objects {
       id
@@ -111,7 +104,7 @@ mutation BulkDeletePosts {
 Control the maximum number of items that can be processed in a single bulk operation:
 
 ```python
-DJANGO_GRAPHQL_AUTO = {
+rail_django_graphql = {
     'MUTATION_SETTINGS': {
         'enable_bulk_operations': True,
         'bulk_batch_size': 50,  # Limit to 50 items per bulk operation
@@ -126,16 +119,19 @@ You can enable/disable bulk operations for specific models by customizing the mu
 ## ⚡ Performance Features
 
 ### Transaction Safety
+
 - All bulk operations are wrapped in database transactions
 - If any item fails, the entire operation is rolled back
 - Ensures data consistency across all operations
 
 ### Error Handling
+
 - Detailed error messages for each failed item
 - Partial success handling where applicable
 - Validation errors are reported clearly
 
 ### Optimization
+
 - Uses Django's `bulk_create()` for efficient database operations
 - Minimizes database queries through batching
 - Automatic query optimization for large datasets
@@ -143,16 +139,19 @@ You can enable/disable bulk operations for specific models by customizing the mu
 ## 🛡️ Security Considerations
 
 ### Validation
+
 - All input data is validated before processing
 - Model-level validation is enforced
 - Custom validation rules are respected
 
 ### Permissions
+
 - Standard Django permissions apply to bulk operations
 - User authentication is required
 - Model-level permissions are checked
 
 ### Rate Limiting
+
 - Batch size limits prevent resource exhaustion
 - Transaction timeouts prevent long-running operations
 - Memory usage is controlled through batching
@@ -163,22 +162,25 @@ All bulk operations return a standardized response:
 
 ```graphql
 type BulkMutationResponse {
-  ok: Boolean!           # Overall success status
-  objects: [ModelType]   # Successfully processed objects
-  errors: [String]       # List of error messages
+  ok: Boolean! # Overall success status
+  objects: [ModelType] # Successfully processed objects
+  errors: [String] # List of error messages
 }
 ```
 
 ## 🔍 Monitoring and Debugging
 
 ### Logging
+
 Bulk operations are logged with detailed information:
+
 - Number of items processed
 - Execution time
 - Error details
 - Transaction status
 
 ### GraphiQL Integration
+
 - Full schema introspection support
 - Auto-completion for bulk mutations
 - Built-in documentation for all operations
@@ -201,12 +203,13 @@ Bulk operations are logged with detailed information:
 4. **Transaction Timeout**: Reduce batch size for complex operations
 
 ### Debug Mode
+
 Enable debug logging to see detailed bulk operation information:
 
 ```python
 LOGGING = {
     'loggers': {
-        'django_graphql_auto': {
+        'rail_django_graphql': {
             'level': 'DEBUG',
         },
     },

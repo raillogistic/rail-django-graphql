@@ -30,7 +30,7 @@ class User(models.Model):
     username = models.CharField(max_length=50, verbose_name="Nom d'utilisateur")
     email = models.EmailField(verbose_name="Adresse email")
     age = models.IntegerField(verbose_name="Âge")
-    
+
     def clean(self):
         if self.age and self.age < 18:
             raise ValidationError({
@@ -39,6 +39,7 @@ class User(models.Model):
 ```
 
 **GraphQL Mutation:**
+
 ```graphql
 mutation CreateUser($input: CreateUserInput!) {
   createUser(input: $input) {
@@ -60,6 +61,7 @@ mutation CreateUser($input: CreateUserInput!) {
 **Test Cases:**
 
 #### 1. Empty Required Field
+
 ```json
 // Input
 {
@@ -87,6 +89,7 @@ mutation CreateUser($input: CreateUserInput!) {
 ```
 
 #### 2. Invalid Email Format
+
 ```json
 // Input
 {
@@ -114,6 +117,7 @@ mutation CreateUser($input: CreateUserInput!) {
 ```
 
 #### 3. Custom Validation Error
+
 ```json
 // Input
 {
@@ -148,21 +152,22 @@ class Post(models.Model):
     title = models.CharField(max_length=200, verbose_name="Titre")
     content = models.TextField(verbose_name="Contenu")
     category = models.ForeignKey(Category, on_delete=models.CASCADE, verbose_name="Catégorie")
-    
+
     def clean(self):
         errors = {}
-        
+
         if not self.title or len(self.title.strip()) < 5:
             errors['title'] = "Le titre doit contenir au moins 5 caractères"
-        
+
         if not self.content or len(self.content.strip()) < 20:
             errors['content'] = "Le contenu doit contenir au moins 20 caractères"
-        
+
         if errors:
             raise ValidationError(errors)
 ```
 
 **Test Case:**
+
 ```json
 // Input
 {
@@ -210,6 +215,7 @@ class Tag(models.Model):
 **Test Cases:**
 
 #### 1. Duplicate Name
+
 ```json
 // Input (when "python" tag already exists)
 {
@@ -236,6 +242,7 @@ class Tag(models.Model):
 ```
 
 #### 2. Duplicate Slug
+
 ```json
 // Input (when "django" slug already exists)
 {
@@ -271,6 +278,7 @@ class Order(models.Model):
 ```
 
 **Test Case:**
+
 ```json
 // Input (missing required field)
 {
@@ -313,6 +321,7 @@ class Post(models.Model):
 **Test Cases:**
 
 #### 1. Invalid Category ID
+
 ```json
 // Input
 {
@@ -339,6 +348,7 @@ class Post(models.Model):
 ```
 
 #### 2. Multiple Foreign Key Errors
+
 ```python
 # models.py
 class Article(models.Model):
@@ -388,14 +398,14 @@ class Article(models.Model):
 # mutations.py
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django_graphql_auto.mutations import BaseMutation
+from rail_django_graphql.mutations import BaseMutation
 import re
 
 class CustomCreatePostMutation(BaseMutation):
     class Meta:
         model = Post
         operation = 'create'
-    
+
     @classmethod
     def perform_mutation(cls, root, info, **input_data):
         try:
@@ -406,12 +416,12 @@ class CustomCreatePostMutation(BaseMutation):
             return cls._handle_integrity_error(e)
         except Exception as e:
             return cls._handle_general_error(e)
-    
+
     @classmethod
     def _handle_validation_error(cls, e):
         """Handle Django validation errors with field extraction"""
         errors = []
-        
+
         if hasattr(e, 'error_dict'):
             # Field-specific errors
             for field, field_errors in e.error_dict.items():
@@ -435,9 +445,9 @@ class CustomCreatePostMutation(BaseMutation):
                 'message': str(e),
                 'code': 'VALIDATION_ERROR'
             })
-        
+
         return cls(ok=False, errors=errors)
-    
+
     @classmethod
     def _handle_integrity_error(cls, e):
         """Handle database integrity errors with field extraction"""
@@ -445,7 +455,7 @@ class CustomCreatePostMutation(BaseMutation):
         field = None
         code = 'INTEGRITY_ERROR'
         message = error_message
-        
+
         # UNIQUE constraint
         if 'UNIQUE constraint failed' in error_message:
             match = re.search(r'UNIQUE constraint failed: \w+\.(\w+)', error_message)
@@ -453,7 +463,7 @@ class CustomCreatePostMutation(BaseMutation):
                 field = match.group(1)
                 message = "Cette valeur existe déjà"
                 code = 'DUPLICATE_ENTRY'
-        
+
         # NOT NULL constraint
         elif 'NOT NULL constraint failed' in error_message:
             match = re.search(r'NOT NULL constraint failed: \w+\.(\w+)', error_message)
@@ -461,7 +471,7 @@ class CustomCreatePostMutation(BaseMutation):
                 field = match.group(1)
                 message = "Ce champ ne peut pas être null"
                 code = 'NOT_NULL_CONSTRAINT'
-        
+
         # FOREIGN KEY constraint
         elif 'FOREIGN KEY constraint failed' in error_message:
             # Try to extract field from error message
@@ -469,7 +479,7 @@ class CustomCreatePostMutation(BaseMutation):
             if match:
                 message = "Référence invalide vers un objet lié"
                 code = 'FOREIGN_KEY_ERROR'
-        
+
         return cls(
             ok=False,
             errors=[{
@@ -478,13 +488,13 @@ class CustomCreatePostMutation(BaseMutation):
                 'code': code
             }]
         )
-    
+
     @classmethod
     def _handle_general_error(cls, e):
         """Handle general exceptions"""
         # Check for foreign key validation errors in exception message
         error_message = str(e)
-        
+
         if "does not exist" in error_message:
             # Extract model name and field
             match = re.search(r'(\w+) with id \'(\d+)\' does not exist', error_message)
@@ -498,7 +508,7 @@ class CustomCreatePostMutation(BaseMutation):
                         'code': 'FOREIGN_KEY_ERROR'
                     }]
                 )
-        
+
         return cls(
             ok=False,
             errors=[{
@@ -525,7 +535,7 @@ class ErrorHandlingTestCase(TestCase):
     def setUp(self):
         self.client = Client(schema)
         self.category = Category.objects.create(name="Technology")
-    
+
     def test_validation_error_field_extraction(self):
         """Test that validation errors extract field information correctly"""
         result = self.client.execute('''
@@ -540,33 +550,33 @@ class ErrorHandlingTestCase(TestCase):
                 }
             }
         ''')
-        
+
         self.assertFalse(result['data']['createUser']['ok'])
         errors = result['data']['createUser']['errors']
-        
+
         # Should have errors for both username and email
         self.assertEqual(len(errors), 2)
-        
+
         # Check username error
         username_error = next(e for e in errors if e['field'] == 'username')
         self.assertEqual(username_error['code'], 'VALIDATION_ERROR')
         self.assertIn('vide', username_error['message'])
-        
+
         # Check email error
         email_error = next(e for e in errors if e['field'] == 'email')
         self.assertEqual(email_error['code'], 'VALIDATION_ERROR')
         self.assertIn('valide', email_error['message'])
-    
+
     def test_duplicate_entry_error(self):
         """Test duplicate entry error handling"""
         # Create initial user
         User.objects.create(username="testuser", email="test@example.com")
-        
+
         result = self.client.execute('''
             mutation {
-                createUser(input: { 
-                    username: "testuser", 
-                    email: "different@example.com" 
+                createUser(input: {
+                    username: "testuser",
+                    email: "different@example.com"
                 }) {
                     ok
                     errors {
@@ -577,19 +587,19 @@ class ErrorHandlingTestCase(TestCase):
                 }
             }
         ''')
-        
+
         self.assertFalse(result['data']['createUser']['ok'])
         error = result['data']['createUser']['errors'][0]
-        
+
         self.assertEqual(error['field'], 'username')
         self.assertEqual(error['code'], 'DUPLICATE_ENTRY')
         self.assertIn('existe déjà', error['message'])
-    
+
     def test_foreign_key_error(self):
         """Test foreign key validation error handling"""
         result = self.client.execute('''
             mutation {
-                createPost(input: { 
+                createPost(input: {
                     title: "Test Post",
                     content: "This is a test post content",
                     categoryId: 999
@@ -603,19 +613,19 @@ class ErrorHandlingTestCase(TestCase):
                 }
             }
         ''')
-        
+
         self.assertFalse(result['data']['createPost']['ok'])
         error = result['data']['createPost']['errors'][0]
-        
+
         self.assertEqual(error['field'], 'category')
         self.assertEqual(error['code'], 'FOREIGN_KEY_ERROR')
         self.assertIn('existe pas', error['message'])
-    
+
     def test_multiple_errors(self):
         """Test handling of multiple simultaneous errors"""
         result = self.client.execute('''
             mutation {
-                createPost(input: { 
+                createPost(input: {
                     title: "",
                     content: "Short",
                     categoryId: 999
@@ -629,13 +639,13 @@ class ErrorHandlingTestCase(TestCase):
                 }
             }
         ''')
-        
+
         self.assertFalse(result['data']['createPost']['ok'])
         errors = result['data']['createPost']['errors']
-        
+
         # Should have multiple errors
         self.assertGreater(len(errors), 1)
-        
+
         # Check that different error types are present
         error_codes = [e['code'] for e in errors]
         self.assertIn('VALIDATION_ERROR', error_codes)
@@ -699,15 +709,15 @@ class CustomMutation(BaseMutation):
 const handleMutationErrors = (errors) => {
   const fieldErrors = {};
   const generalErrors = [];
-  
-  errors.forEach(error => {
+
+  errors.forEach((error) => {
     if (error.field) {
       fieldErrors[error.field] = error.message;
     } else {
       generalErrors.push(error.message);
     }
   });
-  
+
   return { fieldErrors, generalErrors };
 };
 
@@ -715,11 +725,13 @@ const handleMutationErrors = (errors) => {
 const [createUser] = useMutation(CREATE_USER_MUTATION, {
   onCompleted: (data) => {
     if (!data.createUser.ok) {
-      const { fieldErrors, generalErrors } = handleMutationErrors(data.createUser.errors);
+      const { fieldErrors, generalErrors } = handleMutationErrors(
+        data.createUser.errors
+      );
       setFieldErrors(fieldErrors);
       setGeneralErrors(generalErrors);
     }
-  }
+  },
 });
 ```
 

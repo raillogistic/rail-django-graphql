@@ -7,21 +7,22 @@ import os
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "rail_django_graphql.settings")
 django.setup()
 
 from django.contrib.auth.models import User
 from test_app.models import Post, Comment, Category
-from django_graphql_auto.generators.nested_operations import NestedOperationHandler
+from rail_django_graphql.generators.nested_operations import NestedOperationHandler
 
 # Monkey patch to add debug logging to the create call
 original_handle_nested_create = NestedOperationHandler.handle_nested_create
+
 
 def debug_handle_nested_create(self, model, input_data, parent_instance=None):
     print(f"=== handle_nested_create called ===")
     print(f"Model: {model}")
     print(f"Input data: {input_data}")
-    
+
     # Let's manually trace through the logic
     regular_fields = {}
     nested_fields = {}
@@ -34,12 +35,12 @@ def debug_handle_nested_create(self, model, input_data, parent_instance=None):
     for field_name, value in input_data.items():
         if not hasattr(model, field_name):
             continue
-        
+
         # Check if this is a reverse relationship field
         if field_name in reverse_relations:
             reverse_fields[field_name] = (reverse_relations[field_name], value)
             continue
-            
+
         try:
             field = model._meta.get_field(field_name)
         except:
@@ -66,25 +67,22 @@ def debug_handle_nested_create(self, model, input_data, parent_instance=None):
         print(f"Processing nested field: {field_name} = {value} (type: {type(value)})")
         if value is None:
             continue
-            
+
         if isinstance(value, dict):
             print(f"  Dict value - checking for 'id'")
             # Nested create
-            if 'id' in value:
+            if "id" in value:
                 print(f"  Update existing object with id {value['id']}")
                 # Update existing object
-                related_instance = field.related_model.objects.get(pk=value['id'])
+                related_instance = field.related_model.objects.get(pk=value["id"])
                 regular_fields[field_name] = self.handle_nested_update(
-                    field.related_model, 
-                    value, 
-                    related_instance
+                    field.related_model, value, related_instance
                 )
             else:
                 print(f"  Create new object")
                 # Create new object
                 regular_fields[field_name] = self.handle_nested_create(
-                    field.related_model, 
-                    value
+                    field.related_model, value
                 )
         elif isinstance(value, (str, int)):
             print(f"  String/int value - getting existing object")
@@ -98,13 +96,13 @@ def debug_handle_nested_create(self, model, input_data, parent_instance=None):
                 raise django.core.exceptions.ValidationError(
                     f"{field.related_model.__name__} with id '{value}' does not exist"
                 )
-        elif hasattr(value, 'pk'):
+        elif hasattr(value, "pk"):
             print(f"  Model instance - using directly")
             regular_fields[field_name] = value
 
     print(f"Final regular_fields before create: {regular_fields}")
     print(f"Field types: {[(k, type(v)) for k, v in regular_fields.items()]}")
-    
+
     # Create the main instance
     try:
         print(f"Calling {model}.objects.create(**{regular_fields})")
@@ -115,28 +113,34 @@ def debug_handle_nested_create(self, model, input_data, parent_instance=None):
         print(f"ERROR in create: {e}")
         raise
 
+
 NestedOperationHandler.handle_nested_create = debug_handle_nested_create
 
-from django_graphql_auto.schema import schema
+from rail_django_graphql.schema import schema
+
 
 def test_debug():
     print("=== DEBUGGING CREATE CALL ===")
-    
+
     # Clean up
     Comment.objects.filter(content__contains="c2xx").delete()
     Post.objects.filter(title__contains="xxx").delete()
     User.objects.filter(username="test_create_user").delete()
     Category.objects.filter(name="Test Create Category").delete()
-    
+
     # Create test data
-    user = User.objects.create_user(username='test_create_user', email='test_create@test.com')
-    category = Category.objects.create(name='Test Create Category')
-    post = Post.objects.create(title='Test Create Post', content='Test content', category=category)
-    
+    user = User.objects.create_user(
+        username="test_create_user", email="test_create@test.com"
+    )
+    category = Category.objects.create(name="Test Create Category")
+    post = Post.objects.create(
+        title="Test Create Post", content="Test content", category=category
+    )
+
     print(f"Created post {post.id}, user {user.id}")
-    
+
     # Test the exact mutation that's failing
-    mutation = f'''
+    mutation = f"""
     mutation {{
         update_post(id:"{post.id}",input:{{ 
             nested_comments:[ 
@@ -148,10 +152,10 @@ def test_debug():
             errors 
         }} 
     }}
-    '''
-    
+    """
+
     print("Executing mutation...")
-    
+
     try:
         result = schema.execute(mutation)
         print(f"Result: {result.data}")
@@ -159,8 +163,9 @@ def test_debug():
             print(f"Errors: {result.errors}")
     except Exception as e:
         print(f"Exception: {e}")
-    
+
     print("=== DEBUG COMPLETE ===")
+
 
 if __name__ == "__main__":
     test_debug()
