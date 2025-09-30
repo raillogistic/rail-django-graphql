@@ -8,6 +8,7 @@ including abstract models, multi-table inheritance, and proxy models in GraphQL 
 from typing import Any, Dict, List, Optional, Set, Type, Union
 import graphene
 from django.db import models
+from django.db.models import Q
 from django.db.models.base import ModelBase
 from graphene_django import DjangoObjectType
 
@@ -59,13 +60,13 @@ class InheritanceHandler:
         
         # Analyze parent classes
         for base in model.__bases__:
-            if isinstance(base, ModelBase) and issubclass(base, models.Model):
+            if isinstance(base, ModelBase) and issubclass(base, models.Model) and hasattr(base, '_meta'):
                 analysis['parent_models'].append(base)
                 if base._meta.abstract:
                     analysis['abstract_parents'].append(base)
                 else:
                     analysis['concrete_parents'].append(base)
-            elif hasattr(base, '__mro__') and base != object:
+            elif hasattr(base, '__mro__') and base != object and base != models.Model:
                 # Non-model mixin class
                 analysis['mixin_classes'].append(base)
         
@@ -235,8 +236,19 @@ class InheritanceHandler:
         if not child_models:
             return None
         
-        # Get GraphQL types for all child models
+        # Get GraphQL types for all child models (including the base model)
         union_types = []
+        
+        # Add the base model type if it's not abstract
+        if not base_model._meta.abstract:
+            try:
+                base_type = type_generator.generate_object_type(base_model)
+                if base_type:
+                    union_types.append(base_type)
+            except Exception:
+                pass
+        
+        # Add child model types
         for child_model in child_models:
             try:
                 child_type = type_generator.generate_object_type(child_model)
@@ -253,9 +265,26 @@ class InheritanceHandler:
         
         class Meta:
             types = tuple(union_types)
-            name = union_name
         
-        return type(union_name, (graphene.Union,), {'Meta': Meta})
+        union_class = type(union_name, (graphene.Union,), {'Meta': Meta})
+        
+        # Add resolve_type method to the union
+        def resolve_type(root, info):
+            """Resolve the correct GraphQL type for polymorphic instances"""
+            instance_type = type(root)
+            
+            # Look up the GraphQL type for this instance
+            for union_type in union_types:
+                if hasattr(union_type, '_meta') and hasattr(union_type._meta, 'model'):
+                    if union_type._meta.model == instance_type:
+                        return union_type
+            
+            # Fallback to first type
+            return union_types[0] if union_types else None
+        
+        union_class.resolve_type = staticmethod(resolve_type)
+        
+        return union_class
     
     def enhance_type_with_inheritance(
         self, 
@@ -359,21 +388,28 @@ class InheritanceHandler:
         
         def polymorphic_resolver(root, info, **kwargs):
             """
-            Resolver that returns the appropriate GraphQL type based on the instance type.
+            Resolver that returns the instance but with proper type resolution.
+            The GraphQL type resolution happens at the schema level.
             """
             if root is None:
                 return None
             
-            instance_type = type(root)
-            graphql_type = type_mapping.get(instance_type)
+            # For polymorphic queries, we need to handle the database query
+            if not kwargs:
+                return None
+                
+            filters = Q()
+            for key, value in kwargs.items():
+                filters |= Q(**{key: value})
             
-            if graphql_type:
-                return graphql_type
-            
-            # Fallback to base type
             try:
-                return type_generator.generate_object_type(base_model)
-            except Exception:
+                # Get the instance from the base model queryset
+                instance = base_model.objects.get(filters)
+                
+                # Return the actual instance - GraphQL will resolve the correct type
+                # based on the instance's actual class
+                return instance
+            except base_model.DoesNotExist:
                 return None
         
         return polymorphic_resolver
@@ -398,9 +434,10 @@ class InheritanceHandler:
         
         # Create polymorphic queries for models with children
         if analysis['child_models']:
-            # Create a query that can return any child type
-            union_type = self.create_union_for_inheritance_tree(model, query_generator.type_generator)
-            if union_type:
+            # Use the base model type instead of union type for polymorphic queries
+            # The polymorphic_type field will indicate the actual class
+            base_type = query_generator.type_generator.generate_object_type(model)
+            if base_type:
                 def polymorphic_list_resolver(root, info, **kwargs):
                     """Resolver that returns instances of any child type."""
                     queryset = model.objects.all()
@@ -412,7 +449,7 @@ class InheritanceHandler:
                     return queryset
                 
                 queries[f"all_{model.__name__.lower()}_polymorphic"] = graphene.List(
-                    union_type,
+                    base_type,
                     resolver=polymorphic_list_resolver,
                     description=f"Get all {model.__name__} instances including child types"
                 )

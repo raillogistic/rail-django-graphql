@@ -16,6 +16,7 @@ from graphene_django.filter import DjangoFilterConnectionField
 from ..core.settings import QueryGeneratorSettings
 from .types import TypeGenerator
 from .filters import AdvancedFilterGenerator
+from .inheritance import inheritance_handler
 from ..extensions.optimization import (
     get_optimizer, 
     get_performance_monitor, 
@@ -68,54 +69,36 @@ class QueryGenerator:
 
     def generate_single_query(self, model: Type[models.Model]) -> graphene.Field:
         """
-        Generates a query field for retrieving a single model instance.
-        Supports lookup by ID and other unique fields.
+        Generate a single object query for a model.
+        For polymorphic models, uses the base model type with polymorphic_type field
+        to identify the specific subclass instead of union types.
         """
+        # Always use the base model type for single queries
+        # The polymorphic_type field will indicate the actual class
         model_type = self.type_generator.generate_object_type(model)
-        model_name = model.__name__.lower()
-
-        @optimize_query()
-        def resolver(root: Any, info: graphene.ResolveInfo, **kwargs) -> Optional[models.Model]:
+        
+        def resolve_single(root, info, id):
+            """Resolver for single object queries."""
             try:
-                # If no arguments provided, return None instead of trying to get all records
-                if not kwargs:
-                    return None
-                    
-                filters = Q()
-                for key, value in kwargs.items():
-                    filters |= Q(**{key: value})
-                
-                # Get optimized queryset
-                queryset = model.objects.all()
-                queryset = self.optimizer.optimize_queryset(queryset, info, model)
-                
-                return queryset.get(filters)
+                return model.objects.get(pk=id)
             except model.DoesNotExist:
                 return None
-
-        # Define arguments for the query
-        arguments = {
-            'id': graphene.ID(description=f"The ID of the {model_name} to retrieve"),
-        }
-
-        # Add additional lookup fields from settings
-        for field_name in self.settings.additional_lookup_fields.get(model.__name__, []):
-            field = model._meta.get_field(field_name)
-            graphql_type = self.type_generator.FIELD_TYPE_MAP.get(type(field), graphene.String)
-            arguments[field_name] = graphql_type(description=f"Look up {model_name} by {field_name}")
-
+        
         return graphene.Field(
             model_type,
-            args=arguments,
-            resolver=resolver,
-            description=f"Retrieve a single {model_name} instance"
+            id=graphene.ID(required=True),
+            resolver=resolve_single,
+            description=f"Retrieve a single {model.__name__} by ID"
         )
 
     def generate_list_query(self, model: Type[models.Model]) -> Union[graphene.List, DjangoFilterConnectionField]:
         """
         Generates a query field for retrieving a list of model instances.
+        For polymorphic models, returns the base model type to allow querying all instances.
         Supports advanced filtering, pagination, and ordering.
         """
+        
+        # Regular list query for non-polymorphic models
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
         filter_class = self.filter_generator.generate_filter_set(model)

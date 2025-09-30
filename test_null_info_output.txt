@@ -1,0 +1,48 @@
+=== Testing Null Info Handling ===
+Created LocalClient 518 without ClientInformation
+Schema obtained successfully
+Executing GraphQL query...
+Query executed successfully!
+Found 8 LocalClients:
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUwNQ==
+  Raison: dada
+  Test: dsds
+  Info: {'id': 'Q2xpZW50SW5mb3JtYXRpb25UeXBlOjc=', 'adresse': 'Default Address for dada', 'ville': 'Default City'}
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUwNg==
+  Raison: ra
+  Test: dsd
+  Info: {'id': 'Q2xpZW50SW5mb3JtYXRpb25UeXBlOjM=', 'adresse': 'ds', 'ville': 'ds'}
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUwNw==
+  Raison: ra
+  Test: dsd
+  Info: {'id': 'Q2xpZW50SW5mb3JtYXRpb25UeXBlOjQ=', 'adresse': 'ds', 'ville': 'ds'}
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUwOA==
+  Raison: Test Client
+  Test: Test Value
+  Info: {'id': 'Q2xpZW50SW5mb3JtYXRpb25UeXBlOjU=', 'adresse': '123 Test Street', 'ville': 'Test City'}
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUwOQ==
+  Raison: GraphQL Test Client
+  Test: GraphQL Test
+  Info: {'id': 'Q2xpZW50SW5mb3JtYXRpb25UeXBlOjY=', 'adresse': 'GraphQL Test Address', 'ville': 'GraphQL Test City'}
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUxNA==
+  Raison: dsqdqs
+  Test: dsd
+  Info: None
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUxNQ==
+  Raison: Test Client Without Info
+  Test: Test Value
+  Info: None
+  ---
+  LocalClient ID: TG9jYWxDbGllbnRUeXBlOjUxOA==
+  Raison: Test Client Without Info
+  Test: Test Value
+  Info: None
+  ---
+
+Cleaned up test LocalClient 518

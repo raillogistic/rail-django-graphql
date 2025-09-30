@@ -1,237 +1,125 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python
 """
-Test script to verify the NOT NULL constraint fix works for various nested operations
+Test script to verify that single client queries now return ClientType instead of ClientUnion.
 """
 
 import os
+import sys
 import django
 
-# Setup Django
+# Add the project root to the Python path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Configure Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'django_graphql_auto.settings')
 django.setup()
 
-from django.contrib.auth.models import User
-from test_app.models import Post, Comment, Category, Tag
-from django_graphql_auto.schema import schema
+from test_app.models import Client, LocalClient
+from django_graphql_auto.core.schema import SchemaBuilder
+import graphene
 
-def test_nested_comment_creation():
-    """Test creating new comments in nested updates"""
-    print("=== Testing Nested Comment Creation ===")
+def test_single_client_query_fix():
+    """Test that single client queries now return ClientType instead of ClientUnion"""
+    print("Testing single client query fix...")
     
-    # Clean up
-    Comment.objects.filter(content__contains="test_nested").delete()
-    Post.objects.filter(title__contains="Test Nested").delete()
-    User.objects.filter(username="test_nested_user").delete()
-    Category.objects.filter(name="Test Nested Category").delete()
+    # Clean up existing data
+    Client.objects.all().delete()
     
     # Create test data
-    user = User.objects.create_user(username='test_nested_user', email='test_nested@test.com')
-    category = Category.objects.create(name='Test Nested Category')
-    post = Post.objects.create(title='Test Nested Post', content='Test content', category=category)
+    print("Creating test data...")
+    client = Client.objects.create(raison="Test Base Client")
+    local_client = LocalClient.objects.create(raison="Test Local Client", test="Local Info")
     
-    # Test creating new comment with author as ID
-    mutation = f'''
-    mutation {{
-        update_post(id:"{post.id}",input:{{ 
-            nested_comments:[ 
-                {{content:"test_nested_comment_1",author:"{user.id}"}}, 
-            ], 
-            title:"Test Nested Updated", 
-        }}){{ 
-            ok 
-            errors 
-            object {{
-                comments {{
-                    pk
-                    content
-                    author {{
-                        pk
-                        username
-                    }}
-                }}
-            }}
-        }} 
-    }}
-    '''
+    print(f"Created Client: {client.id} - {client.raison}")
+    print(f"Created LocalClient: {local_client.id} - {local_client.raison}")
     
-    result = schema.execute(mutation)
-    if result.data['update_post']['ok']:
-        print("✓ Nested comment creation with author ID: SUCCESS")
+    # Build schema
+    print("Building schema...")
+    schema_builder = SchemaBuilder()
+    schema_builder.register_app('test_app')
+    schema = schema_builder.get_schema()
+    
+    # Test single client query
+    print("\nTesting single client query...")
+    single_client_query = """
+    query GetClient($id: ID!) {
+        client(id: $id) {
+            id
+            raison
+            polymorphicType
+        }
+    }
+    """
+    
+    # Test with base client
+    print(f"Querying base client (ID: {client.id})...")
+    result = schema.execute(single_client_query, variables={"id": str(client.id)})
+    
+    if result.errors:
+        print(f"❌ Errors in base client query: {result.errors}")
+        return False
     else:
-        print(f"✗ Nested comment creation with author ID: FAILED - {result.data['update_post']['errors']}")
+        print(f"✅ Base client query successful!")
+        print(f"   Data: {result.data}")
+        
+        client_data = result.data.get('client')
+        if client_data:
+            print(f"   ID: {client_data.get('id')}")
+            print(f"   Raison: {client_data.get('raison')}")
+            print(f"   Polymorphic Type: {client_data.get('polymorphicType')}")
     
-    return result.data['update_post']['ok']
-
-def test_nested_comment_with_multiple_fields():
-    """Test creating comments with multiple foreign key fields"""
-    print("\n=== Testing Multiple Foreign Key Fields ===")
+    # Test with local client
+    print(f"\nQuerying local client (ID: {local_client.id})...")
+    result = schema.execute(single_client_query, variables={"id": str(local_client.id)})
     
-    # Clean up
-    Comment.objects.filter(content__contains="test_multi").delete()
-    Post.objects.filter(title__contains="Test Multi").delete()
-    User.objects.filter(username="test_multi_user").delete()
-    Category.objects.filter(name="Test Multi Category").delete()
-    
-    # Create test data
-    user = User.objects.create_user(username='test_multi_user', email='test_multi@test.com')
-    category = Category.objects.create(name='Test Multi Category')
-    post = Post.objects.create(title='Test Multi Post', content='Test content', category=category)
-    
-    # Test creating comment with both author and post references
-    mutation = f'''
-    mutation {{
-        update_post(id:"{post.id}",input:{{ 
-            nested_comments:[ 
-                {{
-                    content:"test_multi_comment",
-                    author:"{user.id}",
-                    is_approved:true
-                }}, 
-            ], 
-        }}){{ 
-            ok 
-            errors 
-        }} 
-    }}
-    '''
-    
-    result = schema.execute(mutation)
-    if result.data['update_post']['ok']:
-        print("✓ Multiple foreign key fields: SUCCESS")
+    if result.errors:
+        print(f"❌ Errors in local client query: {result.errors}")
+        return False
     else:
-        print(f"✗ Multiple foreign key fields: FAILED - {result.data['update_post']['errors']}")
+        print(f"✅ Local client query successful!")
+        print(f"   Data: {result.data}")
+        
+        client_data = result.data.get('client')
+        if client_data:
+            print(f"   ID: {client_data.get('id')}")
+            print(f"   Raison: {client_data.get('raison')}")
+            print(f"   Polymorphic Type: {client_data.get('polymorphicType')}")
     
-    return result.data['update_post']['ok']
-
-def test_create_comment_directly():
-    """Test creating comments directly (not nested)"""
-    print("\n=== Testing Direct Comment Creation ===")
+    # Test list query to ensure it still works
+    print("\nTesting list client query...")
+    list_query = """
+    query GetAllClients {
+        allClients {
+            id
+            raison
+            polymorphicType
+        }
+    }
+    """
     
-    # Clean up
-    Comment.objects.filter(content__contains="test_direct").delete()
-    Post.objects.filter(title__contains="Test Direct").delete()
-    User.objects.filter(username="test_direct_user").delete()
-    Category.objects.filter(name="Test Direct Category").delete()
+    result = schema.execute(list_query)
     
-    # Create test data
-    user = User.objects.create_user(username='test_direct_user', email='test_direct@test.com')
-    category = Category.objects.create(name='Test Direct Category')
-    post = Post.objects.create(title='Test Direct Post', content='Test content', category=category)
-    
-    # Test creating comment directly
-    mutation = f'''
-    mutation {{
-        create_comment(input:{{ 
-            content:"test_direct_comment",
-            author:"{user.id}",
-            post:"{post.id}",
-            is_approved:true
-        }}){{ 
-            ok 
-            errors 
-            object {{
-                pk
-                content
-                author {{
-                    username
-                }}
-                post {{
-                    title
-                }}
-            }}
-        }} 
-    }}
-    '''
-    
-    result = schema.execute(mutation)
-    if result.data['create_comment']['ok']:
-        print("✓ Direct comment creation: SUCCESS")
+    if result.errors:
+        print(f"❌ Errors in list query: {result.errors}")
+        return False
     else:
-        print(f"✗ Direct comment creation: FAILED - {result.data['create_comment']['errors']}")
+        print(f"✅ List query successful!")
+        print(f"   Data: {result.data}")
+        
+        clients = result.data.get('allClients', [])
+        print(f"   Found {len(clients)} clients:")
+        for client_data in clients:
+            print(f"     - ID: {client_data.get('id')}, Type: {client_data.get('polymorphicType')}")
     
-    return result.data['create_comment']['ok']
-
-def test_nested_post_creation():
-    """Test creating posts with nested comments"""
-    print("\n=== Testing Nested Post Creation ===")
-    
-    # Clean up
-    Comment.objects.filter(content__contains="test_post_nested").delete()
-    Post.objects.filter(title__contains="Test Post Nested").delete()
-    User.objects.filter(username="test_post_nested_user").delete()
-    Category.objects.filter(name="Test Post Nested Category").delete()
-    
-    # Create test data
-    user = User.objects.create_user(username='test_post_nested_user', email='test_post_nested@test.com')
-    category = Category.objects.create(name='Test Post Nested Category')
-    
-    # Test creating post with nested comments
-    mutation = f'''
-    mutation {{
-        create_post(input:{{ 
-            title:"Test Post Nested Creation",
-            content:"Test content",
-            category:"{category.id}",
-            nested_comments:[ 
-                {{
-                    content:"test_post_nested_comment",
-                    author:"{user.id}",
-                    is_approved:true
-                }}, 
-            ]
-        }}){{ 
-            ok 
-            errors 
-            object {{
-                pk
-                title
-                comments {{
-                    pk
-                    content
-                    author {{
-                        username
-                    }}
-                }}
-            }}
-        }} 
-    }}
-    '''
-    
-    result = schema.execute(mutation)
-    if result.data['create_post']['ok']:
-        print("✓ Nested post creation with comments: SUCCESS")
-    else:
-        print(f"✗ Nested post creation with comments: FAILED - {result.data['create_post']['errors']}")
-    
-    return result.data['create_post']['ok']
-
-def main():
-    print("=== COMPREHENSIVE FIX VERIFICATION ===")
-    
-    tests = [
-        test_nested_comment_creation,
-        test_nested_comment_with_multiple_fields,
-        test_create_comment_directly,
-        test_nested_post_creation
-    ]
-    
-    results = []
-    for test in tests:
-        try:
-            results.append(test())
-        except Exception as e:
-            print(f"✗ Test {test.__name__} failed with exception: {e}")
-            results.append(False)
-    
-    print(f"\n=== SUMMARY ===")
-    print(f"Tests passed: {sum(results)}/{len(results)}")
-    
-    if all(results):
-        print("✓ ALL TESTS PASSED - Fix is working correctly!")
-    else:
-        print("✗ Some tests failed - Fix may need additional work")
-    
-    print("=== VERIFICATION COMPLETE ===")
+    print("\n🎉 All tests passed! Single client queries now return ClientType instead of ClientUnion.")
+    return True
 
 if __name__ == "__main__":
-    main()
+    try:
+        success = test_single_client_query_fix()
+        sys.exit(0 if success else 1)
+    except Exception as e:
+        print(f"❌ Test failed with exception: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)

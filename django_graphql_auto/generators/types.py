@@ -24,6 +24,7 @@ if DJANGO_FILTER_INSTALLED:
 
 from ..core.settings import TypeGeneratorSettings, MutationGeneratorSettings
 from .introspector import ModelIntrospector, FieldInfo
+from .inheritance import inheritance_handler
 
 class TypeGenerator:
     """
@@ -74,6 +75,8 @@ class TypeGenerator:
         self._type_registry: Dict[Type[models.Model], Type[DjangoObjectType]] = {}
         self._input_type_registry: Dict[Type[models.Model], Type[graphene.InputObjectType]] = {}
         self._filter_type_registry: Dict[Type[models.Model], Type] = {}
+        self._union_registry: Dict[str, Type[graphene.Union]] = {}
+        self._interface_registry: Dict[Type[models.Model], Type[graphene.Interface]] = {}
 
     def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
         """Get excluded fields for a specific model."""
@@ -385,12 +388,16 @@ class TypeGenerator:
             # Add resolver that handles different relationship types with filtering
             def make_resolver(accessor_name, is_one_to_one, related_model):
                 def resolver(self, info, filters=None):
-                    related_obj = getattr(self, accessor_name)
-                    # For OneToOne reverse relationships, return the single object or None
+                    # For OneToOne reverse relationships, handle DoesNotExist exceptions
                     if is_one_to_one:
-                        return related_obj
+                        try:
+                            related_obj = getattr(self, accessor_name)
+                            return related_obj
+                        except related_model.DoesNotExist:
+                            return None
                     # For other relationships, return queryset with optional filtering
                     else:
+                        related_obj = getattr(self, accessor_name)
                         queryset = related_obj.all()
                         
                         # Apply filters if provided
@@ -446,12 +453,57 @@ class TypeGenerator:
             
             type_attrs[f'resolve_{prop_name}'] = make_property_resolver(prop_name)
 
-        # Create the type class
+        # Create the type class with Meta configuration
+        meta_attrs = {
+            'model': model,
+        }
+        
+        # Use either fields or exclude, not both
+        if exclude_fields:
+            meta_attrs['exclude'] = exclude_fields
+        else:
+            meta_attrs['fields'] = '__all__'
+        
+        # Check if this model has polymorphic children
+        analysis = inheritance_handler.analyze_model_inheritance(model)
+        
+        type_attrs['Meta'] = type('Meta', (), meta_attrs)
+        
+        # Add polymorphic type resolution for base models
+        if analysis and analysis.get('child_models'):
+            # This is a polymorphic base model, add custom type resolution
+            def is_type_of(root, info):
+                """
+                Custom type resolution for polymorphic models.
+                Returns True if the instance can be represented by this type.
+                """
+                # For polymorphic base types, accept both base and child instances
+                return isinstance(root, model)
+            
+            type_attrs['is_type_of'] = staticmethod(is_type_of)
+            
+            # Add polymorphic_type field to indicate the actual class name
+            type_attrs['polymorphic_type'] = graphene.String(
+                description="The actual class name of this polymorphic instance"
+            )
+            
+            def resolve_polymorphic_type(self, info):
+                """
+                Resolver for polymorphic_type field.
+                Returns the actual class name of the instance.
+                """
+                return self.__class__.__name__
+            
+            type_attrs['resolve_polymorphic_type'] = resolve_polymorphic_type
+        
         model_type = type(
             class_name,
             (DjangoObjectType,),
             type_attrs
         )
+
+        # For polymorphic models, don't add interface logic here
+        # Union types will be handled at the query level
 
         self._type_registry[model] = model_type
         return model_type

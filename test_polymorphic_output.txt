@@ -1,0 +1,34 @@
+Created LocalClient with ID: 533
+LocalClient type: <class 'test_app.models.LocalClient'>
+LocalClient is instance of Client: True
+
+Executing GraphQL query:
+
+        {
+            localclient(id:"533") {
+                id
+                raison
+                test
+                info {
+                    adresse
+                }
+            }
+        }
+        
+
+GraphQL execution completed
+Has errors: False
+
+GraphQL Result:
+{
+  "localclient": {
+    "id": "533",
+    "raison": "Test Local Client",
+    "test": "Test Value",
+    "info": {
+      "adresse": "123 Test Street"
+    }
+  }
+}
+
+Cleaned up LocalClient 533

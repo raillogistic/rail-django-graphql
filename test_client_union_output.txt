@@ -1,0 +1,3 @@
+Created LocalClient with ID: 532
+LocalClient type: <class 'test_app.models.LocalClient'>
+LocalClient is instance of Client: True
