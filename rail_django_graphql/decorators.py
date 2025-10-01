@@ -1,10 +1,14 @@
 """
-Decorators for enhancing Django model methods with GraphQL mutation capabilities.
+Decorators for enhancing Django model methods with GraphQL mutation capabilities
+and schema registration.
 """
 
 from functools import wraps
-from typing import Any, Callable, Optional, Type
+from typing import Any, Callable, Optional, Type, List, Dict
 import graphene
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def mutation(
@@ -121,3 +125,128 @@ def custom_mutation_name(name: str):
         wrapper._custom_mutation_name = name
         return wrapper
     return decorator
+
+
+def register_schema(
+    name: Optional[str] = None,
+    description: str = "",
+    version: str = "1.0.0",
+    apps: Optional[List[str]] = None,
+    models: Optional[List[str]] = None,
+    settings: Optional[Dict[str, Any]] = None,
+    auto_discovery: bool = True,
+    enabled: bool = True
+):
+    """
+    Decorator for registering GraphQL schemas with the central schema registry.
+    
+    This decorator can be applied to schema classes or schema factory functions
+    to automatically register them with the schema registry system.
+    
+    Args:
+        name: Schema name (defaults to class/function name)
+        description: Schema description for documentation
+        version: Schema version string
+        apps: List of Django apps this schema covers
+        models: List of model names this schema includes
+        settings: Schema-specific configuration settings
+        auto_discovery: Whether to enable automatic model discovery
+        enabled: Whether the schema is enabled by default
+        
+    Example:
+        @register_schema(
+            name="blog_schema",
+            description="Blog management GraphQL schema",
+            version="2.0.0",
+            apps=["blog", "comments"],
+            settings={"enable_graphiql": True, "authentication_required": False}
+        )
+        class BlogSchema(graphene.Schema):
+            query = BlogQuery
+            mutation = BlogMutation
+            
+        @register_schema(
+            name="api_v1",
+            description="Main API schema",
+            apps=["users", "products"]
+        )
+        def create_api_schema():
+            return graphene.Schema(query=APIQuery, mutation=APIMutation)
+    """
+    def decorator(schema_class_or_function: Callable) -> Callable:
+        # Determine schema name
+        schema_name = name or getattr(schema_class_or_function, '__name__', 'unnamed_schema')
+        
+        # Prepare registration data
+        registration_data = {
+            'name': schema_name,
+            'description': description,
+            'version': version,
+            'apps': apps or [],
+            'models': models or [],
+            'settings': settings or {},
+            'auto_discovery': auto_discovery,
+            'enabled': enabled
+        }
+        
+        # Handle both class and function decoration
+        if isinstance(schema_class_or_function, type):
+            # Class decoration - register the class directly
+            # Store registration metadata on the class
+            schema_class_or_function._schema_registration = registration_data
+            
+            # Perform registration
+            _register_schema_with_registry(schema_class_or_function, registration_data)
+            
+            return schema_class_or_function
+        else:
+            # Function decoration - register the function result
+            @wraps(schema_class_or_function)
+            def wrapper(*args, **kwargs):
+                schema_instance = schema_class_or_function(*args, **kwargs)
+                return schema_instance
+            
+            # Store registration metadata on the function
+            wrapper._schema_registration = registration_data
+            
+            # Perform registration with function
+            _register_schema_with_registry(schema_class_or_function, registration_data)
+            
+            return wrapper
+    
+    return decorator
+
+
+def _register_schema_with_registry(schema_class_or_function: Callable, registration_data: Dict[str, Any]):
+    """
+    Internal function to handle the actual schema registration with the registry.
+    
+    Args:
+        schema_class_or_function: The schema class or factory function
+        registration_data: Dictionary containing registration metadata
+    """
+    try:
+        # Import registry here to avoid circular imports
+        from .core.registry import schema_registry
+        
+        # Register the schema
+        schema_registry.register_schema(
+            name=registration_data['name'],
+            description=registration_data['description'],
+            apps=registration_data['apps'],
+            models=registration_data['models'],
+            settings=registration_data['settings'],
+            enabled=registration_data['enabled']
+        )
+        
+        logger.info(f"Successfully registered schema '{registration_data['name']}' via decorator")
+        
+    except ImportError as e:
+        logger.warning(
+            f"Could not register schema '{registration_data['name']}' - "
+            f"registry not available: {e}"
+        )
+    except Exception as e:
+        logger.error(
+            f"Failed to register schema '{registration_data['name']}' via decorator: {e}"
+        )

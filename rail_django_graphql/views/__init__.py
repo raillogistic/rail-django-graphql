@@ -14,6 +14,12 @@ from .health_views import (
     HealthHistoryView,
 )
 
+from .graphql_views import (
+    MultiSchemaGraphQLView,
+    SchemaListView,
+    GraphQLPlaygroundView,
+)
+
 __all__ = [
     "HealthDashboardView",
     "HealthAPIView",
@@ -21,4 +27,7 @@ __all__ = [
     "health_metrics_endpoint",
     "health_components_endpoint",
     "HealthHistoryView",
+    "MultiSchemaGraphQLView",
+    "SchemaListView",
+    "GraphQLPlaygroundView",
 ]

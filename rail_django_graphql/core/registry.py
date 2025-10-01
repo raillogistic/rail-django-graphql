@@ -85,25 +85,42 @@ class SchemaRegistry:
         Returns:
             SchemaInfo instance
         """
+        # Run pre-registration hooks
+        kwargs = {
+            'description': description,
+            'version': version,
+            'apps': apps,
+            'models': models,
+            'exclude_models': exclude_models,
+            'settings': settings,
+            'schema_class': schema_class,
+            'auto_discover': auto_discover,
+            'enabled': enabled
+        }
+        modified_kwargs = self._run_pre_registration_hooks(name, **kwargs)
+        
         with self._lock:
             if name in self._schemas:
                 logger.warning(f"Schema '{name}' already registered, updating...")
             
             schema_info = SchemaInfo(
                 name=name,
-                description=description,
-                version=version,
-                apps=apps or [],
-                models=models or [],
-                exclude_models=exclude_models or [],
-                settings=settings or {},
-                schema_class=schema_class,
-                auto_discover=auto_discover,
-                enabled=enabled
+                description=modified_kwargs.get('description', description),
+                version=modified_kwargs.get('version', version),
+                apps=modified_kwargs.get('apps', apps) or [],
+                models=modified_kwargs.get('models', models) or [],
+                exclude_models=modified_kwargs.get('exclude_models', exclude_models) or [],
+                settings=modified_kwargs.get('settings', settings) or {},
+                schema_class=modified_kwargs.get('schema_class', schema_class),
+                auto_discover=modified_kwargs.get('auto_discover', auto_discover),
+                enabled=modified_kwargs.get('enabled', enabled)
             )
             
             self._schemas[name] = schema_info
             logger.info(f"Registered schema: {name}")
+            
+            # Run post-registration hooks
+            self._run_post_registration_hooks(schema_info)
             
             return schema_info
     
@@ -258,6 +275,26 @@ class SchemaRegistry:
         self._initialized = True
         logger.info(f"Schema discovery completed. Found {len(self._schemas)} schemas.")
     
+    def auto_discover_schemas(self) -> int:
+        """
+        Automatically discover and register schemas from Django apps.
+        
+        Returns:
+            Number of schemas discovered and registered
+        """
+        initial_count = len(self._schemas)
+        
+        logger.info("Starting automatic schema discovery...")
+        
+        # Look for schema configurations in Django apps
+        for app_config in apps.get_app_configs():
+            self._discover_app_schemas(app_config)
+        
+        discovered_count = len(self._schemas) - initial_count
+        logger.info(f"Auto-discovery completed. Discovered {discovered_count} new schemas.")
+        
+        return discovered_count
+    
     def _discover_app_schemas(self, app_config) -> None:
         """
         Discover schemas in a specific Django app.
@@ -323,6 +360,100 @@ class SchemaRegistry:
             hook: Function that takes the registry as argument
         """
         self._discovery_hooks.append(hook)
+    
+    def add_pre_registration_hook(self, hook: Callable) -> None:
+        """
+        Add a pre-registration hook function.
+        
+        Args:
+            hook: Function called before schema registration with (registry, schema_name, **kwargs)
+        """
+        if not hasattr(self, '_pre_registration_hooks'):
+            self._pre_registration_hooks = []
+        self._pre_registration_hooks.append(hook)
+    
+    def add_post_registration_hook(self, hook: Callable) -> None:
+        """
+        Add a post-registration hook function.
+        
+        Args:
+            hook: Function called after schema registration with (registry, schema_info)
+        """
+        if not hasattr(self, '_post_registration_hooks'):
+            self._post_registration_hooks = []
+        self._post_registration_hooks.append(hook)
+    
+    def remove_discovery_hook(self, hook: Callable) -> bool:
+        """
+        Remove a discovery hook function.
+        
+        Args:
+            hook: Hook function to remove
+            
+        Returns:
+            True if hook was removed, False if not found
+        """
+        try:
+            self._discovery_hooks.remove(hook)
+            return True
+        except ValueError:
+            return False
+    
+    def clear_discovery_hooks(self) -> None:
+        """Clear all discovery hooks."""
+        self._discovery_hooks.clear()
+        if hasattr(self, '_pre_registration_hooks'):
+            self._pre_registration_hooks.clear()
+        if hasattr(self, '_post_registration_hooks'):
+            self._post_registration_hooks.clear()
+    
+    def get_discovery_hooks(self) -> List[Callable]:
+        """Get list of all discovery hooks."""
+        return self._discovery_hooks.copy()
+    
+    def _run_pre_registration_hooks(self, name: str, **kwargs) -> Dict[str, Any]:
+        """
+        Run pre-registration hooks and collect modifications.
+        
+        Args:
+            name: Schema name
+            **kwargs: Registration parameters
+            
+        Returns:
+            Modified registration parameters
+        """
+        if not hasattr(self, '_pre_registration_hooks'):
+            return kwargs
+        
+        modified_kwargs = kwargs.copy()
+        
+        for hook in self._pre_registration_hooks:
+            try:
+                result = hook(self, name, **modified_kwargs)
+                if isinstance(result, dict):
+                    modified_kwargs.update(result)
+                logger.debug(f"Pre-registration hook executed for schema: {name}")
+            except Exception as e:
+                logger.error(f"Error in pre-registration hook for schema '{name}': {e}")
+        
+        return modified_kwargs
+    
+    def _run_post_registration_hooks(self, schema_info: SchemaInfo) -> None:
+        """
+        Run post-registration hooks.
+        
+        Args:
+            schema_info: Registered schema information
+        """
+        if not hasattr(self, '_post_registration_hooks'):
+            return
+        
+        for hook in self._post_registration_hooks:
+            try:
+                hook(self, schema_info)
+                logger.debug(f"Post-registration hook executed for schema: {schema_info.name}")
+            except Exception as e:
+                logger.error(f"Error in post-registration hook for schema '{schema_info.name}': {e}")
     
     def clear_schemas(self) -> None:
         """Clear all registered schemas."""
@@ -402,6 +533,30 @@ class SchemaRegistry:
             "warnings": warnings,
             "model_count": len(models_list)
         }
+    
+    def schema_exists(self, name: str) -> bool:
+        """
+        Check if a schema exists in the registry.
+        
+        Args:
+            name: Schema name to check
+            
+        Returns:
+            True if schema exists, False otherwise
+        """
+        return name in self._schemas
+    
+    def clear(self) -> None:
+        """
+        Clear all schemas from the registry.
+        
+        This method removes all registered schemas and builders.
+        Useful for testing and cleanup operations.
+        """
+        with self._lock:
+            self._schemas.clear()
+            self._schema_builders.clear()
+            logger.info("Cleared all schemas from registry")
 
 
 # Global schema registry instance
