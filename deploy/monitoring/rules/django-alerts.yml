@@ -1,0 +1,276 @@
+# Prometheus alerting rules for Django GraphQL Auto System
+
+groups:
+  - name: django-app
+    rules:
+      # Application availability
+      - alert: DjangoAppDown
+        expr: up{job="django-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: django-app
+        annotations:
+          summary: "Django application is down"
+          description: "Django application has been down for more than 1 minute"
+          runbook_url: "https://docs.example.com/runbooks/django-app-down"
+
+      # High response time
+      - alert: DjangoHighResponseTime
+        expr: histogram_quantile(0.95, rate(django_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: django-app
+        annotations:
+          summary: "Django application high response time"
+          description: "95th percentile response time is {{ $value }}s for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/high-response-time"
+
+      # High error rate
+      - alert: DjangoHighErrorRate
+        expr: rate(django_request_exceptions_total[5m]) / rate(django_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: django-app
+        annotations:
+          summary: "Django application high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/high-error-rate"
+
+      # GraphQL query errors
+      - alert: GraphQLHighErrorRate
+        expr: rate(graphql_errors_total[5m]) / rate(graphql_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: graphql
+        annotations:
+          summary: "GraphQL high error rate"
+          description: "GraphQL error rate is {{ $value | humanizePercentage }} for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/graphql-errors"
+
+      # Memory usage
+      - alert: DjangoHighMemoryUsage
+        expr: (container_memory_usage_bytes{name="django-graphql_web_1"} / container_spec_memory_limit_bytes{name="django-graphql_web_1"}) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: django-app
+        annotations:
+          summary: "Django application high memory usage"
+          description: "Memory usage is {{ $value }}% for more than 10 minutes"
+          runbook_url: "https://docs.example.com/runbooks/high-memory-usage"
+
+      # CPU usage
+      - alert: DjangoHighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name="django-graphql_web_1"}[5m]) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: django-app
+        annotations:
+          summary: "Django application high CPU usage"
+          description: "CPU usage is {{ $value }}% for more than 10 minutes"
+          runbook_url: "https://docs.example.com/runbooks/high-cpu-usage"
+
+      # Database connection pool
+      - alert: DjangoDatabaseConnectionPoolHigh
+        expr: django_db_connections_used / django_db_connections_max > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Django database connection pool usage high"
+          description: "Database connection pool usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.example.com/runbooks/db-connection-pool"
+
+  - name: database
+    rules:
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+          runbook_url: "https://docs.example.com/runbooks/postgresql-down"
+
+      # High database connections
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.example.com/runbooks/postgresql-connections"
+
+      # Slow queries
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_returned[5m]) / rate(pg_stat_database_tup_fetched[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "Query efficiency is low: {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.example.com/runbooks/postgresql-slow-queries"
+
+      # Database size growth
+      - alert: PostgreSQLDatabaseSizeGrowth
+        expr: increase(pg_database_size_bytes[1h]) > 1073741824  # 1GB
+        for: 0m
+        labels:
+          severity: info
+          service: postgresql
+        annotations:
+          summary: "PostgreSQL database size increased significantly"
+          description: "Database size increased by {{ $value | humanizeBytes }} in the last hour"
+          runbook_url: "https://docs.example.com/runbooks/database-growth"
+
+  - name: redis
+    rules:
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+          runbook_url: "https://docs.example.com/runbooks/redis-down"
+
+      # High memory usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}"
+          runbook_url: "https://docs.example.com/runbooks/redis-memory"
+
+      # High number of connected clients
+      - alert: RedisHighConnectedClients
+        expr: redis_connected_clients > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis high number of connected clients"
+          description: "Redis has {{ $value }} connected clients"
+          runbook_url: "https://docs.example.com/runbooks/redis-clients"
+
+  - name: infrastructure
+    rules:
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }} on {{ $labels.mountpoint }}"
+          runbook_url: "https://docs.example.com/runbooks/disk-usage"
+
+      # High load average
+      - alert: HighLoadAverage
+        expr: node_load15 > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High load average"
+          description: "Load average is {{ $value }} for more than 10 minutes"
+          runbook_url: "https://docs.example.com/runbooks/high-load"
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Low disk space"
+          description: "Available disk space is {{ $value | humanizePercentage }} on {{ $labels.mountpoint }}"
+          runbook_url: "https://docs.example.com/runbooks/low-disk-space"
+
+      # SSL certificate expiry
+      - alert: SSLCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 7  # 7 days
+        for: 0m
+        labels:
+          severity: warning
+          service: ssl
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate for {{ $labels.instance }} expires in {{ $value | humanizeDuration }}"
+          runbook_url: "https://docs.example.com/runbooks/ssl-expiry"
+
+      # SSL certificate expired
+      - alert: SSLCertificateExpired
+        expr: probe_ssl_earliest_cert_expiry - time() < 0
+        for: 0m
+        labels:
+          severity: critical
+          service: ssl
+        annotations:
+          summary: "SSL certificate expired"
+          description: "SSL certificate for {{ $labels.instance }} has expired"
+          runbook_url: "https://docs.example.com/runbooks/ssl-expired"
+
+  - name: nginx
+    rules:
+      # Nginx down
+      - alert: NginxDown
+        expr: up{job="nginx"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: nginx
+        annotations:
+          summary: "Nginx is down"
+          description: "Nginx has been down for more than 1 minute"
+          runbook_url: "https://docs.example.com/runbooks/nginx-down"
+
+      # High request rate
+      - alert: NginxHighRequestRate
+        expr: rate(nginx_http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: nginx
+        annotations:
+          summary: "Nginx high request rate"
+          description: "Request rate is {{ $value }} requests/second for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/nginx-high-requests"
+
+      # High error rate
+      - alert: NginxHighErrorRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[5m]) / rate(nginx_http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          service: nginx
+        annotations:
+          summary: "Nginx high error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} for more than 5 minutes"
+          runbook_url: "https://docs.example.com/runbooks/nginx-errors"
