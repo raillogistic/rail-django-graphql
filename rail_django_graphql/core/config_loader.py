@@ -1,20 +1,46 @@
 """
-Configuration loader for Django GraphQL Auto-Generation.
+Configuration loader for rail-django-graphql library.
 
 This module provides utilities to load configuration from Django settings
-and apply them to the various settings classes.
+and apply them to the various settings classes. It integrates with the new
+hierarchical configuration system.
 """
 
-from typing import Dict, Any, Optional
-from django.conf import settings
-from .settings import MutationGeneratorSettings, TypeGeneratorSettings, SchemaSettings
+from typing import Dict, Any, Optional, Type, TypeVar
+from django.conf import settings as django_settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Import the new configuration system
+try:
+    from ..conf import get_settings, get_schema_settings
+    from ..defaults import DEFAULT_SETTINGS
+except ImportError:
+    # Fallback for development
+    logger.warning("New configuration system not available, using legacy loader")
+    get_settings = None
+    get_schema_settings = None
+    DEFAULT_SETTINGS = {}
+
+# Legacy imports for backward compatibility
+try:
+    from .settings import MutationGeneratorSettings, TypeGeneratorSettings, SchemaSettings
+except ImportError:
+    logger.warning("Legacy settings classes not available")
+    MutationGeneratorSettings = None
+    TypeGeneratorSettings = None
+    SchemaSettings = None
+
+T = TypeVar('T')
 
 
 class ConfigLoader:
     """
-    Configuration loader class for Django GraphQL Auto-Generation.
+    Configuration loader class for rail-django-graphql library.
 
-    This class provides methods to load and validate configuration from Django settings.
+    This class provides methods to load and validate configuration from Django settings
+    using the new hierarchical configuration system.
     """
 
     @staticmethod
@@ -25,37 +51,80 @@ class ConfigLoader:
         Returns:
             Dictionary containing the configuration, or empty dict if not found.
         """
-        return get_rail_django_graphql_settings()
+        if get_settings:
+            return get_settings()
+        return get_rail_django_graphql_settings_legacy()
 
     @staticmethod
-    def load_mutation_settings() -> MutationGeneratorSettings:
+    def get_schema_specific_settings(schema_name: str) -> Dict[str, Any]:
+        """
+        Get schema-specific settings.
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            Dictionary containing schema-specific configuration
+        """
+        if get_schema_settings:
+            return get_schema_settings(schema_name)
+        return {}
+
+    @staticmethod
+    def load_mutation_settings(schema_name: Optional[str] = None) -> 'MutationGeneratorSettings':
         """
         Load MutationGeneratorSettings from Django settings.
+
+        Args:
+            schema_name: Optional schema name for schema-specific settings
 
         Returns:
             MutationGeneratorSettings instance with configuration from Django settings.
         """
-        return load_mutation_settings()
+        if get_settings and schema_name:
+            config = get_schema_settings(schema_name)
+            mutation_config = config.get("MUTATION_SETTINGS", {})
+        else:
+            mutation_config = ConfigLoader.get_rail_django_graphql_settings().get("MUTATION_SETTINGS", {})
+        
+        return load_mutation_settings_from_config(mutation_config)
 
     @staticmethod
-    def load_type_settings() -> TypeGeneratorSettings:
+    def load_type_settings(schema_name: Optional[str] = None) -> 'TypeGeneratorSettings':
         """
         Load TypeGeneratorSettings from Django settings.
+
+        Args:
+            schema_name: Optional schema name for schema-specific settings
 
         Returns:
             TypeGeneratorSettings instance with configuration from Django settings.
         """
-        return load_type_settings()
+        if get_settings and schema_name:
+            config = get_schema_settings(schema_name)
+            type_config = config.get("TYPE_SETTINGS", {})
+        else:
+            type_config = ConfigLoader.get_rail_django_graphql_settings().get("TYPE_SETTINGS", {})
+        
+        return load_type_settings_from_config(type_config)
 
     @staticmethod
-    def load_schema_settings() -> SchemaSettings:
+    def load_schema_settings(schema_name: Optional[str] = None) -> 'SchemaSettings':
         """
         Load SchemaSettings from Django settings.
+
+        Args:
+            schema_name: Optional schema name for schema-specific settings
 
         Returns:
             SchemaSettings instance with configuration from Django settings.
         """
-        return load_schema_settings()
+        if get_settings and schema_name:
+            config = get_schema_settings(schema_name)
+        else:
+            config = ConfigLoader.get_rail_django_graphql_settings()
+        
+        return load_schema_settings_from_config(config)
 
     @staticmethod
     def validate_configuration() -> bool:
@@ -65,36 +134,95 @@ class ConfigLoader:
         Returns:
             True if configuration is valid, False otherwise.
         """
-        return validate_configuration()
+        try:
+            if get_settings:
+                from ..conf import validate_configuration as new_validate
+                return new_validate()
+            else:
+                return validate_configuration_legacy()
+        except Exception as e:
+            logger.error(f"Configuration validation failed: {e}")
+            return False
 
     @staticmethod
     def debug_configuration() -> None:
         """
         Print debug information about the current configuration.
         """
-        debug_configuration()
+        if get_settings:
+            debug_configuration_new()
+        else:
+            debug_configuration_legacy()
+
+    @staticmethod
+    def get_setting(key: str, default: Any = None, schema_name: Optional[str] = None) -> Any:
+        """
+        Get a specific setting value with hierarchical lookup.
+
+        Args:
+            key: Setting key (supports dot notation like 'MUTATION_SETTINGS.enable_create')
+            default: Default value if setting not found
+            schema_name: Optional schema name for schema-specific settings
+
+        Returns:
+            Setting value or default
+        """
+        try:
+            if get_settings:
+                if schema_name:
+                    config = get_schema_settings(schema_name)
+                else:
+                    config = get_settings()
+                
+                # Support dot notation
+                keys = key.split('.')
+                value = config
+                for k in keys:
+                    if isinstance(value, dict) and k in value:
+                        value = value[k]
+                    else:
+                        return default
+                return value
+            else:
+                # Legacy fallback
+                config = get_rail_django_graphql_settings_legacy()
+                keys = key.split('.')
+                value = config
+                for k in keys:
+                    if isinstance(value, dict) and k in value:
+                        value = value[k]
+                    else:
+                        return default
+                return value
+        except Exception as e:
+            logger.warning(f"Error getting setting '{key}': {e}")
+            return default
 
 
-def get_rail_django_graphql_settings() -> Dict[str, Any]:
+# Legacy functions for backward compatibility
+def get_rail_django_graphql_settings_legacy() -> Dict[str, Any]:
     """
-    Get rail_django_graphql settings from Django settings.
+    Legacy function to get rail_django_graphql settings from Django settings.
 
     Returns:
         Dictionary containing the configuration, or empty dict if not found.
     """
-    return getattr(settings, "rail_django_graphql", {})
+    return getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
 
 
-def load_mutation_settings() -> MutationGeneratorSettings:
+def load_mutation_settings_from_config(mutation_config: Dict[str, Any]) -> 'MutationGeneratorSettings':
     """
-    Load MutationGeneratorSettings from Django settings.
+    Load MutationGeneratorSettings from configuration dictionary.
+
+    Args:
+        mutation_config: Configuration dictionary for mutations
 
     Returns:
-        MutationGeneratorSettings instance with configuration from Django settings.
+        MutationGeneratorSettings instance with configuration.
     """
-    config = get_rail_django_graphql_settings()
-    mutation_config = config.get("MUTATION_SETTINGS", {})
-
+    if not MutationGeneratorSettings:
+        raise ImportError("MutationGeneratorSettings not available")
+    
     # Create settings instance with loaded configuration
     mutation_settings = MutationGeneratorSettings(
         enable_nested_relations=mutation_config.get("enable_nested_relations", False),
@@ -117,16 +245,19 @@ def load_mutation_settings() -> MutationGeneratorSettings:
     return mutation_settings
 
 
-def load_type_settings() -> TypeGeneratorSettings:
+def load_type_settings_from_config(type_config: Dict[str, Any]) -> 'TypeGeneratorSettings':
     """
-    Load TypeGeneratorSettings from Django settings.
+    Load TypeGeneratorSettings from configuration dictionary.
+
+    Args:
+        type_config: Configuration dictionary for types
 
     Returns:
-        TypeGeneratorSettings instance with configuration from Django settings.
+        TypeGeneratorSettings instance with configuration.
     """
-    config = get_rail_django_graphql_settings()
-    type_config = config.get("TYPE_SETTINGS", {})
-
+    if not TypeGeneratorSettings:
+        raise ImportError("TypeGeneratorSettings not available")
+    
     # Create settings instance with loaded configuration
     type_settings = TypeGeneratorSettings(
         naming_convention=type_config.get("naming_convention", "snake_case"),
@@ -146,7 +277,77 @@ def load_type_settings() -> TypeGeneratorSettings:
     return type_settings
 
 
-def load_schema_settings() -> SchemaSettings:
+def load_schema_settings_from_config(config: Dict[str, Any]) -> 'SchemaSettings':
+    """
+    Load SchemaSettings from configuration dictionary.
+
+    Args:
+        config: Configuration dictionary
+
+    Returns:
+        SchemaSettings instance with configuration.
+    """
+    if not SchemaSettings:
+        raise ImportError("SchemaSettings not available")
+    
+    # Create settings instance with loaded configuration
+    schema_settings = SchemaSettings(
+        auto_generate_schema=config.get("AUTO_GENERATE_SCHEMA", True),
+        auto_refresh_on_model_change=config.get("AUTO_REFRESH_ON_MODEL_CHANGE", True),
+        schema_output_dir=config.get("SCHEMA_OUTPUT_DIR", "generated_schema/"),
+        apps_to_include=config.get("APPS_TO_INCLUDE", []),
+        apps_to_exclude=config.get(
+            "APPS_TO_EXCLUDE", ["admin", "auth", "contenttypes"]
+        ),
+        models_to_exclude=config.get("MODELS_TO_EXCLUDE", []),
+        enable_mutations=config.get("ENABLE_MUTATIONS", True),
+        enable_subscriptions=config.get("ENABLE_SUBSCRIPTIONS", False),
+        pagination_size=config.get("PAGINATION_SIZE", 20),
+        max_query_depth=config.get("MAX_QUERY_DEPTH", 10),
+        enable_filters=config.get("ENABLE_FILTERS", True),
+        enable_nested_operations=config.get("ENABLE_NESTED_OPERATIONS", True),
+        enable_file_uploads=config.get("ENABLE_FILE_UPLOADS", True),
+        enable_custom_scalars=config.get("ENABLE_CUSTOM_SCALARS", True),
+        enable_inheritance=config.get("ENABLE_INHERITANCE", True),
+    )
+
+    return schema_settings
+
+
+# Legacy functions
+def load_mutation_settings() -> 'MutationGeneratorSettings':
+    """
+    Legacy function to load MutationGeneratorSettings from Django settings.
+
+    Returns:
+        MutationGeneratorSettings instance with configuration from Django settings.
+    """
+    config = get_rail_django_graphql_settings_legacy()
+    mutation_config = config.get("MUTATION_SETTINGS", {})
+    return load_mutation_settings_from_config(mutation_config)
+
+
+def load_type_settings() -> 'TypeGeneratorSettings':
+    """
+    Legacy function to load TypeGeneratorSettings from Django settings.
+
+    Returns:
+        TypeGeneratorSettings instance with configuration from Django settings.
+    """
+    config = get_rail_django_graphql_settings_legacy()
+    type_config = config.get("TYPE_SETTINGS", {})
+    return load_type_settings_from_config(type_config)
+
+
+def load_schema_settings() -> 'SchemaSettings':
+    """
+    Legacy function to load SchemaSettings from Django settings.
+
+    Returns:
+        SchemaSettings instance with configuration from Django settings.
+    """
+    config = get_rail_django_graphql_settings_legacy()
+    return load_schema_settings_from_config(config)
     """
     Load SchemaSettings from Django settings.
 

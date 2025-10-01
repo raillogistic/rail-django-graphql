@@ -28,29 +28,60 @@ MAX_ALLOWED_NESTED_DEPTH = 5
 class AdvancedFilterGenerator:
     """
     Generates advanced GraphQL filters for Django models based on field types.
-    Supports text, numeric, date, boolean, and choice field filtering with
-    complex operations like contains, range, and logical combinations.
     
-    Enhanced with nested field filtering for related models with configurable depth control.
+    This class creates sophisticated filtering capabilities for GraphQL queries,
+    supporting various field types and operations including text search, numeric
+    ranges, date filtering, boolean logic, and nested relationship filtering.
+    
+    Features:
+    - Field-specific filter operations (contains, exact, range, etc.)
+    - Nested relationship filtering with configurable depth
+    - Complex logical combinations (AND, OR, NOT)
+    - Caching for performance optimization
+    - Multi-schema support for different filtering configurations
+    
+    Supported Field Types:
+    - CharField: contains, icontains, exact, iexact, startswith, endswith
+    - IntegerField/FloatField: exact, lt, lte, gt, gte, range
+    - DateField/DateTimeField: exact, lt, lte, gt, gte, range, year, month, day
+    - BooleanField: exact
+    - ChoiceField: exact, in
+    - ForeignKey/OneToOne: nested filtering on related model fields
+    - ManyToMany: nested filtering with multiple related objects
+    
+    Args:
+        max_nested_depth: Maximum depth for nested relationship filtering (default: 3, max: 5)
+        enable_nested_filters: Whether to enable nested field filtering (default: True)
+        schema_name: Optional schema name for context (for future multi-schema support)
+    
+    Example:
+        >>> filter_generator = AdvancedFilterGenerator(max_nested_depth=2)
+        >>> filter_class = filter_generator.generate_filter_class(User)
+        >>> # Creates filters like: name__contains, email__iexact, profile__bio__contains
     """
 
-    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH, enable_nested_filters: bool = True):
+    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH, 
+                 enable_nested_filters: bool = True, schema_name: Optional[str] = None):
         """
         Initialize the filter generator with nested filtering configuration.
         
         Args:
             max_nested_depth: Maximum depth for nested relationship filtering (default: 3, max: 5)
             enable_nested_filters: Whether to enable nested field filtering (default: True)
+            schema_name: Optional schema name for context (for future multi-schema support)
         """
         self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
         self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
         self.enable_nested_filters = enable_nested_filters
+        self.schema_name = schema_name or 'default'
         self._visited_models: set = set()  # Track visited models to prevent infinite recursion
         
         # Log configuration for debugging
-        logger.debug(f"Initialized AdvancedFilterGenerator "
-                    f"with max_nested_depth={self.max_nested_depth}, "
-                    f"enable_nested_filters={self.enable_nested_filters}")
+        logger.debug(
+            f"Initialized AdvancedFilterGenerator for schema '{self.schema_name}' "
+            f"with max_nested_depth={self.max_nested_depth}, "
+            f"enable_nested_filters={self.enable_nested_filters}"
+        )
 
     def generate_filter_set(self, model: Type[models.Model], current_depth: int = 0) -> Type[FilterSet]:
         """

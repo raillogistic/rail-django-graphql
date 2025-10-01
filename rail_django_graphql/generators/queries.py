@@ -14,6 +14,7 @@ from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 
 from ..core.settings import QueryGeneratorSettings
+from ..conf import get_schema_settings
 from .types import TypeGenerator
 from .filters import AdvancedFilterGenerator
 from .inheritance import inheritance_handler
@@ -51,21 +52,55 @@ class PaginatedResult:
         self.items = items
         self.page_info = page_info
 
+
 class QueryGenerator:
     """
-    Creates GraphQL queries for Django models, supporting single object lookups,
-    list queries, filtering, and pagination.
+    Generates GraphQL queries for Django models.
+    
+    This class supports:
+    - Single object queries with filtering
+    - List queries with pagination and filtering
+    - Advanced filtering with nested field support
+    - Performance optimization and monitoring
+    - Multi-schema query generation
     """
 
-    def __init__(self, type_generator: TypeGenerator, settings: Optional[QueryGeneratorSettings] = None):
+    def __init__(
+        self,
+        type_generator: TypeGenerator,
+        settings: Optional[QueryGeneratorSettings] = None,
+        schema_name: str = "default",
+    ):
+        """
+        Initialize the QueryGenerator.
+        
+        Args:
+            type_generator: TypeGenerator instance for creating GraphQL types
+            settings: Query generator settings or None for defaults
+            schema_name: Name of the schema for multi-schema support
+        """
         self.type_generator = type_generator
-        self.settings = settings or QueryGeneratorSettings()
-        self.filter_generator = AdvancedFilterGenerator()
+        self.schema_name = schema_name
+        
+        # Use hierarchical settings if no explicit settings provided
+        if settings is None:
+            schema_settings = get_schema_settings(schema_name)
+            self.settings = schema_settings.get('query_generator', QueryGeneratorSettings())
+        else:
+            self.settings = settings
+            
+        self._query_registry: Dict[Type[models.Model], Dict[str, Any]] = {}
+        self._filter_generator = AdvancedFilterGenerator()
         self._query_fields: Dict[str, graphene.Field] = {}
         
         # Initialize performance optimization
         self.optimizer = get_optimizer()
         self.performance_monitor = get_performance_monitor()
+
+    @property
+    def filter_generator(self):
+        """Access to the filter generator instance."""
+        return self._filter_generator
 
     def generate_single_query(self, model: Type[models.Model]) -> graphene.Field:
         """

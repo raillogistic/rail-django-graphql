@@ -26,6 +26,7 @@ class MutationError(graphene.ObjectType):
     message = graphene.String(required=True, description="Le message d'erreur décrivant ce qui s'est mal passé")
 
 from ..core.settings import MutationGeneratorSettings
+from ..conf import get_schema_settings
 from .types import TypeGenerator
 from .introspector import ModelIntrospector, MethodInfo
 from .nested_operations import NestedOperationHandler
@@ -36,9 +37,30 @@ class MutationGenerator:
     and custom method-based mutations.
     """
 
-    def __init__(self, type_generator: TypeGenerator, settings: Optional[MutationGeneratorSettings] = None):
+    def __init__(
+        self, 
+        type_generator: TypeGenerator, 
+        settings: Optional[MutationGeneratorSettings] = None,
+        schema_name: str = "default",
+    ):
+        """
+        Initialize the MutationGenerator.
+        
+        Args:
+            type_generator: TypeGenerator instance for creating GraphQL types
+            settings: Mutation generator settings or None for defaults
+            schema_name: Name of the schema for multi-schema support
+        """
         self.type_generator = type_generator
-        self.settings = settings or MutationGeneratorSettings()
+        self.schema_name = schema_name
+        
+        # Use hierarchical settings if no explicit settings provided
+        if settings is None:
+            schema_settings = get_schema_settings(schema_name)
+            self.settings = schema_settings.get('mutation_generator', MutationGeneratorSettings())
+        else:
+            self.settings = settings
+            
         # Pass mutation settings to type generator for nested relations configuration
         self.type_generator.mutation_settings = self.settings
         self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}

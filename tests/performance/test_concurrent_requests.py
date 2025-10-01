@@ -28,7 +28,7 @@ import graphene
 from graphene import Schema
 from graphene.test import Client
 
-from rail_django_graphql.schema_generator import AutoSchemaGenerator
+from rail_django_graphql.core.schema import SchemaBuilder
 from rail_django_graphql.generators.introspector import ModelIntrospector
 from rail_django_graphql.generators.types import TypeGenerator
 from rail_django_graphql.generators.queries import QueryGenerator
@@ -267,19 +267,19 @@ class TestConcurrentRequests(TransactionTestCase):
     def setUp(self):
         """Configuration des tests de concurrence."""
         # Initialiser les générateurs
-        self.introspector = ModelIntrospector()
-        self.type_generator = TypeGenerator(self.introspector)
+        self.introspector = ModelIntrospector(TestConcurrentModel)
+        self.type_generator = TypeGenerator()
         self.query_generator = QueryGenerator(self.type_generator, None)
         self.mutation_generator = MutationGenerator(self.type_generator, None)
 
         # Initialiser le générateur de schéma
-        self.schema_generator = AutoSchemaGenerator()
+        self.schema_generator = SchemaBuilder()
 
         # Modèles de test
         self.test_models = [TestConcurrentModel, TestSharedResource]
 
         # Générer le schéma
-        self.schema = self.schema_generator.generate_schema(self.test_models)
+        self.schema = self.schema_generator.get_schema()
         self.client = Client(self.schema)
 
         # Testeur de concurrence

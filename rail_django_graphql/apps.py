@@ -1,53 +1,109 @@
 """
-Configuration de l'application Django GraphQL Auto.
+Django app configuration for rail-django-graphql library.
 
-Ce module configure:
-- Application Django pour la génération automatique de schémas GraphQL
-- Configuration des signaux et hooks
-- Initialisation des composants principaux
+This module configures:
+- Django application for automatic GraphQL schema generation
+- Signal and hook configuration
+- Core component initialization
+- Library settings validation
 """
-from rail_django_graphql.middleware.performance import setup_performance_monitoring
-setup_performance_monitoring()
+
 from django.apps import AppConfig
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class DjangoGraphQLAutoConfig(AppConfig):
-    """Configuration de l'application Django GraphQL Auto."""
+class RailDjangoGraphQLConfig(AppConfig):
+    """Django app configuration for rail-django-graphql library."""
     
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'rail_django_graphql'
-    verbose_name = 'Django GraphQL Auto Generation'
+    verbose_name = 'Rail Django GraphQL'
+    label = 'rail_django_graphql'
     
     def ready(self):
-        """Initialisation de l'application après le chargement de Django."""
+        """Initialize the application after Django has loaded."""
         try:
-            # Importer les signaux si nécessaire
+            # Setup performance monitoring if enabled
+            self._setup_performance_monitoring()
+            
+            # Setup Django signals
             self._setup_signals()
             
-            # Configuration de l'environnement
-            self._configure_environment()
+            # Validate library configuration
+            self._validate_configuration()
             
-            logger.info("Django GraphQL Auto application initialized successfully")
+            # Initialize schema registry
+            self._initialize_schema_registry()
+            
+            logger.info("Rail Django GraphQL library initialized successfully")
             
         except Exception as e:
-            logger.error(f"Error initializing Django GraphQL Auto: {e}")
+            logger.error(f"Error initializing Rail Django GraphQL library: {e}")
+            # Don't raise in production to avoid breaking the app
+            if self._is_debug_mode():
+                raise
+    
+    def _setup_performance_monitoring(self):
+        """Setup performance monitoring if enabled."""
+        try:
+            from .conf import settings
+            if settings.MONITORING_SETTINGS.get('ENABLE_METRICS', False):
+                from .middleware.performance import setup_performance_monitoring
+                setup_performance_monitoring()
+                logger.debug("Performance monitoring setup completed")
+        except ImportError as e:
+            logger.warning(f"Could not setup performance monitoring: {e}")
+        except Exception as e:
+            logger.error(f"Error setting up performance monitoring: {e}")
     
     def _setup_signals(self):
-        """Configure les signaux Django pour la génération automatique."""
+        """Configure Django signals for automatic schema generation."""
         try:
-            # Éviter les imports circulaires en important ici
-            from .core.schema import SchemaBuilder
-            
-            # Les signaux seront configurés par le SchemaBuilder
-            # quand il sera instancié
-            pass
-            
+            from .conf import settings
+            if settings.SCHEMA_REGISTRY.get('ENABLE_AUTO_DISCOVERY', True):
+                # Import signals to register them
+                from . import signals  # This will be created later
+                logger.debug("Django signals setup completed")
         except ImportError as e:
+            logger.debug(f"Signals module not found, skipping: {e}")
+        except Exception as e:
             logger.warning(f"Could not setup signals: {e}")
     
+    def _validate_configuration(self):
+        """Validate library configuration."""
+        try:
+            from .conf import validate_configuration
+            validate_configuration()
+            logger.debug("Configuration validation completed")
+        except Exception as e:
+            logger.warning(f"Configuration validation failed: {e}")
+            if self._is_debug_mode():
+                raise
+    
+    def _initialize_schema_registry(self):
+        """Initialize the schema registry."""
+        try:
+            from .conf import settings
+            if settings.SCHEMA_REGISTRY.get('ENABLE_AUTO_DISCOVERY', True):
+                from .core.registry import schema_registry
+                schema_registry.discover_schemas()
+                logger.debug("Schema registry initialization completed")
+        except ImportError as e:
+            logger.debug(f"Schema registry not available: {e}")
+        except Exception as e:
+            logger.warning(f"Could not initialize schema registry: {e}")
+    
+    def _is_debug_mode(self):
+        """Check if we're in debug mode."""
+        try:
+            from django.conf import settings as django_settings
+            return getattr(django_settings, 'DEBUG', False)
+        except:
+            return False
+
+
     def _configure_environment(self):
         """Configure l'environnement pour l'application."""
         import os
@@ -56,3 +112,7 @@ class DjangoGraphQLAutoConfig(AppConfig):
         logging.getLogger('rail_django_graphql').setLevel(
             logging.DEBUG if os.environ.get('DEBUG') else logging.INFO
         )
+
+
+# Backward compatibility alias
+DjangoGraphQLAutoConfig = RailDjangoGraphQLConfig

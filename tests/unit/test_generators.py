@@ -126,15 +126,7 @@ class TestTypeGenerator(TestCase):
             self.assertIsNotNone(generated_type)
             self.assertEqual(generated_type._meta.model, model)
 
-    def test_field_exclusion(self):
-        """Test l'exclusion de champs sensibles."""
-        # Skip this test as it requires configuration that doesn't match current API
-        self.skipTest("Configuration API has changed - test needs refactoring")
 
-    def test_custom_field_mapping(self):
-        """Test le mapping personnalisé de champs."""
-        # Skip this test as it requires configuration that doesn't match current API
-        self.skipTest("Configuration API has changed - test needs refactoring")
 
     def test_nullable_fields_handling(self):
         """Test la gestion des champs nullable."""
@@ -215,11 +207,7 @@ class TestTypeGenerator(TestCase):
         # Vérifier le champ ManyToMany
         self.assertIn("tags", fields)
 
-    @patch("rail_django_graphql.generators.types.logger")
-    def test_logging_functionality(self, mock_logger):
-        """Test la fonctionnalité de logging."""
-        # Skip this test as logger is not defined in types.py
-        self.skipTest("Logger not found in types.py module")
+
 
     def test_type_registry(self):
         """Test le registre des types générés."""
@@ -234,27 +222,10 @@ class TestTypeGenerator(TestCase):
         self.assertIsNotNone(tag_type)
 
 
-class TestGraphQLTypeInfo(TestCase):
-    """Tests pour la classe GraphQLTypeInfo."""
-
-    def test_type_info_creation(self):
-        """Test la création d'un objet GraphQLTypeInfo."""
-        # Skip this test as GraphQLTypeInfo class doesn't exist in current implementation
-        self.skipTest("GraphQLTypeInfo class not found in current implementation")
-
-    def test_type_info_list_type(self):
-        """Test la création d'un type liste."""
-        # Skip this test as GraphQLTypeInfo class doesn't exist in current implementation
-        self.skipTest("GraphQLTypeInfo class not found in current implementation")
 
 
-class TestFieldMapping(TestCase):
-    """Tests pour la classe FieldMapping."""
 
-    def test_field_mapping_creation(self):
-        """Test la création d'un mapping de champ."""
-        # Skip this test as FieldMapping class doesn't exist in current implementation
-        self.skipTest("FieldMapping class not found in current implementation")
+
 
 
 @pytest.mark.unit
@@ -322,10 +293,7 @@ class TestAdvancedTypeGeneration(TestCase):
         """Configuration des tests."""
         self.type_generator = TypeGenerator()
 
-    def test_custom_scalar_types(self):
-        """Test la gestion des types scalaires personnalisés."""
-        # Skip this test as it requires configuration API that doesn't match current implementation
-        self.skipTest("Custom scalar types test needs refactoring")
+
 
     def test_field_description_generation(self):
         """Test la génération des descriptions de champs."""

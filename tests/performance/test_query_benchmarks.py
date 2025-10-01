@@ -109,19 +109,19 @@ class TestQueryBenchmarks(TransactionTestCase):
     def setUp(self):
         """Configuration des tests de performance."""
         # Initialiser les générateurs
-        self.introspector = ModelIntrospector()
-        self.type_generator = TypeGenerator(self.introspector)
+        self.introspector = ModelIntrospector(BenchmarkTestAuthor)
+        self.type_generator = TypeGenerator()
         self.query_generator = QueryGenerator(self.type_generator, None)
         self.mutation_generator = MutationGenerator(self.type_generator, None)
         
         # Initialiser le générateur de schéma
-        self.schema_generator = AutoSchemaGenerator()
+        self.schema_generator = SchemaBuilder()
         
         # Modèles de test
         self.test_models = [BenchmarkTestAuthor, BenchmarkTestBook, BenchmarkTestReview]
         
         # Générer le schéma
-        self.schema = self.schema_generator.generate_schema(self.test_models)
+        self.schema = self.schema_generator.get_schema()
         self.client = Client(self.schema)
         
         # Utilitaire de mesure de performance

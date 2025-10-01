@@ -6,7 +6,7 @@ Django models and extracting metadata required for generating GraphQL schemas.
 """
 
 import inspect
-from typing import Any, Dict, List, Type, Union, get_origin, get_args
+from typing import Any, Dict, List, Type, Union, get_origin, get_args, Optional
 
 from django.db import models
 from django.db.models.fields.related import (ForeignKey, ManyToManyField,
@@ -16,7 +16,19 @@ from django.utils.functional import cached_property
 # Data structures for introspection results
 
 class FieldInfo:
-    """Stores metadata about a Django model field."""
+    """
+    Stores metadata about a Django model field.
+    
+    Attributes:
+        field_type: The Django field type class
+        is_required: Whether the field is required (not null)
+        default_value: The default value for the field
+        help_text: Help text for the field
+        has_auto_now: Whether the field has auto_now=True
+        has_auto_now_add: Whether the field has auto_now_add=True
+        blank: Whether the field allows blank values
+        has_default: Whether the field has a default value
+    """
     def __init__(self, field_type: Any, is_required: bool, default_value: Any, help_text: str, 
                  has_auto_now: bool = False, has_auto_now_add: bool = False, blank: bool = True, 
                  has_default: bool = False):
@@ -30,7 +42,15 @@ class FieldInfo:
         self.has_default = has_default
 
 class RelationshipInfo:
-    """Stores metadata about a model relationship."""
+    """
+    Stores metadata about a model relationship.
+    
+    Attributes:
+        related_model: The related Django model class
+        relationship_type: Type of relationship (ForeignKey, ManyToManyField, etc.)
+        to_field: The field name on the related model
+        from_field: The field name on the current model
+    """
     def __init__(self, related_model: Type[models.Model], relationship_type: str, to_field: str, from_field: str):
         self.related_model = related_model
         self.relationship_type = relationship_type
@@ -38,7 +58,18 @@ class RelationshipInfo:
         self.from_field = from_field
 
 class MethodInfo:
-    """Information about a model method."""
+    """
+    Information about a model method.
+    
+    Attributes:
+        name: Method name
+        arguments: Dictionary of argument names and their metadata
+        return_type: The return type annotation
+        is_async: Whether the method is asynchronous
+        is_mutation: Whether the method should be treated as a mutation
+        is_private: Whether the method is private (starts with _)
+        method: The actual method callable
+    """
     
     def __init__(self, name: str, arguments: Dict[str, Any], return_type: Any, is_async: bool, 
                  is_mutation: bool = False, is_private: bool = False, method: callable = None):
@@ -51,12 +82,23 @@ class MethodInfo:
         self.method = method
 
 class PropertyInfo:
-    """Stores metadata about a model property."""
+    """
+    Stores metadata about a model property.
+    
+    Attributes:
+        return_type: The return type annotation of the property
+    """
     def __init__(self, return_type: Any):
         self.return_type = return_type
 
 class InheritanceInfo:
-    """Stores metadata about model inheritance."""
+    """
+    Stores metadata about model inheritance.
+    
+    Attributes:
+        base_classes: List of base model classes
+        is_abstract: Whether the model is abstract
+    """
     def __init__(self, base_classes: List[Type[models.Model]], is_abstract: bool):
         self.base_classes = base_classes
         self.is_abstract = is_abstract
@@ -64,10 +106,35 @@ class InheritanceInfo:
 class ModelIntrospector:
     """
     Analyzes Django models to extract metadata for GraphQL schema generation.
-    Caches results to avoid redundant introspection.
+    
+    This class provides comprehensive introspection capabilities for Django models,
+    extracting information about fields, relationships, methods, properties, and
+    inheritance hierarchies. The introspection results are cached to avoid
+    redundant analysis.
+    
+    Features:
+    - Field analysis with type information and constraints
+    - Relationship discovery (ForeignKey, ManyToMany, OneToOne)
+    - Method signature extraction with type annotations
+    - Property detection and analysis
+    - Inheritance hierarchy mapping
+    - Caching for performance optimization
+    
+    Args:
+        model: The Django model class to introspect
+        schema_name: Optional schema name for context (for future multi-schema support)
+    
+    Example:
+        >>> from myapp.models import User
+        >>> introspector = ModelIntrospector(User)
+        >>> fields = introspector.fields
+        >>> relationships = introspector.relationships
+        >>> methods = introspector.methods
     """
-    def __init__(self, model: Type[models.Model]):
+    
+    def __init__(self, model: Type[models.Model], schema_name: Optional[str] = None):
         self.model = model
+        self.schema_name = schema_name or 'default'
         self._meta = getattr(model, '_meta', None)
 
     @cached_property

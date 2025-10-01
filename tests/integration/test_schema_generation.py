@@ -21,13 +21,13 @@ from graphene import ObjectType, Schema
 from graphene.test import Client
 from graphene_django import DjangoObjectType
 
-from rail_django_graphql.schema_generator import AutoSchemaGenerator
+from rail_django_graphql.core.schema import SchemaBuilder
 from rail_django_graphql.generators.introspector import ModelIntrospector
 from rail_django_graphql.generators.types import TypeGenerator
 from rail_django_graphql.generators.queries import QueryGenerator
 from rail_django_graphql.generators.mutations import MutationGenerator
 from rail_django_graphql.generators.filters import AdvancedFilterGenerator
-from rail_django_graphql.decorators.business_logic import business_method
+from rail_django_graphql.decorators import business_logic
 
 from tests.models import (
     TestCompany, TestEmployee, TestSkill, TestSkillCategory,
@@ -46,15 +46,17 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         # Créer les tables de test
         call_command('migrate', verbosity=0, interactive=False)
         
-        # Initialiser les générateurs
-        self.introspector = ModelIntrospector()
-        self.type_generator = TypeGenerator(self.introspector)
-        self.filter_generator = AdvancedFilterGenerator(self.introspector)
+        # Initialiser les générateurs avec des paramètres appropriés
+        from rail_django_graphql.core.settings import TypeGeneratorSettings, MutationGeneratorSettings
+        
+        self.introspector = ModelIntrospector(TestCompany)
+        self.type_generator = TypeGenerator(settings=TypeGeneratorSettings())
+        self.filter_generator = AdvancedFilterGenerator()
         self.query_generator = QueryGenerator(self.type_generator, self.filter_generator)
-        self.mutation_generator = MutationGenerator(self.type_generator, None)
+        self.mutation_generator = MutationGenerator(self.type_generator, MutationGeneratorSettings())
         
         # Initialiser le générateur de schéma principal
-        self.schema_generator = AutoSchemaGenerator()
+        self.schema_generator = SchemaBuilder()
         
         # Modèles de test
         self.test_models = [
@@ -69,7 +71,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_complete_schema_generation(self):
         """Test la génération complète d'un schéma GraphQL."""
         # Générer le schéma complet
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         
         # Vérifier que le schéma est généré
         self.assertIsNotNone(schema)
@@ -82,7 +84,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_schema_introspection(self):
         """Test l'introspection du schéma généré."""
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema()
         
         # Créer un client de test
         client = Client(schema)
@@ -142,7 +144,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
         
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Exécuter une requête pour récupérer les entreprises
@@ -175,7 +177,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_mutation_execution_with_data(self):
         """Test l'exécution de mutations avec des données réelles."""
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Exécuter une mutation pour créer une entreprise
@@ -248,7 +250,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
         
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Exécuter une requête avec relations
@@ -298,7 +300,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
             )
         
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Exécuter une mutation de méthode métier
@@ -343,7 +345,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
                 )
         
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Exécuter une requête avec filtres
@@ -382,7 +384,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_schema_validation(self):
         """Test la validation du schéma généré."""
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         
         # Vérifier que le schéma est valide
         self.assertIsNotNone(schema)
@@ -423,7 +425,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         
         # Générer le schéma
         start_time = time.time()
-        schema = self.schema_generator.generate_schema([TestCompany])
+        schema = self.schema_generator.get_schema([TestCompany])
         generation_time = time.time() - start_time
         
         # La génération doit être rapide (moins de 2 secondes)
@@ -459,7 +461,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_error_handling_integration(self):
         """Test la gestion d'erreurs dans l'intégration complète."""
         # Générer le schéma
-        schema = self.schema_generator.generate_schema(self.test_models)
+        schema = self.schema_generator.get_schema(self.test_models)
         client = Client(schema)
         
         # Tester une mutation avec des données invalides
@@ -497,7 +499,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         import time
         
         # Générer le schéma
-        schema = self.schema_generator.generate_schema([TestCompany])
+        schema = self.schema_generator.get_schema([TestCompany])
         
         # Créer des données de test
         with transaction.atomic():
@@ -559,12 +561,12 @@ class TestSchemaGeneratorAdvanced:
         # Générer le schéma une première fois
         import time
         start_time = time.time()
-        schema1 = schema_generator.generate_schema([TestCompany])
+        schema1 = schema_generator.get_schema([TestCompany])
         first_generation_time = time.time() - start_time
         
         # Générer le schéma une deuxième fois (devrait utiliser le cache)
         start_time = time.time()
-        schema2 = schema_generator.generate_schema([TestCompany])
+        schema2 = schema_generator.get_schema([TestCompany])
         second_generation_time = time.time() - start_time
         
         # La deuxième génération devrait être plus rapide
@@ -583,7 +585,7 @@ class TestSchemaGeneratorAdvanced:
         schema_generator.register_model(TestEmployee)
         
         # Générer le schéma
-        schema = schema_generator.generate_schema()
+        schema = schema_generator.get_schema()
         
         # Vérifier que le schéma est généré
         assert schema is not None
@@ -601,7 +603,7 @@ class TestSchemaGeneratorAdvanced:
         schema_generator.add_query_extension(custom_query)
         
         # Générer le schéma avec extensions
-        schema = schema_generator.generate_schema([TestCompany])
+        schema = schema_generator.get_schema([TestCompany])
         
         # Vérifier que le schéma est généré
         assert schema is not None
