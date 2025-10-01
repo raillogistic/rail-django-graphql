@@ -12,6 +12,8 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 
 ### 🔧 Core Features
 - **[Schema Generation](features/schema-generation.md)** - Automatic GraphQL schema creation
+- **[Multi-Schema Registry](features/multi-schema-registry.md)** - Multiple GraphQL schemas with independent configurations ✨ **NEW**
+- **[Schema Management API](api/schema-management-api.md)** - REST API for schema CRUD operations and monitoring ✨ **NEW**
 - **[Filtering](features/filtering.md)** - Advanced query filtering capabilities
 - **[Bulk Operations](features/bulk-operations.md)** - Efficient batch operations
 - **[Method Mutations](features/method-mutations.md)** - Custom mutation methods
@@ -39,10 +41,16 @@ Welcome to the comprehensive documentation for the Django GraphQL Auto-Generatio
 - **[Benchmarking Tools](performance-optimization.md#benchmarks-et-tests-de-performance)** - Performance testing and validation
 
 ### 📖 API Reference & Usage
+- **[Quick Start Guide](getting-started.md)** - Get up and running in 5 minutes
+- **[Multi-Schema Setup Guide](usage/multi-schema-setup.md)** - **NEW** Set up multiple GraphQL schemas
+- **[Configuration Guide](configuration-guide.md)** - Complete configuration reference
+- **[Schema Management API](api/schema-management-api.md)** - **NEW** REST API for managing schemas
+- **[Migration Guide](migration/single-to-multi-schema.md)** - **NEW** Migrate from single to multi-schema
+- **[API Reference](api/api-reference.md)** - Complete API documentation
+- **[GraphQL Schema Reference](api/schema-reference.md)** - Generated schema documentation
 - **[Advanced Usage Guide](usage/advanced-usage.md)** - Advanced patterns, API reference, and schema generation
 - **[GraphQL API Reference](api/graphql-api-reference.md)** - Complete API documentation
 - **[Core Classes](api/core-classes.md)** - Python class documentation
-- **[API Reference](api-reference.md)** - Legacy API reference
 
 ### 🛠️ Development & Architecture
 - **[Developer Guide](development/developer-guide.md)** - Architecture, extension development, and testing

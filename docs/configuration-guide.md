@@ -5,15 +5,16 @@ This guide details all available configuration options for Django GraphQL Auto-G
 ## Table of Contents
 
 1. [Base Configuration](#base-configuration)
-2. [Mutation Settings](#mutation-settings)
-3. [Type Settings](#type-settings)
-4. [Schema Settings](#schema-settings)
-5. [Security Settings](#security-settings)
-6. [Performance Settings](#performance-settings)
-7. [Feature Flags](#feature-flags)
-8. [Runtime Configuration](#runtime-configuration)
-9. [Complete Examples](#complete-examples)
-10. [Troubleshooting](#troubleshooting)
+2. [Multi-Schema Configuration](#multi-schema-configuration)
+3. [Mutation Settings](#mutation-settings)
+4. [Type Settings](#type-settings)
+5. [Schema Settings](#schema-settings)
+6. [Security Settings](#security-settings)
+7. [Performance Settings](#performance-settings)
+8. [Feature Flags](#feature-flags)
+9. [Runtime Configuration](#runtime-configuration)
+10. [Complete Examples](#complete-examples)
+11. [Troubleshooting](#troubleshooting)
 
 ## Base Configuration
 
@@ -21,7 +22,15 @@ The main configuration is done in your Django project's `settings.py` file:
 
 ```python
 # settings.py
-rail_django_graphql = {
+RAIL_DJANGO_GRAPHQL = {
+    # Multi-Schema Configuration
+    'MULTI_SCHEMA_ENABLED': True,
+    'AUTO_DISCOVER_SCHEMAS': True,
+    'DEFAULT_SCHEMA_SETTINGS': {
+        # Default settings for all schemas
+    },
+    
+    # Legacy single-schema configuration
     'MUTATION_SETTINGS': {
         # Mutation configuration
     },
@@ -38,6 +47,288 @@ rail_django_graphql = {
         # Performance configuration
     }
 }
+```
+
+## Multi-Schema Configuration
+
+### Overview
+
+Multi-schema support allows you to create and manage multiple GraphQL schemas within a single Django application. Each schema can have its own configuration, authentication requirements, and model selection.
+
+### Basic Multi-Schema Setup
+
+```python
+# settings.py
+RAIL_DJANGO_GRAPHQL = {
+    # Enable multi-schema support
+    'MULTI_SCHEMA_ENABLED': True,
+    
+    # Auto-discover schemas from apps
+    'AUTO_DISCOVER_SCHEMAS': True,
+    
+    # Default settings applied to all schemas
+    'DEFAULT_SCHEMA_SETTINGS': {
+        'enable_graphiql': True,
+        'authentication_required': False,
+        'max_query_depth': 10,
+        'enable_query_caching': True,
+        'cache_timeout': 300,
+    },
+    
+    # Schema registry configuration
+    'SCHEMA_REGISTRY': {
+        'cache_enabled': True,
+        'cache_timeout': 3600,
+        'validation_enabled': True,
+        'auto_reload': True,  # Development only
+    },
+    
+    # API configuration
+    'API_AUTHENTICATION_REQUIRED': False,
+    'API_CORS_ENABLED': True,
+    'API_CORS_ORIGINS': ['http://localhost:3000'],
+}
+```
+
+### Schema Registration
+
+Schemas can be registered programmatically or through configuration files:
+
+#### Programmatic Registration
+
+```python
+# myapp/apps.py or myapp/schema_config.py
+from rail_django_graphql.core.registry import schema_registry
+
+def register_schemas():
+    # Public API schema
+    schema_registry.register_schema(
+        name="public_api",
+        description="Public API for customers",
+        version="1.0.0",
+        apps=["customers", "products"],
+        models=["Customer", "Product"],
+        enabled=True,
+        settings={
+            "enable_graphiql": True,
+            "authentication_required": False,
+            "max_query_depth": 8,
+            "cors_enabled": True,
+        }
+    )
+    
+    # Admin API schema
+    schema_registry.register_schema(
+        name="admin_api",
+        description="Admin API for internal use",
+        version="1.0.0",
+        apps=["customers", "products", "orders"],
+        settings={
+            "authentication_required": True,
+            "permission_classes": ["django.contrib.auth.permissions.IsStaff"],
+            "max_query_depth": 15,
+        }
+    )
+
+# Call during app initialization
+register_schemas()
+```
+
+#### Configuration-based Registration
+
+```python
+# settings.py
+RAIL_DJANGO_GRAPHQL = {
+    'MULTI_SCHEMA_ENABLED': True,
+    'SCHEMAS': {
+        'public_api': {
+            'description': 'Public API for customers',
+            'version': '1.0.0',
+            'apps': ['customers', 'products'],
+            'models': ['Customer', 'Product'],
+            'enabled': True,
+            'settings': {
+                'enable_graphiql': True,
+                'authentication_required': False,
+                'max_query_depth': 8,
+            }
+        },
+        'admin_api': {
+            'description': 'Admin API for internal use',
+            'version': '1.0.0',
+            'apps': ['customers', 'products', 'orders'],
+            'enabled': True,
+            'settings': {
+                'authentication_required': True,
+                'max_query_depth': 15,
+            }
+        }
+    }
+}
+```
+
+### Schema Configuration Options
+
+Each schema supports the following configuration options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | `str` | Required | Unique schema identifier |
+| `description` | `str` | `""` | Human-readable description |
+| `version` | `str` | `"1.0.0"` | Schema version |
+| `apps` | `list` | `[]` | Django apps to include |
+| `models` | `list` | `[]` | Specific models to include |
+| `exclude_models` | `list` | `[]` | Models to exclude |
+| `enabled` | `bool` | `True` | Enable/disable schema |
+| `auto_discover` | `bool` | `True` | Auto-discover models from apps |
+| `builder_class` | `str` | `None` | Custom schema builder class |
+| `settings` | `dict` | `{}` | Schema-specific settings |
+
+### Schema-Specific Settings
+
+Each schema can override default settings:
+
+```python
+schema_registry.register_schema(
+    name="secure_api",
+    apps=["sensitive_app"],
+    settings={
+        # GraphiQL Configuration
+        "enable_graphiql": True,
+        "graphiql_template": "custom_graphiql.html",
+        
+        # Authentication & Security
+        "authentication_required": True,
+        "permission_classes": ["myapp.permissions.CustomPermission"],
+        
+        # Query Limits
+        "max_query_depth": 5,
+        "max_query_complexity": 500,
+        "query_timeout": 15,
+        
+        # Caching
+        "enable_query_caching": True,
+        "cache_timeout": 600,
+        
+        # CORS
+        "cors_enabled": True,
+        "cors_origins": ["https://secure.example.com"],
+        "cors_allow_credentials": True,
+        
+        # Custom Middleware
+        "middleware": ["myapp.middleware.SecurityMiddleware"],
+        
+        # Hooks
+        "hooks": ["logging", "metrics"],
+    }
+)
+```
+
+### Settings Hierarchy
+
+Settings are applied in the following order (later overrides earlier):
+
+1. **Global defaults** from `RAIL_DJANGO_GRAPHQL`
+2. **Default schema settings** from `DEFAULT_SCHEMA_SETTINGS`
+3. **Schema-specific settings** from individual schema configuration
+4. **Runtime overrides** (if any)
+
+```python
+# settings.py
+RAIL_DJANGO_GRAPHQL = {
+    # Global defaults
+    'ENABLE_GRAPHIQL': True,
+    'AUTHENTICATION_REQUIRED': False,
+    
+    # Default schema settings (override global)
+    'DEFAULT_SCHEMA_SETTINGS': {
+        'max_query_depth': 10,
+        'enable_query_caching': True,
+    },
+}
+
+# Schema-specific settings (override defaults)
+schema_registry.register_schema(
+    name="my_api",
+    settings={
+        'authentication_required': True,  # Overrides global default
+        'max_query_depth': 5,            # Overrides default schema setting
+        # enable_graphiql inherits from global (True)
+        # enable_query_caching inherits from default schema settings (True)
+    }
+)
+```
+
+### URL Configuration
+
+Multi-schema URLs are automatically configured:
+
+```python
+# urls.py
+from django.urls import path, include
+
+urlpatterns = [
+    path('graphql/', include('rail_django_graphql.urls')),
+]
+```
+
+This provides:
+- `/graphql/{schema_name}/` - GraphQL endpoint for each schema
+- `/graphql/{schema_name}/graphiql/` - GraphiQL interface for each schema
+- `/api/schemas/` - Schema management API
+
+### Custom URL Patterns
+
+For custom URL patterns:
+
+```python
+# urls.py
+from django.urls import path
+from rail_django_graphql.views import MultiSchemaGraphQLView
+
+urlpatterns = [
+    # Custom schema endpoints
+    path('api/v1/', MultiSchemaGraphQLView.as_view(schema_name="public_api_v1")),
+    path('api/v2/', MultiSchemaGraphQLView.as_view(schema_name="public_api_v2")),
+    path('admin/graphql/', MultiSchemaGraphQLView.as_view(schema_name="admin_api")),
+]
+```
+
+### Environment-Specific Configuration
+
+```python
+# settings.py
+import os
+
+# Base configuration
+RAIL_DJANGO_GRAPHQL = {
+    'MULTI_SCHEMA_ENABLED': True,
+    'AUTO_DISCOVER_SCHEMAS': True,
+}
+
+# Environment-specific overrides
+if os.environ.get('DJANGO_ENV') == 'production':
+    RAIL_DJANGO_GRAPHQL.update({
+        'DEFAULT_SCHEMA_SETTINGS': {
+            'enable_graphiql': False,  # Disable in production
+            'authentication_required': True,
+            'max_query_depth': 8,
+        },
+        'API_AUTHENTICATION_REQUIRED': True,
+        'SCHEMA_REGISTRY': {
+            'auto_reload': False,  # Disable auto-reload in production
+        }
+    })
+elif os.environ.get('DJANGO_ENV') == 'development':
+    RAIL_DJANGO_GRAPHQL.update({
+        'DEFAULT_SCHEMA_SETTINGS': {
+            'enable_graphiql': True,
+            'authentication_required': False,
+            'max_query_depth': 15,
+        },
+        'DEBUG': True,
+        'LOG_QUERIES': True,
+    })
 ```
 
 ## Mutation Settings
