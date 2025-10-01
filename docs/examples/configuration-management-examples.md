@@ -1,6 +1,6 @@
 # Configuration Management Examples
 
-This guide provides practical examples of using the Configuration Management system in django-graphql-auto, including environment-based configuration, feature flags, runtime configuration updates, and validation.
+This guide provides practical examples of using the Configuration Management system in rail-django-graphql, including environment-based configuration, feature flags, runtime configuration updates, and validation.
 
 ## Table of Contents
 
@@ -907,4 +907,4 @@ runtime_config.register_change_callback(
 )
 ```
 
-This comprehensive guide demonstrates how to effectively use the Configuration Management system in django-graphql-auto for various scenarios, from basic environment setup to advanced monitoring and A/B testing.
+This comprehensive guide demonstrates how to effectively use the Configuration Management system in rail-django-graphql for various scenarios, from basic environment setup to advanced monitoring and A/B testing.

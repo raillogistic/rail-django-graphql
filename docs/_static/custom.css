@@ -1,0 +1,200 @@
+/* Custom CSS for Django GraphQL Auto Documentation */
+
+/* Brand colors */
+:root {
+    --primary-color: #2980B9;
+    --secondary-color: #3498DB;
+    --accent-color: #E74C3C;
+    --success-color: #27AE60;
+    --warning-color: #F39C12;
+    --info-color: #17A2B8;
+    --dark-color: #2C3E50;
+    --light-color: #ECF0F1;
+}
+
+/* Enhanced code blocks */
+.highlight {
+    border-radius: 6px;
+    border: 1px solid #e1e4e8;
+    margin: 1em 0;
+}
+
+.highlight pre {
+    padding: 16px;
+    overflow: auto;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f6f8fa;
+    border-radius: 6px;
+}
+
+/* Improved admonitions */
+.admonition {
+    border-radius: 6px;
+    border-left: 4px solid var(--primary-color);
+    margin: 1.5625em 0;
+    padding: 0 1.2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.admonition.note {
+    border-left-color: var(--info-color);
+}
+
+.admonition.warning {
+    border-left-color: var(--warning-color);
+}
+
+.admonition.danger {
+    border-left-color: var(--accent-color);
+}
+
+.admonition.tip {
+    border-left-color: var(--success-color);
+}
+
+/* Enhanced tables */
+table.docutils {
+    border-collapse: collapse;
+    border-spacing: 0;
+    width: 100%;
+    margin: 1em 0;
+}
+
+table.docutils th,
+table.docutils td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+table.docutils th {
+    background-color: var(--light-color);
+    font-weight: bold;
+}
+
+table.docutils tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+/* Code inline styling */
+code {
+    background-color: #f1f2f3;
+    border-radius: 3px;
+    padding: 2px 4px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 87.5%;
+    color: #e83e8c;
+}
+
+/* Navigation improvements */
+.wy-nav-side {
+    background: linear-gradient(180deg, var(--primary-color) 0%, var(--dark-color) 100%);
+}
+
+.wy-menu-vertical a {
+    color: #d9d9d9;
+}
+
+.wy-menu-vertical a:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+/* Content area improvements */
+.wy-nav-content {
+    max-width: 1200px;
+}
+
+/* Button styling */
+.btn {
+    display: inline-block;
+    padding: 6px 12px;
+    margin-bottom: 0;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.42857143;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    text-decoration: none;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--secondary-color);
+    border-color: var(--secondary-color);
+}
+
+/* API reference styling */
+.py.class > dt,
+.py.function > dt,
+.py.method > dt {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+}
+
+.py.class .sig-name,
+.py.function .sig-name,
+.py.method .sig-name {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .wy-nav-content {
+        margin-left: 0;
+    }
+    
+    .wy-nav-side {
+        left: -300px;
+    }
+}
+
+/* Search improvements */
+.wy-side-nav-search {
+    background-color: var(--dark-color);
+}
+
+.wy-side-nav-search input[type=text] {
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+/* Footer styling */
+.rst-footer-buttons {
+    margin-top: 2em;
+    padding-top: 1em;
+    border-top: 1px solid #e1e4e8;
+}
+
+/* Version selector */
+.rst-versions {
+    background-color: var(--dark-color);
+}
+
+.rst-versions .rst-current-version {
+    background-color: var(--primary-color);
+}
+
+/* Highlight current page in navigation */
+.wy-menu-vertical .current {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.wy-menu-vertical .current a {
+    color: white;
+    font-weight: bold;
+}

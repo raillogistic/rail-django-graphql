@@ -1,49 +1,95 @@
-# Installation & Setup Guide
+# Installation Guide
 
-This guide will walk you through installing and setting up the Django GraphQL Auto-Generation Library in your Django project.
+This guide covers the installation and initial setup of Django GraphQL Auto.
 
-## 📋 Prerequisites
+## Requirements
 
-- Python 3.8 or higher
-- Django 3.2 or higher
-- Basic understanding of Django models and GraphQL concepts
+- Python 3.8+
+- Django 3.2+
+- GraphQL Core 3.0+
 
-## 🚀 Installation
+## Installation Methods
 
-### Step 1: Install Dependencies
+### From PyPI (Recommended)
+
+Install the latest stable version from PyPI:
 
 ```bash
-# Install the core library (when published)
 pip install django-graphql-auto
+```
 
-# Or install from source
-git clone https://github.com/your-repo/django-graphql-auto.git
+### From GitHub (Latest Development)
+
+Install the latest development version directly from GitHub:
+
+```bash
+pip install git+https://github.com/raillogistic/django-graphql-auto.git@main
+```
+
+### Development Installation
+
+For development or contributing to the project:
+
+```bash
+git clone https://github.com/raillogistic/django-graphql-auto.git
 cd django-graphql-auto
 pip install -e .
 ```
 
-### Step 2: Install Required Dependencies
+## Optional Dependencies
+
+Django GraphQL Auto supports optional features through extra dependencies:
+
+### Authentication & Permissions
 
 ```bash
-pip install graphene-django>=3.0.0
-pip install django-filter>=22.1
-pip install django-cors-headers>=4.0.0
-pip install django-extensions>=3.2.0
-pip install graphene-file-upload>=1.3.0
-
-# File Upload & Media Dependencies
-pip install Pillow>=9.0.0          # Image processing
-pip install python-magic>=0.4.27   # File type detection
-pip install pyclamd>=0.5.0          # ClamAV virus scanner integration
-pip install boto3>=1.26.0          # AWS S3 storage (optional)
-pip install google-cloud-storage>=2.7.0  # Google Cloud Storage (optional)
-pip install azure-storage-blob>=12.14.0  # Azure Blob Storage (optional)
+pip install django-graphql-auto[auth]
 ```
 
-Or use the provided requirements file:
+Includes:
+- Django REST Framework integration
+- JWT authentication support
+- Advanced permission classes
+
+### Performance & Caching
 
 ```bash
-pip install -r requirements.txt
+pip install django-graphql-auto[performance]
+```
+
+Includes:
+- Redis caching support
+- Query optimization tools
+- Performance monitoring utilities
+
+### File Upload Support
+
+```bash
+pip install django-graphql-auto[media]
+```
+
+Includes:
+- GraphQL file upload support
+- Image processing utilities
+- Cloud storage integrations
+
+### Documentation Generation
+
+```bash
+pip install django-graphql-auto[docs]
+```
+
+Includes:
+- Sphinx documentation tools
+- API documentation generators
+- Schema visualization tools
+
+### All Features
+
+Install all optional dependencies:
+
+```bash
+pip install django-graphql-auto[all]
 ```
 
 ## ⚙️ Django Configuration

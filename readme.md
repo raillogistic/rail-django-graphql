@@ -1,17 +1,30 @@
-# Django GraphQL Multi-Schema System
+# Django GraphQL Auto
 
-A comprehensive Django package for managing multiple GraphQL schemas with advanced features including schema discovery, plugin architecture, and REST API management.
+A comprehensive Django library for automatic GraphQL schema generation, multi-schema management, and advanced GraphQL features including validation, introspection, debugging, and performance monitoring.
 
-## Features
+## 🚀 Overview
+
+Django GraphQL Auto transforms your Django models into powerful GraphQL APIs with minimal configuration. Whether you're building microservices, multi-tenant applications, or complex APIs with different access levels, this library provides enterprise-grade tools for GraphQL schema management.
+
+### ✨ Key Benefits
+
+- **🔧 Zero Configuration**: Works out of the box with sensible defaults
+- **🏗️ Multi-Schema Architecture**: Manage multiple GraphQL schemas in a single Django application  
+- **🚀 Production Ready**: Thread-safe operations with comprehensive error handling
+- **👨‍💻 Developer Friendly**: Rich debugging tools and comprehensive documentation
+- **🔌 Extensible**: Plugin architecture for custom functionality
+- **📊 Performance Monitoring**: Built-in metrics and performance tracking
+- **🔍 Schema Validation**: Comprehensive validation and introspection capabilities
+
+## 📋 Features
 
 ### Core Features
-- 🚀 **Multi-Schema Support**: Register and manage multiple GraphQL schemas
-- 🔍 **Dynamic Schema Discovery**: Automatic schema detection from Django apps
-- 📋 **Schema Registry**: Centralized schema management with metadata
-- 🔌 **Plugin Architecture**: Extensible plugin system for custom functionality
+- 🚀 **Multi-Schema Support**: Register and manage multiple GraphQL schemas independently
+- 🔍 **Dynamic Schema Discovery**: Automatic schema detection from Django apps and models
+- 📋 **Schema Registry**: Centralized schema management with metadata and versioning
 - 🌐 **REST API**: Complete REST API for schema management and monitoring
-- 💚 **Health Checks**: Built-in health monitoring and metrics
-- 🔒 **Thread Safety**: Thread-safe operations for production environments
+- 💚 **Health Checks**: Built-in health monitoring and performance metrics
+- 🔒 **Thread Safety**: Production-ready thread-safe operations
 
 ### Advanced Features
 - 🪝 **Discovery Hooks**: Pre/post registration hooks for custom logic
@@ -19,17 +32,37 @@ A comprehensive Django package for managing multiple GraphQL schemas with advanc
 - 📊 **Performance Monitoring**: Built-in metrics and performance tracking
 - 🌍 **CORS Support**: Cross-origin resource sharing for API endpoints
 - 🎯 **Decorator-based Registration**: Simple decorators for schema registration
-- 🔎 **Auto-discovery**: Automatic schema detection from Django apps
+- 🔧 **Hierarchical Settings**: Three-tier configuration system (schema > global > defaults)
+- ✅ **Schema Validation**: Comprehensive validation with detailed error reporting
+- 🔍 **Schema Introspection**: Advanced introspection with documentation generation
+- 🐛 **Debugging Tools**: Comprehensive debugging hooks and query analysis
+- 📁 **Schema Management**: Migration, backup, and lifecycle management utilities
 
-## Installation
+## 📦 Installation
+
+### From PyPI (Recommended)
 
 ```bash
 pip install rail-django-graphql
 ```
 
+### From GitHub (Latest)
+
+```bash
+pip install git+https://github.com/raillogistic/rail-django-graphql.git@main
+```
+
+### Development Installation
+
+```bash
+git clone https://github.com/raillogistic/rail-django-graphql.git
+cd rail-django-graphql
+pip install -e .
+```
+
 ### Optional Dependencies
 
-For specific features, install optional dependencies:
+Install additional features as needed:
 
 ```bash
 # Authentication and permissions
@@ -41,780 +74,599 @@ pip install rail-django-graphql[performance]
 # File upload support
 pip install rail-django-graphql[media]
 
-# Monitoring and metrics
-pip install rail-django-graphql[monitoring]
-
-# Development tools
-pip install rail-django-graphql[dev]
+# Documentation generation
+pip install rail-django-graphql[docs]
 
 # All features
-```bash
-pip install django-graphql-multi-schema
+pip install rail-django-graphql[all]
 ```
 
-Add to your Django `INSTALLED_APPS`:
+## ⚡ Quick Start
+
+### 1. Add to Django Settings
 
 ```python
+# settings.py
 INSTALLED_APPS = [
-    # ... your apps
-    'rail_django_graphql',
+    # ... your existing apps
+    'django_graphql_auto',
 ]
+
+# Basic configuration
+DJANGO_GRAPHQL_AUTO = {
+    'DEFAULT_SCHEMA': 'main',
+    'ENABLE_GRAPHIQL': True,
+    'AUTO_DISCOVER_SCHEMAS': True,
+    'SCHEMAS': {
+        'main': {
+            'description': 'Main GraphQL API',
+            'apps': ['myapp'],
+        }
+    }
+}
 ```
 
-Add URL patterns to your main `urls.py`:
-
-```python
-from django.urls import path, include
-
-urlpatterns = [
-    # ... your patterns
-    path('graphql/', include('rail_django_graphql.urls')),
-]
-```
-
-## Quick Start
-
-### 1. Basic Schema Registration
-
-```python
-# myapp/schema.py
-import graphene
-from rail_django_graphql.core.registry import schema_registry
-
-class Query(graphene.ObjectType):
-    hello = graphene.String(default_value="Hello World!")
-
-schema = graphene.Schema(query=Query)
-
-# Register the schema
-schema_registry.register_schema(
-    name='myapp_schema',
-    description='My application GraphQL schema',
-    version='1.0.0',
-    apps=['myapp'],
-    models=['MyModel'],
-    schema=schema
-)
-```
-
-### 2. Using Decorators
-
-```python
-# myapp/schema.py
-from rail_django_graphql.decorators import register_schema
-import graphene
-
-@register_schema(
-    name='decorated_schema',
-    description='Schema registered with decorator',
-    version='1.0.0'
-)
-class MySchema:
-    def get_schema(self):
-        return graphene.Schema(query=Query)
-```
-
-### 3. Auto-Discovery
-
-Create a `graphql_schema.py` file in your Django app:
-
-```python
-# myapp/graphql_schema.py
-import graphene
-from rail_django_graphql.core.registry import register_schema
-
-class Query(graphene.ObjectType):
-    hello = graphene.String(default_value="Hello from auto-discovery!")
-
-# This will be automatically discovered
-register_schema(
-    name='auto_discovered_schema',
-    description='Automatically discovered schema',
-    schema=graphene.Schema(query=Query)
-)
-```
-
-## Schema Registration
-
-### Manual Registration
-
-```python
-from rail_django_graphql.core.registry import schema_registry
-
-schema_info = schema_registry.register_schema(
-    name='my_schema',
-    description='My GraphQL schema',
-    version='1.0.0',
-    apps=['app1', 'app2'],
-    models=['Model1', 'Model2'],
-    exclude_models=['ExcludedModel'],
-    settings={'custom_setting': 'value'},
-    auto_discover=True,
-    enabled=True,
-    schema=my_graphene_schema
-)
-```
-
-### Schema Builder Pattern
-
-```python
-from rail_django_graphql.core.registry import schema_registry
-
-def build_my_schema():
-    # Custom schema building logic
-    return graphene.Schema(query=MyQuery)
-
-schema_registry.register_schema(
-    name='builder_schema',
-    builder=build_my_schema
-)
-```
-
-### Decorator Registration
-
-```python
-from rail_django_graphql.decorators import register_schema
-
-@register_schema(
-    name='user_schema',
-    description='User management schema',
-    apps=['users'],
-    models=['User', 'Profile']
-)
-class UserSchema:
-    def get_schema(self):
-        return graphene.Schema(query=UserQuery)
-```
-
-## Multi-Schema Routing
-
-The system provides multiple GraphQL endpoints:
-
-### Schema-Specific Endpoints
-
-```
-/graphql/<schema_name>/          # GraphQL endpoint for specific schema
-/graphql/<schema_name>/playground/  # GraphiQL playground for specific schema
-```
-
-### Multi-Schema Endpoints
-
-```
-/graphql/                        # Default GraphQL endpoint
-/playground/                     # GraphiQL playground with schema selector
-/graphql/schemas/               # List all available schemas
-```
-
-### URL Configuration
+### 2. Add URL Configuration
 
 ```python
 # urls.py
 from django.urls import path, include
 
 urlpatterns = [
-    path('graphql/', include('rail_django_graphql.urls')),
+    # ... your existing patterns
+    path('graphql/', include('django_graphql_auto.urls')),
 ]
 ```
 
-## REST API
+### 3. Create Your Models
 
-The system provides a comprehensive REST API for schema management:
+```python
+# myapp/models.py
+from django.db import models
+
+class Author(models.Model):
+    name = models.CharField(max_length=100)
+    email = models.EmailField()
+    bio = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+class Book(models.Model):
+    title = models.CharField(max_length=200)
+    author = models.ForeignKey(Author, on_delete=models.CASCADE)
+    isbn = models.CharField(max_length=13, unique=True)
+    published_date = models.DateField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+```
+
+### 4. Register Schema (Optional)
+
+```python
+# myapp/schema.py
+import graphene
+from django_graphql_auto import register_schema
+from django_graphql_auto.types import DjangoObjectType
+from .models import Author, Book
+
+class AuthorType(DjangoObjectType):
+    class Meta:
+        model = Author
+        fields = '__all__'
+
+class BookType(DjangoObjectType):
+    class Meta:
+        model = Book
+        fields = '__all__'
+
+class Query(graphene.ObjectType):
+    authors = graphene.List(AuthorType)
+    books = graphene.List(BookType)
+    
+    def resolve_authors(self, info):
+        return Author.objects.all()
+    
+    def resolve_books(self, info):
+        return Book.objects.all()
+
+# Register schema using decorator
+@register_schema('main')
+class MainSchema(graphene.Schema):
+    query = Query
+```
+
+### 5. Access Your GraphQL API
+
+Once configured, your GraphQL endpoints will be available at:
+
+- **GraphQL Endpoint**: `http://localhost:8000/graphql/main/`
+- **GraphiQL Interface**: `http://localhost:8000/graphql/main/graphiql/`
+- **Schema Management API**: `http://localhost:8000/graphql/api/schemas/`
+- **Health Check**: `http://localhost:8000/graphql/api/health/`
+
+## 📖 Usage Examples
+
+### Schema Registration Methods
+
+#### 1. Decorator-based Registration
+
+```python
+from django_graphql_auto import register_schema
+import graphene
+
+@register_schema('api_v1', description='API Version 1', version='1.0.0')
+class APIv1Schema(graphene.Schema):
+    query = Query
+    mutation = Mutation
+```
+
+#### 2. Manual Registration
+
+```python
+from django_graphql_auto.registry import schema_registry
+import graphene
+
+schema = graphene.Schema(query=Query, mutation=Mutation)
+schema_registry.register(
+    name='api_v2',
+    schema=schema,
+    description='API Version 2',
+    version='2.0.0'
+)
+```
+
+#### 3. Auto-discovery from Apps
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    'AUTO_DISCOVER_SCHEMAS': True,
+    'DISCOVERY_APPS': ['myapp', 'otherapp'],
+    'SCHEMA_FILE_PATTERNS': ['schema.py', 'graphql_schema.py'],
+}
+```
+
+#### 4. Builder Pattern
+
+```python
+from django_graphql_auto.builders import SchemaBuilder
+
+schema = (SchemaBuilder('ecommerce')
+    .with_query(Query)
+    .with_mutation(Mutation)
+    .with_subscription(Subscription)
+    .with_description('E-commerce GraphQL API')
+    .with_version('1.0.0')
+    .build())
+```
+
+### Multi-Schema Setup
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    'SCHEMAS': {
+        'public': {
+            'description': 'Public API',
+            'apps': ['blog', 'products'],
+            'authentication_required': False,
+        },
+        'admin': {
+            'description': 'Admin API',
+            'apps': ['users', 'orders'],
+            'authentication_required': True,
+            'permission_classes': ['IsAdminUser'],
+        },
+        'mobile': {
+            'description': 'Mobile API',
+            'apps': ['mobile'],
+            'max_query_depth': 5,
+            'enable_caching': True,
+        }
+    }
+}
+```
+
+### Schema Validation and Introspection
+
+```python
+from django_graphql_auto.validation import SchemaValidator
+from django_graphql_auto.introspection import SchemaIntrospector
+
+# Validate schema
+validator = SchemaValidator()
+result = validator.validate_schema(schema)
+if not result.is_valid:
+    print(f"Validation errors: {result.errors}")
+
+# Introspect schema
+introspector = SchemaIntrospector()
+introspection_result = introspector.introspect_schema(schema)
+print(f"Schema has {len(introspection_result.types)} types")
+```
+
+### Performance Monitoring
+
+```python
+from django_graphql_auto.debugging import PerformanceMonitor
+
+# Monitor query performance
+monitor = PerformanceMonitor()
+monitor.start_operation('user_query', {'query': 'query { users { name } }'})
+# ... execute query
+monitor.end_operation('user_query')
+
+# Get performance metrics
+metrics = monitor.get_metrics()
+print(f"Average execution time: {metrics.average_execution_time}ms")
+```
+
+## ⚙️ Configuration
+
+### Global Configuration
+
+```python
+# settings.py
+DJANGO_GRAPHQL_AUTO = {
+    # Core settings
+    'DEFAULT_SCHEMA': 'main',
+    'ENABLE_GRAPHIQL': True,
+    'AUTHENTICATION_REQUIRED': False,
+    
+    # Auto-discovery
+    'AUTO_DISCOVER_SCHEMAS': True,
+    'DISCOVERY_APPS': ['myapp'],
+    'SCHEMA_FILE_PATTERNS': ['schema.py', 'graphql_schema.py'],
+    
+    # Performance
+    'ENABLE_CACHING': True,
+    'CACHE_TIMEOUT': 300,
+    'MAX_QUERY_DEPTH': 10,
+    'QUERY_TIMEOUT': 30,
+    
+    # Security
+    'CORS_ENABLED': True,
+    'CORS_ALLOW_ALL_ORIGINS': False,
+    'CORS_ALLOWED_ORIGINS': ['http://localhost:3000'],
+    'ENABLE_INTROSPECTION': True,
+    
+    # Monitoring and Debugging
+    'ENABLE_METRICS': True,
+    'ENABLE_DEBUG_HOOKS': True,
+    'PERFORMANCE_MONITORING': True,
+    'LOG_QUERIES': True,
+    
+    # Validation
+    'STRICT_VALIDATION': True,
+    'VALIDATE_ON_STARTUP': True,
+    'VALIDATION_RULES': ['default', 'security', 'performance'],
+    
+    # Schema Management
+    'ENABLE_SCHEMA_MANAGEMENT': True,
+    'AUTO_BACKUP_SCHEMAS': True,
+    'BACKUP_RETENTION_DAYS': 30,
+    
+    # Schema-specific settings
+    'SCHEMAS': {
+        'main': {
+            'description': 'Main API',
+            'version': '1.0.0',
+            'apps': ['myapp'],
+            'enable_graphiql': True,
+            'authentication_required': False,
+        },
+        'admin': {
+            'description': 'Admin API',
+            'authentication_required': True,
+            'permission_classes': ['IsAdminUser'],
+            'max_query_depth': 15,
+        }
+    }
+}
+```
+
+### Per-Schema Configuration
+
+```python
+from django_graphql_auto import register_schema
+
+@register_schema(
+    name='secure_api',
+    description='Secure API with authentication',
+    version='1.0.0',
+    authentication_required=True,
+    permission_classes=['IsAuthenticated'],
+    enable_graphiql=False,
+    cors_enabled=False,
+    max_query_depth=5,
+    enable_caching=True,
+    cache_timeout=600
+)
+class SecureSchema(graphene.Schema):
+    query = Query
+```
+
+## 🔧 Advanced Features
+
+### Schema Validation
+
+```python
+from django_graphql_auto.validation import SchemaValidator, ValidationRule
+
+# Custom validation rule
+class CustomValidationRule(ValidationRule):
+    def validate(self, schema_definition):
+        # Custom validation logic
+        if 'deprecated' in schema_definition.description.lower():
+            return ValidationResult(
+                is_valid=False,
+                errors=['Schema should not be deprecated']
+            )
+        return ValidationResult(is_valid=True)
+
+# Use validator with custom rules
+validator = SchemaValidator()
+validator.add_rule(CustomValidationRule())
+result = validator.validate_schema(schema)
+```
+
+### Schema Introspection and Documentation
+
+```python
+from django_graphql_auto.introspection import SchemaIntrospector
+from django_graphql_auto.documentation import DocumentationGenerator
+
+# Introspect schema
+introspector = SchemaIntrospector()
+introspection = introspector.introspect_schema(schema)
+
+# Generate documentation
+doc_generator = DocumentationGenerator()
+html_docs = doc_generator.generate_html_documentation(introspection)
+markdown_docs = doc_generator.generate_markdown_documentation(introspection)
+```
+
+### Debugging and Performance Monitoring
+
+```python
+from django_graphql_auto.debugging import DebugHooks, PerformanceMonitor, QueryAnalyzer
+
+# Set up debugging
+debug_hooks = DebugHooks()
+debug_hooks.register_pre_execution_hook(lambda query, variables: print(f"Executing: {query}"))
+
+# Performance monitoring
+monitor = PerformanceMonitor()
+monitor.set_threshold('execution_time', 1000)  # 1 second threshold
+
+# Query analysis
+analyzer = QueryAnalyzer()
+analysis = analyzer.analyze_query(query_string)
+if analysis.complexity_score > 100:
+    print("Query is too complex!")
+```
 
 ### Schema Management
 
-```bash
-# List all schemas
-GET /api/v1/schemas/
+```python
+from django_graphql_auto.management import SchemaManager, MigrationManager, BackupManager
 
-# Get specific schema
-GET /api/v1/schemas/{schema_name}/
+# Schema lifecycle management
+schema_manager = SchemaManager()
+schema_manager.register_schema('new_api', schema, metadata={'version': '1.0.0'})
 
-# Create new schema
-POST /api/v1/schemas/
-{
-    "name": "new_schema",
-    "description": "New schema",
-    "version": "1.0.0",
-    "apps": ["myapp"],
-    "enabled": true
-}
+# Schema migration
+migration_manager = MigrationManager()
+migration_plan = migration_manager.create_migration(old_schema, new_schema)
+migration_manager.execute_migration(migration_plan)
 
-# Update schema
-PUT /api/v1/schemas/{schema_name}/
-{
-    "description": "Updated description",
-    "enabled": false
-}
-
-# Delete schema
-DELETE /api/v1/schemas/{schema_name}/
+# Schema backup
+backup_manager = BackupManager()
+backup = backup_manager.create_backup('main_schema')
+backup_manager.restore_backup(backup.backup_id)
 ```
 
-### Management Operations
+## 🔄 Migration Guide
+
+### From Standalone Project to Library
+
+If you're migrating from a standalone GraphQL implementation:
+
+#### 1. Update Dependencies
 
 ```bash
-# Enable schema
-POST /api/v1/management/
-{
-    "action": "enable",
-    "schema_name": "my_schema"
-}
+# Remove old dependencies
+pip uninstall graphene-django
 
-# Disable schema
-POST /api/v1/management/
-{
-    "action": "disable",
-    "schema_name": "my_schema"
-}
-
-# Clear all schemas
-POST /api/v1/management/
-{
-    "action": "clear_all"
-}
+# Install rail-django-graphql
+pip install rail-django-graphql
 ```
 
-### Discovery and Health
-
-```bash
-# Trigger schema discovery
-POST /api/v1/discovery/
-
-# Get discovery status
-GET /api/v1/discovery/
-
-# Health check
-GET /api/v1/health/
-
-# Get metrics
-GET /api/v1/metrics/
-```
-
-## Plugin System
-
-### Creating a Plugin
+#### 2. Update Settings
 
 ```python
-# myplugin.py
-from rail_django_graphql.plugins.base import BasePlugin
-
-class MyPlugin(BasePlugin):
-    name = 'my_plugin'
-    version = '1.0.0'
-    
-    def on_pre_registration(self, schema_name, **kwargs):
-        """Called before schema registration."""
-        print(f"Registering schema: {schema_name}")
-        return kwargs  # Can modify registration arguments
-    
-    def on_post_registration(self, schema_name, schema_info):
-        """Called after schema registration."""
-        print(f"Schema {schema_name} registered successfully")
-    
-    def on_schema_discovery(self, discovered_schemas):
-        """Called after schema discovery."""
-        print(f"Discovered {len(discovered_schemas)} schemas")
-    
-    def validate_schema(self, schema_info):
-        """Validate schema configuration."""
-        if not schema_info.description:
-            raise ValueError("Schema must have a description")
-        return True
-```
-
-### Plugin Configuration
-
-```python
-# settings.py
-GRAPHQL_SCHEMA_PLUGINS = [
-    'myapp.plugins.MyPlugin',
-    'another_app.plugins.AnotherPlugin',
+# Old settings.py
+INSTALLED_APPS = [
+    'graphene_django',
 ]
 
-GRAPHQL_SCHEMA_PLUGIN_SETTINGS = {
-    'my_plugin': {
-        'enabled': True,
-        'config': {'setting': 'value'}
-    }
+GRAPHENE = {
+    'SCHEMA': 'myapp.schema.schema'
 }
-```
 
-## Discovery Hooks
-
-### Adding Hooks
-
-```python
-from rail_django_graphql.core.registry import schema_registry
-
-def my_pre_hook(schema_name, **kwargs):
-    """Modify schema registration arguments."""
-    kwargs['description'] = f"Enhanced: {kwargs.get('description', '')}"
-    return kwargs
-
-def my_post_hook(schema_name, schema_info):
-    """Perform actions after registration."""
-    print(f"Schema {schema_name} registered with version {schema_info.version}")
-
-# Add hooks
-schema_registry.add_pre_registration_hook(my_pre_hook)
-schema_registry.add_post_registration_hook(my_post_hook)
-```
-
-### Hook Registry
-
-```python
-from rail_django_graphql.plugins.hooks import hook_registry
-
-# Register hooks independently
-hook_registry.register_hook('pre_registration', my_pre_hook, 'my_hook')
-hook_registry.register_hook('post_registration', my_post_hook, 'my_post_hook')
-
-# Execute hooks
-modified_kwargs = hook_registry.execute_hooks_with_data('pre_registration', kwargs)
-hook_registry.execute_hooks('post_registration', schema_name, schema_info)
-```
-
-## Configuration
-
-### Django Settings
-
-```python
-# settings.py
-
-# Enable/disable auto-discovery
-GRAPHQL_SCHEMA_AUTO_DISCOVERY = True
-
-# Discovery paths
-GRAPHQL_SCHEMA_DISCOVERY_PATHS = [
-    'graphql_schema.py',
-    'schema.py',
-    'graphql/schema.py'
+# New settings.py
+INSTALLED_APPS = [
+    'django_graphql_auto',
 ]
 
-# Plugin configuration
-GRAPHQL_SCHEMA_PLUGINS = [
-    'myapp.plugins.MyPlugin',
-]
-
-# API settings
-GRAPHQL_SCHEMA_API_CORS_ENABLED = True
-GRAPHQL_SCHEMA_API_AUTH_REQUIRED = False
-
-# Performance settings
-GRAPHQL_SCHEMA_CACHE_ENABLED = True
-GRAPHQL_SCHEMA_CACHE_TIMEOUT = 3600
-
-# Logging
-LOGGING = {
-    'loggers': {
-        'rail_django_graphql': {
-            'level': 'INFO',
-            'handlers': ['console'],
+DJANGO_GRAPHQL_AUTO = {
+    'DEFAULT_SCHEMA': 'main',
+    'SCHEMAS': {
+        'main': {
+            'apps': ['myapp'],
         }
     }
 }
 ```
 
-### Schema Configuration
+#### 3. Update Schema Registration
 
 ```python
-# In your schema files
-SCHEMA_CONFIG = {
-    'name': 'my_schema',
-    'description': 'My application schema',
-    'version': '1.0.0',
-    'apps': ['myapp'],
-    'models': ['MyModel'],
-    'settings': {
-        'enable_subscriptions': True,
-        'max_query_depth': 10
-    }
-}
-```
-## Testing
+# Old schema.py
+import graphene
+from graphene_django import DjangoObjectType
 
-### Unit Tests
+schema = graphene.Schema(query=Query)
 
-```python
-# test_schemas.py
-from django.test import TestCase
-from rail_django_graphql.core.registry import schema_registry
+# New schema.py
+import graphene
+from django_graphql_auto import register_schema
+from django_graphql_auto.types import DjangoObjectType
 
-class SchemaRegistryTest(TestCase):
-    def setUp(self):
-        schema_registry.clear()
-    
-    def test_schema_registration(self):
-        schema_info = schema_registry.register_schema(
-            name='test_schema',
-            description='Test schema'
-        )
-        
-        self.assertEqual(schema_info.name, 'test_schema')
-        self.assertTrue(schema_registry.schema_exists('test_schema'))
-    
-    def test_schema_retrieval(self):
-        schema_registry.register_schema(name='test_schema')
-        schema_info = schema_registry.get_schema('test_schema')
-        
-        self.assertIsNotNone(schema_info)
-        self.assertEqual(schema_info.name, 'test_schema')
+@register_schema('main')
+class MainSchema(graphene.Schema):
+    query = Query
 ```
 
-### Integration Tests
+#### 4. Update URLs
 
 ```python
-# test_api.py
-from django.test import TestCase, Client
-import json
+# Old urls.py
+from graphene_django.views import GraphQLView
 
-class SchemaAPITest(TestCase):
-    def setUp(self):
-        self.client = Client()
-    
-    def test_list_schemas(self):
-        response = self.client.get('/api/v1/schemas/')
-        self.assertEqual(response.status_code, 200)
-        
-        data = response.json()
-        self.assertEqual(data['status'], 'success')
-        self.assertIn('schemas', data['data'])
-    
-    def test_create_schema(self):
-        schema_data = {
-            'name': 'test_schema',
-            'description': 'Test schema',
-            'version': '1.0.0'
-        }
-        
-        response = self.client.post(
-            '/api/v1/schemas/',
-            data=json.dumps(schema_data),
-            content_type='application/json'
-        )
-        
-        self.assertEqual(response.status_code, 201)
+urlpatterns = [
+    path('graphql/', GraphQLView.as_view(graphiql=True)),
+]
+
+# New urls.py
+from django.urls import include
+
+urlpatterns = [
+    path('graphql/', include('django_graphql_auto.urls')),
+]
+```
+
+### From Single Schema to Multi-Schema
+
+#### 1. Reorganize Schemas
+
+```python
+# Before: Single schema
+class Query(graphene.ObjectType):
+    users = graphene.List(UserType)
+    products = graphene.List(ProductType)
+    orders = graphene.List(OrderType)
+
+# After: Multiple schemas
+@register_schema('users')
+class UserSchema(graphene.Schema):
+    query = UserQuery
+
+@register_schema('products')  
+class ProductSchema(graphene.Schema):
+    query = ProductQuery
+
+@register_schema('orders')
+class OrderSchema(graphene.Schema):
+    query = OrderQuery
+```
+
+#### 2. Update Client Code
+
+```javascript
+// Before: Single endpoint
+const client = new ApolloClient({
+  uri: '/graphql/',
+});
+
+// After: Multiple endpoints
+const userClient = new ApolloClient({
+  uri: '/graphql/users/',
+});
+
+const productClient = new ApolloClient({
+  uri: '/graphql/products/',
+});
+```
+
+## 📚 Documentation
+
+### Full Documentation
+
+- **[Quick Start Guide](docs/quick-start.md)** - Get up and running in minutes
+- **[Configuration Guide](docs/configuration-guide.md)** - Comprehensive configuration options
+- **[API Reference](docs/api-reference.md)** - Complete API documentation
+- **[Advanced Usage](docs/usage/advanced-usage.md)** - Advanced features and patterns
+- **[Migration Guide](docs/migration/single-to-multi-schema.md)** - Migration strategies
+- **[Performance Guide](docs/development/performance.md)** - Performance optimization
+- **[Security Guide](docs/features/security.md)** - Security best practices
+- **[Troubleshooting](docs/development/troubleshooting.md)** - Common issues and solutions
+
+### Examples
+
+- **[Basic Examples](docs/examples/basic-examples.md)** - Simple usage examples
+- **[Advanced Examples](docs/examples/advanced-examples.md)** - Complex scenarios
+- **[Authentication Examples](docs/examples/authentication-examples.md)** - Auth patterns
+- **[Performance Examples](docs/examples/performance-examples.md)** - Performance optimization
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+git clone https://github.com/raillogistic/rail-django-graphql.git
+cd rail-django-graphql
+pip install -e ".[dev]"
+pre-commit install
 ```
 
 ### Running Tests
 
 ```bash
-# Run all tests
-python manage.py test rail_django_graphql
-
-# Run specific test modules
-python manage.py test rail_django_graphql.tests.unit
-python manage.py test rail_django_graphql.tests.integration
-
-# Run with coverage
-coverage run --source='.' manage.py test rail_django_graphql
-coverage report
+pytest
+pytest --cov=django_graphql_auto
 ```
 
-## API Reference
-
-### Schema Registry
-
-#### Methods
-
-- `register_schema(name, **kwargs)` - Register a new schema
-- `unregister_schema(name)` - Remove a schema
-- `get_schema(name)` - Get schema information
-- `list_schemas()` - List all registered schemas
-- `schema_exists(name)` - Check if schema exists
-- `enable_schema(name)` - Enable a schema
-- `disable_schema(name)` - Disable a schema
-- `clear()` - Remove all schemas
-- `auto_discover_schemas()` - Trigger auto-discovery
-
-#### Schema Info Properties
-
-- `name` - Schema name
-- `description` - Schema description
-- `version` - Schema version
-- `apps` - Associated Django apps
-- `models` - Included models
-- `exclude_models` - Excluded models
-- `enabled` - Whether schema is enabled
-- `auto_discover` - Whether schema supports auto-discovery
-- `settings` - Custom settings dictionary
-- `schema` - GraphQL schema instance
-- `builder` - Schema builder function
-
-### Decorators
-
-#### `@register_schema(**kwargs)`
-
-Register a class or function as a schema provider.
-
-```python
-@register_schema(name='my_schema', version='1.0.0')
-class MySchema:
-    def get_schema(self):
-        return graphene.Schema(query=MyQuery)
-```
-
-### Plugin Base Classes
-
-#### `BasePlugin`
-
-Base class for creating plugins.
-
-**Methods:**
-- `on_pre_registration(schema_name, **kwargs)` - Pre-registration hook
-- `on_post_registration(schema_name, schema_info)` - Post-registration hook
-- `on_schema_discovery(discovered_schemas)` - Discovery hook
-- `validate_schema(schema_info)` - Schema validation
-
-#### `PluginManager`
-
-Manages plugin loading and execution.
-
-**Methods:**
-- `load_plugins()` - Load plugins from settings
-- `get_plugins()` - Get all loaded plugins
-- `get_enabled_plugins()` - Get enabled plugins
-- `run_pre_registration_hooks(schema_name, **kwargs)` - Run pre-registration hooks
-- `run_post_registration_hooks(schema_name, schema_info)` - Run post-registration hooks
-
-## Examples
-
-### Complete Example: E-commerce Schema
-
-```python
-# ecommerce/graphql_schema.py
-import graphene
-from graphene_django import DjangoObjectType
-from rail_django_graphql.decorators import register_schema
-from .models import Product, Category, Order
-
-class ProductType(DjangoObjectType):
-    class Meta:
-        model = Product
-        fields = '__all__'
-
-class CategoryType(DjangoObjectType):
-    class Meta:
-        model = Category
-        fields = '__all__'
-
-class Query(graphene.ObjectType):
-    products = graphene.List(ProductType)
-    categories = graphene.List(CategoryType)
-    
-    def resolve_products(self, info):
-        return Product.objects.all()
-    
-    def resolve_categories(self, info):
-        return Category.objects.all()
-
-class CreateProduct(graphene.Mutation):
-    class Arguments:
-        name = graphene.String(required=True)
-        price = graphene.Decimal(required=True)
-        category_id = graphene.ID(required=True)
-    
-    product = graphene.Field(ProductType)
-    
-    def mutate(self, info, name, price, category_id):
-        product = Product.objects.create(
-            name=name,
-            price=price,
-            category_id=category_id
-        )
-        return CreateProduct(product=product)
-
-class Mutation(graphene.ObjectType):
-    create_product = CreateProduct.Field()
-
-@register_schema(
-    name='ecommerce_schema',
-    description='E-commerce GraphQL schema',
-    version='1.0.0',
-    apps=['ecommerce'],
-    models=['Product', 'Category', 'Order'],
-    settings={
-        'enable_subscriptions': True,
-        'max_query_depth': 5
-    }
-)
-class EcommerceSchema:
-    def get_schema(self):
-        return graphene.Schema(
-            query=Query,
-            mutation=Mutation
-        )
-```
-
-### Custom Plugin Example
-
-```python
-# myapp/plugins.py
-from rail_django_graphql.plugins.base import BasePlugin
-import logging
-
-logger = logging.getLogger(__name__)
-
-class AuditPlugin(BasePlugin):
-    name = 'audit_plugin'
-    version = '1.0.0'
-    
-    def on_pre_registration(self, schema_name, **kwargs):
-        """Log schema registration attempts."""
-        logger.info(f"Attempting to register schema: {schema_name}")
-        
-        # Add audit metadata
-        kwargs.setdefault('settings', {})
-        kwargs['settings']['registered_by'] = 'audit_plugin'
-        kwargs['settings']['registration_time'] = timezone.now().isoformat()
-        
-        return kwargs
-    
-    def on_post_registration(self, schema_name, schema_info):
-        """Log successful registrations."""
-        logger.info(f"Successfully registered schema: {schema_name} v{schema_info.version}")
-        
-        # Could send to external audit system
-        self.send_audit_event('schema_registered', {
-            'schema_name': schema_name,
-            'version': schema_info.version,
-            'apps': schema_info.apps
-        })
-    
-    def validate_schema(self, schema_info):
-        """Validate schema meets audit requirements."""
-        if not schema_info.description:
-            raise ValueError(f"Schema {schema_info.name} must have a description for audit compliance")
-        
-        if not schema_info.version:
-            raise ValueError(f"Schema {schema_info.name} must have a version for audit compliance")
-        
-        return True
-    
-    def send_audit_event(self, event_type, data):
-        """Send audit event to external system."""
-        # Implementation would depend on your audit system
-        pass
-```
-
-### Advanced Discovery Hook
-
-```python
-# myapp/hooks.py
-from rail_django_graphql.core.registry import schema_registry
-from django.conf import settings
-import logging
-
-logger = logging.getLogger(__name__)
-
-def environment_aware_hook(schema_name, **kwargs):
-    """Modify schema registration based on environment."""
-    
-    # Add environment-specific settings
-    env = getattr(settings, 'ENVIRONMENT', 'development')
-    
-    kwargs.setdefault('settings', {})
-    kwargs['settings']['environment'] = env
-    
-    # Disable certain schemas in production
-    if env == 'production' and schema_name.endswith('_test'):
-        kwargs['enabled'] = False
-        logger.warning(f"Disabled test schema {schema_name} in production")
-    
-    # Add debug information in development
-    if env == 'development':
-        kwargs['settings']['debug'] = True
-        kwargs['description'] = f"[DEV] {kwargs.get('description', '')}"
-    
-    return kwargs
-
-def schema_validation_hook(schema_name, schema_info):
-    """Validate schema after registration."""
-    
-    # Check for required models
-    required_models = getattr(settings, 'REQUIRED_MODELS', [])
-    missing_models = set(required_models) - set(schema_info.models)
-    
-    if missing_models:
-        logger.warning(f"Schema {schema_name} missing required models: {missing_models}")
-    
-    # Log schema statistics
-    logger.info(f"Schema {schema_name} registered with {len(schema_info.models)} models")
-
-# Register hooks
-schema_registry.add_pre_registration_hook(environment_aware_hook)
-schema_registry.add_post_registration_hook(schema_validation_hook)
-```
-
-## Contributing
-
-### Development Setup
+### Code Quality
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/django-graphql-multi-schema.git
-cd django-graphql-multi-schema
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-python manage.py test
-
-# Run linting
-flake8 rail_django_graphql/
-black rail_django_graphql/
-isort rail_django_graphql/
+black .
+isort .
+flake8
+mypy django_graphql_auto
 ```
 
-### Code Style
-
-- Follow PEP 8
-- Use type hints where appropriate
-- Write comprehensive docstrings
-- Add unit tests for new features
-- Update documentation for API changes
-
-### Submitting Changes
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Update documentation
-6. Submit a pull request
-
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Changelog
+## 🆘 Support
 
-### Version 1.0.0
-- Initial release
-- Multi-schema support
-- Schema registry
-- Plugin architecture
-- REST API
-- Auto-discovery
-- Discovery hooks
-- Comprehensive test suite
+- **Documentation**: [https://rail-django-graphql.readthedocs.io/](https://rail-django-graphql.readthedocs.io/)
+- **Issues**: [GitHub Issues](https://github.com/raillogistic/rail-django-graphql/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/raillogistic/rail-django-graphql/discussions)
+- **Email**: support@raillogistic.com
 
-## Support
+## 🗺️ Roadmap
 
-- **Documentation**: [Full documentation](https://django-graphql-multi-schema.readthedocs.io/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/django-graphql-multi-schema/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/django-graphql-multi-schema/discussions)
-- **Email**: support@your-org.com
+- [ ] GraphQL Federation support
+- [ ] Real-time subscriptions with WebSockets
+- [ ] Advanced caching strategies
+- [ ] GraphQL Code Generator integration
+- [ ] Automated testing utilities
+- [ ] Performance benchmarking tools
+- [ ] Schema stitching capabilities
+- [ ] Advanced security features
 
-## Acknowledgments
+## 📊 Stats
 
-- Built on top of [Graphene-Django](https://github.com/graphql-python/graphene-django)
-- Inspired by Django's app registry system
-- Thanks to all contributors and the GraphQL community
-- Inspired by [Django REST Framework](https://www.django-rest-framework.org/)
-- Thanks to all contributors and the open-source community
+![GitHub stars](https://img.shields.io/github/stars/raillogistic/rail-django-graphql)
+![GitHub forks](https://img.shields.io/github/forks/raillogistic/rail-django-graphql)
+![GitHub issues](https://img.shields.io/github/issues/raillogistic/rail-django-graphql)
+![PyPI version](https://img.shields.io/pypi/v/rail-django-graphql)
+![Python versions](https://img.shields.io/pypi/pyversions/rail-django-graphql)
+![Django versions](https://img.shields.io/badge/django-3.2%2B-blue)
+
+---
+
+Made with ❤️ by [Rail Logistic](https://raillogistic.com)
