@@ -24,9 +24,9 @@ git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql
 
 # Create basic structure
-mkdir -p rail_django_graphql/{core,generators,middleware,permissions,extensions,plugins}
-mkdir -p rail_django_graphql/{introspection,validation,debugging,management/commands}
-mkdir -p rail_django_graphql/{api,templates,static,views}
+mkdir -p rail-django-graphql/{core,generators,middleware,permissions,extensions,plugins}
+mkdir -p rail-django-graphql/{introspection,validation,debugging,management/commands}
+mkdir -p rail-django-graphql/{api,templates,static,views}
 mkdir -p tests/{unit,integration,performance,e2e,fixtures}
 mkdir -p docs/{source,requirements}
 mkdir -p examples/{basic,advanced,integration}
@@ -38,7 +38,7 @@ mkdir -p .github/workflows
 #### Step 1.2: Copy and Clean Library Files
 ```bash
 # Copy main library package (excluding boilerplate-specific files)
-cp -r ../Graphql\ Schema/rail_django_graphql/* rail_django_graphql/
+cp -r ../Graphql\ Schema/rail_django_graphql/* rail-django-graphql/
 
 # Copy only library-related configuration files
 cp ../Graphql\ Schema/pyproject.toml .
@@ -56,11 +56,11 @@ cp -r ../Graphql\ Schema/tests/unit/test_*.py tests/unit/
 cp -r ../Graphql\ Schema/tests/integration/test_*.py tests/integration/
 
 # Remove boilerplate-specific files from library
-rm -rf rail_django_graphql/test_app/
-rm -rf rail_django_graphql/config/
-rm -f rail_django_graphql/manage.py
-rm -f rail_django_graphql/wsgi.py
-rm -f rail_django_graphql/asgi.py
+rm -rf rail-django-graphql/test_app/
+rm -rf rail-django-graphql/config/
+rm -f rail-django-graphql/manage.py
+rm -f rail-django-graphql/wsgi.py
+rm -f rail-django-graphql/asgi.py
 ```
 
 #### Step 1.3: Update Library Configuration for GitHub Distribution
@@ -162,7 +162,7 @@ cp ../Graphql\ Schema/LICENSE .
 
 #### Step 2.4: Update Django Settings for GitHub Library
 - [ ] Update `config/settings/base.py` to use library from GitHub installation
-- [ ] Configure `INSTALLED_APPS` to include `rail_django_graphql`
+- [ ] Configure `INSTALLED_APPS` to include `rail-django-graphql`
 - [ ] Set up proper library configuration in settings
 - [ ] Create environment-specific settings (dev, staging, prod)
 
@@ -267,7 +267,7 @@ cp ../Graphql\ Schema/LICENSE .
 
 ```
 rail-django-graphql/
-├── rail_django_graphql/           # Main library package
+├── rail-django-graphql/           # Main library package
 │   ├── __init__.py               # Library exports and version
 │   ├── core/                     # Core functionality
 │   ├── generators/               # Schema generators
@@ -424,7 +424,7 @@ jobs:
       - name: Run tests
         run: pytest
       - name: Run linting
-        run: flake8 rail_django_graphql/
+        run: flake8 rail-django-graphql/
 ```
 
 #### Boilerplate Repository CI/CD
@@ -510,7 +510,7 @@ def pytest_configure():
         INSTALLED_APPS=[
             'django.contrib.auth',
             'django.contrib.contenttypes',
-            'rail_django_graphql',
+            'rail-django-graphql',
             'graphene_django',
         ],
         SECRET_KEY='test-secret-key',
@@ -634,10 +634,10 @@ docs/
 1. **Import Changes**
    ```python
    # Old (current structure)
-   from rail_django_graphql.generators import MutationGenerator
+   from rail-django-graphql.generators import MutationGenerator
    
    # New (GitHub library installation)
-   from rail_django_graphql.generators import MutationGenerator  # Same import!
+   from rail-django-graphql.generators import MutationGenerator  # Same import!
    ```
 
 2. **Installation Changes**
