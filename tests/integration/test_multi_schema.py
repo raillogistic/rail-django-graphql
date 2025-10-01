@@ -47,7 +47,6 @@ class TestMultiSchemaRouting(TestCase):
         # Enregistrer les schémas de test
         self.schema_info1 = self.registry.register_schema(
             name="test_schema1",
-            schema=self.mock_schema1,
             description="Premier schéma de test",
             version="1.0.0",
             enabled=True
@@ -55,7 +54,6 @@ class TestMultiSchemaRouting(TestCase):
         
         self.schema_info2 = self.registry.register_schema(
             name="test_schema2",
-            schema=self.mock_schema2,
             description="Deuxième schéma de test",
             version="2.0.0",
             enabled=True
@@ -63,7 +61,6 @@ class TestMultiSchemaRouting(TestCase):
         
         self.disabled_schema = self.registry.register_schema(
             name="disabled_schema",
-            schema=Mock(),
             description="Schéma désactivé",
             enabled=False
         )
@@ -72,7 +69,7 @@ class TestMultiSchemaRouting(TestCase):
         """Nettoyage après chaque test."""
         self.registry.clear()
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
+    @patch('rail_django_graphql.core.registry.schema_registry')
     def test_multi_schema_graphql_view_get_request(self, mock_registry):
         """Test de la vue MultiSchemaGraphQLView avec une requête GET."""
         mock_registry.get_schema.return_value = self.schema_info1
@@ -91,7 +88,7 @@ class TestMultiSchemaRouting(TestCase):
         # Vérifier que le schéma correct a été récupéré
         mock_registry.get_schema.assert_called_with('test_schema1')
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
+    @patch('rail_django_graphql.core.registry.schema_registry')
     def test_multi_schema_graphql_view_post_request(self, mock_registry):
         """Test de la vue MultiSchemaGraphQLView avec une requête POST."""
         mock_registry.get_schema.return_value = self.schema_info1
@@ -115,8 +112,8 @@ class TestMultiSchemaRouting(TestCase):
             # Vérifier que la requête GraphQL a été exécutée
             mock_execute.assert_called_once()
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
-    def test_multi_schema_view_schema_not_found(self, mock_registry):
+    @patch('rail_django_graphql.core.registry.schema_registry')
+    def test_multi_schema_graphql_view_schema_not_found(self, mock_registry):
         """Test de la vue avec un schéma inexistant."""
         mock_registry.get_schema.return_value = None
         
@@ -129,8 +126,8 @@ class TestMultiSchemaRouting(TestCase):
         # Vérifier que la réponse indique une erreur 404
         self.assertEqual(response.status_code, 404)
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
-    def test_multi_schema_view_disabled_schema(self, mock_registry):
+    @patch('rail_django_graphql.core.registry.schema_registry')
+    def test_multi_schema_graphql_view_disabled_schema(self, mock_registry):
         """Test de la vue avec un schéma désactivé."""
         disabled_schema_info = Mock()
         disabled_schema_info.enabled = False
@@ -145,8 +142,8 @@ class TestMultiSchemaRouting(TestCase):
         # Vérifier que la réponse indique que le schéma est désactivé
         self.assertEqual(response.status_code, 403)
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
-    def test_schema_list_view(self, mock_registry):
+    @patch('rail_django_graphql.core.registry.schema_registry')
+    def test_schema_list_view_get(self, mock_registry):
         """Test de la vue SchemaListView."""
         mock_registry.list_schemas.return_value = [
             self.schema_info1,
@@ -173,8 +170,8 @@ class TestMultiSchemaRouting(TestCase):
         self.assertIn('test_schema1', schema_names)
         self.assertIn('test_schema2', schema_names)
     
-    @patch('rail_django_graphql.views.graphql_views.schema_registry')
-    def test_graphql_playground_view(self, mock_registry):
+    @patch('rail_django_graphql.core.registry.schema_registry')
+    def test_graphql_playground_view_get(self, mock_registry):
         """Test de la vue GraphQLPlaygroundView."""
         mock_registry.get_schema.return_value = self.schema_info1
         
@@ -208,7 +205,6 @@ class TestMultiSchemaURLIntegration(TestCase):
         
         self.registry.register_schema(
             name="url_test_schema",
-            schema=mock_schema,
             description="Schéma pour test d'URLs"
         )
     
@@ -285,7 +281,6 @@ class TestMultiSchemaAuthentication(TestCase):
         mock_schema = Mock()
         self.auth_schema_info = self.registry.register_schema(
             name="auth_schema",
-            schema=mock_schema,
             description="Schéma avec authentification",
             settings={
                 'authentication_required': True,
