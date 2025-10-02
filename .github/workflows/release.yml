@@ -16,6 +16,9 @@ on:
           - minor
           - patch
 
+permissions:
+  contents: write
+
 jobs:
   # Package building and validation
   build:
@@ -97,13 +100,15 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag_name: ${{ github.ref_name }}
+        name: Release ${{ github.ref_name }}
         body_path: RELEASE_CHANGELOG.md
         files: |
           dist/*
         draft: false
+        generate_release_notes: true
         prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Publish to PyPI
   publish-pypi:
