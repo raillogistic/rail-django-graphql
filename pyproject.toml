@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rail-django-graphql"
-version = "1.0.0"
+version = "1.0.2"
 description = "A powerful Django library for automatic GraphQL API generation with advanced features"
 readme = "README.md"
 license = {text = "MIT"}
@@ -101,11 +101,11 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/rail-django-graphql"
+Homepage = "https://github.com/raillogistic/rail-django-graphql"
 Documentation = "https://rail-django-graphql.readthedocs.io/"
-Repository = "https://github.com/yourusername/rail-django-graphql.git"
-"Bug Tracker" = "https://github.com/yourusername/rail-django-graphql/issues"
-Changelog = "https://github.com/yourusername/rail-django-graphql/blob/main/CHANGELOG.md"
+Repository = "https://github.com/raillogistic/rail-django-graphql.git"
+"Bug Tracker" = "https://github.com/raillogistic/rail-django-graphql/issues"
+Changelog = "https://github.com/raillogistic/rail-django-graphql/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["rail_django_graphql"]
