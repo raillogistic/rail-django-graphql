@@ -1,0 +1,7 @@
+# Base requirements
+Django>=4.2,<5.0
+graphene-django>=3.0
+django-cors-headers>=3.14
+
+# Install rail-django-graphql directly from GitHub
+git+https://github.com/raillogistic/rail-django-graphql.git@v1.0.0#egg=rail-django-graphql
