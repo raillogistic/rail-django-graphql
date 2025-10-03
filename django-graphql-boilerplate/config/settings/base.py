@@ -122,8 +122,8 @@ AUTH_USER_MODEL = 'users.User'
 GRAPHENE = {
     'SCHEMA': 'config.schema.schema',
     'MIDDLEWARE': [
-        'rail_django_graphql.middleware.AuthenticationMiddleware',
-        'rail_django_graphql.middleware.PermissionMiddleware',
+        # Use Django's Graphene debug middleware in development only
+        'graphene_django.debug.DjangoDebugMiddleware',
     ],
 }
 

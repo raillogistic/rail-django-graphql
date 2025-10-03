@@ -1,0 +1,289 @@
+# Alertmanager configuration for Django GraphQL Auto System
+
+global:
+  # SMTP configuration for email notifications
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'alerts@example.com'
+  smtp_auth_username: 'alerts@example.com'
+  smtp_auth_password: 'your-email-password'
+  smtp_require_tls: true
+
+# Templates for custom notification formats
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert routing
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      
+    # Warning alerts - less frequent notifications
+    - match:
+        severity: warning
+      receiver: 'warning-alerts'
+      repeat_interval: 30m
+      
+    # Database alerts
+    - match:
+        service: postgresql
+      receiver: 'database-team'
+      
+    # Application alerts
+    - match:
+        service: django-app
+      receiver: 'dev-team'
+      
+    # Infrastructure alerts
+    - match:
+        service: system
+      receiver: 'ops-team'
+      
+    # SSL certificate alerts
+    - match:
+        service: ssl
+      receiver: 'security-team'
+
+# Inhibition rules to suppress redundant alerts
+inhibit_rules:
+  # Suppress warning alerts when critical alerts are firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+    
+  # Suppress individual service alerts when the entire node is down
+  - source_match:
+      alertname: 'NodeDown'
+    target_match_re:
+      service: '.*'
+    equal: ['instance']
+
+# Receivers define notification destinations
+receivers:
+  # Default receiver
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'admin@example.com'
+        subject: '[ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+        html: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Alert Notification</title>
+            <style>
+              body { font-family: Arial, sans-serif; }
+              .alert { margin: 10px 0; padding: 10px; border-left: 4px solid #ff6b6b; }
+              .critical { border-left-color: #ff6b6b; }
+              .warning { border-left-color: #ffa726; }
+              .info { border-left-color: #42a5f5; }
+            </style>
+          </head>
+          <body>
+            <h2>Alert Notification</h2>
+            {{ range .Alerts }}
+            <div class="alert {{ .Labels.severity }}">
+              <h3>{{ .Annotations.summary }}</h3>
+              <p><strong>Description:</strong> {{ .Annotations.description }}</p>
+              <p><strong>Severity:</strong> {{ .Labels.severity }}</p>
+              <p><strong>Service:</strong> {{ .Labels.service }}</p>
+              <p><strong>Time:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05" }}</p>
+              {{ if .Annotations.runbook_url }}
+              <p><a href="{{ .Annotations.runbook_url }}">Runbook</a></p>
+              {{ end }}
+            </div>
+            {{ end }}
+          </body>
+          </html>
+
+  # Critical alerts receiver
+  - name: 'critical-alerts'
+    email_configs:
+      - to: 'oncall@example.com'
+        subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        body: |
+          CRITICAL ALERT FIRED!
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Started: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ if .Annotations.runbook_url }}
+          Runbook: {{ .Annotations.runbook_url }}
+          {{ end }}
+          {{ end }}
+          
+          Please investigate immediately!
+    
+    # Slack notifications for critical alerts
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts-critical'
+        title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          
+          *Service:* {{ .Labels.service }}
+          *Severity:* {{ .Labels.severity }}
+          *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ if .Annotations.runbook_url }}
+          <{{ .Annotations.runbook_url }}|Runbook>
+          {{ end }}
+          {{ end }}
+        color: 'danger'
+        send_resolved: true
+
+  # Warning alerts receiver
+  - name: 'warning-alerts'
+    email_configs:
+      - to: 'team@example.com'
+        subject: '[WARNING] {{ .GroupLabels.alertname }}'
+        body: |
+          Warning alert detected:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts-warning'
+        title: 'Warning: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+        color: 'warning'
+
+  # Database team receiver
+  - name: 'database-team'
+    email_configs:
+      - to: 'dba@example.com'
+        subject: '[DB ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          Database alert detected:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Database: {{ .Labels.instance }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#database-alerts'
+        title: 'Database Alert: {{ .GroupLabels.alertname }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+  # Development team receiver
+  - name: 'dev-team'
+    email_configs:
+      - to: 'developers@example.com'
+        subject: '[APP ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          Application alert detected:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Application: {{ .Labels.service }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#dev-alerts'
+        title: 'Application Alert: {{ .GroupLabels.alertname }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+  # Operations team receiver
+  - name: 'ops-team'
+    email_configs:
+      - to: 'ops@example.com'
+        subject: '[INFRA ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          Infrastructure alert detected:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#ops-alerts'
+        title: 'Infrastructure Alert: {{ .GroupLabels.alertname }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+  # Security team receiver
+  - name: 'security-team'
+    email_configs:
+      - to: 'security@example.com'
+        subject: '[SECURITY ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          Security alert detected:
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ if .Labels.instance }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+          {{ end }}
+          
+          Please review immediately for security implications.
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#security-alerts'
+        title: 'Security Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          *{{ .Annotations.summary }}*
+          {{ .Annotations.description }}
+          {{ end }}
+        color: 'danger'
+        send_resolved: true
+
+# Time intervals for notification timing
+time_intervals:
+  - name: 'business-hours'
+    time_intervals:
+      - times:
+          - start_time: '09:00'
+            end_time: '17:00'
+        weekdays: ['monday:friday']
+        
+  - name: 'weekends'
+    time_intervals:
+      - weekdays: ['saturday', 'sunday']
+        
+  - name: 'nights'
+    time_intervals:
+      - times:
+          - start_time: '22:00'
+            end_time: '08:00'

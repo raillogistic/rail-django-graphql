@@ -24,7 +24,7 @@ from graphql import (
     get_named_type
 )
 from graphql.execution import execute
-from graphql.language import build_ast_schema, print_schema
+from graphql.utilities import build_ast_schema, print_schema
 
 logger = logging.getLogger(__name__)
 

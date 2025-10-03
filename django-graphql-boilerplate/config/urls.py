@@ -6,6 +6,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from graphene_django.views import GraphQLView
+from rail_django_graphql.health_urls import health_urlpatterns
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic import TemplateView
 
@@ -13,11 +14,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', TemplateView.as_view(template_name='index.html'), name='home'),
     
-    # GraphQL endpoint
+    # GraphQL endpoint (library view)
     path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=True))),
     
     # Health check endpoints
-    path('health/', include('rail_django_graphql.health_urls')),
+    path('health/', include(health_urlpatterns)),
     
     # App URLs
     path('users/', include('apps.users.urls')),
