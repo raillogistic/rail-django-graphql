@@ -52,6 +52,16 @@ cd django-graphql-boilerplate
 mkdocs serve
 ```
 
+## Deployment
+
+Production-ready deployment assets are provided under `django-graphql-boilerplate/deploy`.
+
+- Copy `deploy/.env.production.example` to `deploy/.env.production` and set `SECRET_KEY`, `POSTGRES_PASSWORD`, `ALLOWED_HOSTS`.
+- Start stack: `docker compose -f django-graphql-boilerplate/deploy/docker-compose.production.yml --env-file django-graphql-boilerplate/deploy/.env.production up -d --build`
+- Migrate: `docker compose -f django-graphql-boilerplate/deploy/docker-compose.production.yml exec web python manage.py migrate`
+- Collect static: `docker compose -f django-graphql-boilerplate/deploy/docker-compose.production.yml exec web python manage.py collectstatic --noinput`
+- Grafana: `http://localhost:3000/`, Prometheus: `http://localhost:9090/`, App: `http://localhost:8000/`
+
 ## Tests
 
 Install testing dependencies and run the test suite:

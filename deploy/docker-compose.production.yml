@@ -12,7 +12,7 @@ services:
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./deploy/scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
       - ./deploy/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -30,7 +30,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
       - ./deploy/redis/redis.conf:/usr/local/etc/redis/redis.conf
@@ -59,9 +59,11 @@ services:
       - logs_data:/app/logs
     ports:
       - "${WEB_PORT:-8000}:8000"
+    env_file:
+      - ./deploy/.env.production.example
     environment:
       - DEBUG=False
-      - DJANGO_SETTINGS_MODULE=rail_django_graphql.settings.production
+      - DJANGO_SETTINGS_MODULE=config.settings.production
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-rail_django_graphql}
       - REDIS_URL=redis://redis:6379/0
       - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
@@ -144,6 +146,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./deploy/monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./deploy/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
