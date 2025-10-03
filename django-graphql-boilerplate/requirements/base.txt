@@ -4,5 +4,5 @@ graphene-django>=3.0
 django-cors-headers>=3.14
 psutil>=5.9
 
-# Install rail-django-graphql from local source (editable)
--e ../rail-django-graphql
+# Install rail-django-graphql directly from GitHub (pinned to v1.0.0)
+git+https://github.com/raillogistic/rail-django-graphql.git@v1.0.0#egg=rail-django-graphql

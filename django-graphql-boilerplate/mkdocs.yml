@@ -1,0 +1,12 @@
+site_name: Django GraphQL Boilerplate
+repo_url: https://github.com/raillogistic/django-graphql-boilerplate
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Usage: usage.md
+  - Advanced: advanced/index.md
+  - Examples: examples/index.md
+docs_dir: docs
