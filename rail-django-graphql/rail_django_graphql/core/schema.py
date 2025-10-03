@@ -468,7 +468,6 @@ class SchemaBuilder:
                     from .registry import register_schema
                     register_schema(
                         name=self.schema_name,
-                        schema=self._schema,
                         description=f"Auto-generated GraphQL schema for {self.schema_name}",
                         version=str(self._schema_version),
                         models=list(self._registered_models)
