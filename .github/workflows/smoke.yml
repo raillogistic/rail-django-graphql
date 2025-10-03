@@ -1,0 +1,17 @@
+name: Smoke Tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo ref
+        run: |
+          echo "ref=${{ github.ref }}"
+          echo "ref_name=${{ github.ref_name }}"
+      - name: Checkout
+        uses: actions/checkout@v4
