@@ -20,6 +20,18 @@ permissions:
   contents: write
 
 jobs:
+  # Minimal smoke test to verify workflow execution
+  smoke:
+    runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Echo tag
+        run: |
+          echo "Triggered by tag: ${{ github.ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
   # Package building and validation
   build:
     runs-on: ubuntu-latest
