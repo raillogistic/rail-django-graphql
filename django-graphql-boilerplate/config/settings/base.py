@@ -124,8 +124,8 @@ GRAPHENE = {
     'MIDDLEWARE': [
         # Use Django's Graphene debug middleware in development only
         'graphene_django.debug.DjangoDebugMiddleware',
-        # Rail Django GraphQL performance middleware for request metrics
-        'rail_django_graphql.middleware.GraphQLPerformanceMiddleware',
+        # Use GraphQL execution middleware (Graphene middleware class)
+        'rail_django_graphql.middleware.performance_middleware.GraphQLExecutionMiddleware',
     ],
 }
 
