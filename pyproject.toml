@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Automatic GraphQL schema generation for Django with advanced features"
 authors = [{name = "Rail Logistic", email = "contact@raillogistic.com"}]
 license = {text = "MIT"}
-readme = "README.md"
+readme = "readme.md"
 requires-python = ">=3.8"
 keywords = ["django", "graphql", "schema", "generation", "api", "graphene"]
 classifiers = [

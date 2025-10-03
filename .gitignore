@@ -91,3 +91,4 @@ local_settings.py
 .env.dev
 .env.prod
 .env.prod.db
+.venv_release_test

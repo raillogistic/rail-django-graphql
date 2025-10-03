@@ -36,21 +36,30 @@ jobs:
         python-version: '3.11'
 
     - name: Install build dependencies
+      working-directory: rail-django-graphql
       run: |
         python -m pip install --upgrade pip
         pip install build twine
 
     - name: Build distribution packages
+      working-directory: rail-django-graphql
       run: python -m build
 
     - name: Check package
+      working-directory: rail-django-graphql
       run: twine check dist/*
+
+    - name: List build outputs
+      working-directory: rail-django-graphql
+      run: |
+        echo "Contents of rail-django-graphql/dist:"
+        ls -la dist || true
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist
-        path: dist/
+        path: rail-django-graphql/dist/
 
   # Create GitHub release
   create-release:
@@ -99,8 +108,9 @@ jobs:
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         body_path: RELEASE_CHANGELOG.md
@@ -127,6 +137,8 @@ jobs:
     - name: Publish to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
+        packages_dir: dist
+        skip_existing: true
         password: ${{ secrets.PYPI_API_TOKEN }}
 
   # Update documentation
