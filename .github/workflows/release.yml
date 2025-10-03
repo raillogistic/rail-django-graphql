@@ -156,15 +156,14 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install dependencies
+    - name: Install Sphinx documentation dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ".[dev]"
-        pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+        pip install sphinx sphinx-rtd-theme myst-parser
 
-    - name: Build documentation
+    - name: Build Sphinx documentation
       run: |
-        mkdocs build
+        sphinx-build -b html docs site
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
