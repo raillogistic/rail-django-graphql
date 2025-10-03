@@ -8,7 +8,7 @@ to create a GraphQL API from Django models.
 # Installation:
 # pip install rail-django-graphql
 # or from GitHub:
-# pip install git+https://github.com/yourusername/rail-django-graphql.git
+# pip install git+https://github.com/raillogistic/rail-django-graphql.git
 
 # 1. Django Settings Configuration
 DJANGO_SETTINGS_EXAMPLE = """

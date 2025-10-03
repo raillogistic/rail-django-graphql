@@ -8,16 +8,16 @@ and set up a development environment.
 # Installation from GitHub
 GITHUB_INSTALLATION = """
 # Install from GitHub (latest development version)
-pip install git+https://github.com/yourusername/rail-django-graphql.git
+pip install git+https://github.com/raillogistic/rail-django-graphql.git
 
 # Install specific branch
-pip install git+https://github.com/yourusername/rail-django-graphql.git@develop
+pip install git+https://github.com/raillogistic/rail-django-graphql.git@develop
 
 # Install specific tag/version
-pip install git+https://github.com/yourusername/rail-django-graphql.git@v1.0.0
+pip install git+https://github.com/raillogistic/rail-django-graphql.git@v1.0.0
 
 # Install in editable mode for development
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql
 pip install -e .
 
@@ -28,7 +28,7 @@ pip install -e ".[dev]"
 # Development Environment Setup
 DEVELOPMENT_SETUP = """
 # 1. Clone the repository
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql
 
 # 2. Create virtual environment
@@ -209,7 +209,7 @@ def github_development_workflow():
     ## 1. Fork and Clone
     # Fork the repository on GitHub
     # Clone your fork
-    git clone https://github.com/yourusername/rail-django-graphql.git
+    git clone https://github.com/raillogistic/rail-django-graphql.git
     cd rail-django-graphql
     
     # Add upstream remote
@@ -343,7 +343,7 @@ def test_github_installation():
     except ImportError as e:
         print(f"❌ Failed to import rail_django_graphql: {e}")
         print("   Make sure you have installed it from GitHub:")
-        print("   pip install git+https://github.com/yourusername/rail-django-graphql.git")
+        print("   pip install git+https://github.com/raillogistic/rail-django-graphql.git")
         return False
         
     except Exception as e:
@@ -364,7 +364,7 @@ CONTRIBUTING_EXAMPLE = """
 
 2. **Clone Your Fork**
    ```bash
-   git clone https://github.com/yourusername/rail-django-graphql.git
+   git clone https://github.com/raillogistic/rail-django-graphql.git
    cd rail-django-graphql
    ```
 
