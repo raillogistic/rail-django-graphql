@@ -3,18 +3,10 @@ name: Security
 on:
   push:
     branches: [ main, develop ]
-    paths:
-      - 'rail-django-graphql/**'
   pull_request:
     branches: [ main, develop ]
-    paths:
-      - 'rail-django-graphql/**'
   schedule:
     - cron: '0 0 * * 0'  # Weekly on Sunday
-
-defaults:
-  run:
-    working-directory: rail-django-graphql
 
 jobs:
   security:

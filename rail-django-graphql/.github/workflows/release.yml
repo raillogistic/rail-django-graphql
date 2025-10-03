@@ -5,17 +5,11 @@ on:
     tags:
       - 'v*'
 
-defaults:
-  run:
-    working-directory: rail-django-graphql
-
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
     
     steps:
     - uses: actions/checkout@v4
@@ -51,9 +45,9 @@ jobs:
         generate_release_notes: true
 
     - name: Publish to PyPI
-      if: ${{ env.PYPI_API_TOKEN != '' }}
+      if: ${{ secrets.PYPI_API_TOKEN != '' }}
       env:
         TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ env.PYPI_API_TOKEN }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
         twine upload dist/*
