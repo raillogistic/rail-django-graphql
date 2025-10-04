@@ -1,53 +1,51 @@
 """
-Production settings for django-graphql-boilerplate project.
+Production settings for django-graphql-boilerplate project (env-driven).
 """
 
 import os
 from .base import *
+from pathlib import Path
+import environ
+
+env = environ.Env()
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = env.bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=[])
 
-# Production database
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('POSTGRES_DB', os.environ.get('DB_NAME', 'rail_django_graphql')),
-        'USER': os.environ.get('POSTGRES_USER', os.environ.get('DB_USER', 'postgres')),
-        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', os.environ.get('DB_PASSWORD')),
-        'HOST': os.environ.get('DB_HOST', os.environ.get('POSTGRES_HOST', 'db')),
-        'PORT': os.environ.get('DB_PORT', os.environ.get('POSTGRES_PORT', '5432')),
-    }
+    'default': env.db('DATABASE_URL')
 }
 
-# Cache configuration using Redis
-CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': os.environ.get('REDIS_URL', 'redis://redis:6379/0'),
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'IGNORE_EXCEPTIONS': True,
+_redis_url = env('REDIS_URL', default=None)
+if _redis_url:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': _redis_url,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
+            }
         }
     }
-}
 
-# Disable GraphiQL in production
-RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_GRAPHIQL'] = False
-RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_INTROSPECTION'] = False
+# Security toggles
+RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_GRAPHIQL'] = env.bool('ENABLE_GRAPHIQL', default=False)
+RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_INTROSPECTION'] = env.bool('ENABLE_INTROSPECTION', default=False)
 
-# Static files
-STATIC_ROOT = '/app/static/'
-
-# Media files
-MEDIA_ROOT = '/app/media/'
+STATIC_ROOT = Path(env('STATIC_ROOT', default='/app/static/'))
+MEDIA_ROOT = Path(env('MEDIA_ROOT', default='/app/media/'))
 
 # Security settings
-SECURE_BROWSER_XSS_FILTER = True
-SECURE_CONTENT_TYPE_NOSNIFF = True
-X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+SECURE_BROWSER_XSS_FILTER = env.bool('SECURE_BROWSER_XSS_FILTER', default=True)
+SECURE_CONTENT_TYPE_NOSNIFF = env.bool('SECURE_CONTENT_TYPE_NOSNIFF', default=True)
+X_FRAME_OPTIONS = env('X_FRAME_OPTIONS', default='DENY')
+SECURE_HSTS_SECONDS = env.int('SECURE_HSTS_SECONDS', default=31536000)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True)
+SECURE_HSTS_PRELOAD = env.bool('SECURE_HSTS_PRELOAD', default=True)
+SECURE_PROXY_SSL_HEADER = env('SECURE_PROXY_SSL_HEADER', default=('HTTP_X_FORWARDED_PROTO', 'https'))
+SESSION_COOKIE_SECURE = env.bool('SESSION_COOKIE_SECURE', default=True)
+CSRF_COOKIE_SECURE = env.bool('CSRF_COOKIE_SECURE', default=True)
+CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])

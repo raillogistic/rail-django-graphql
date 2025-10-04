@@ -1,39 +1,19 @@
 """
-Development settings for django-graphql-boilerplate project.
+Development settings for django-graphql-boilerplate project (env-driven).
 """
 
 from .base import *
+import environ
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+env = environ.Env()
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+# Development toggles
+DEBUG = env.bool('DJANGO_DEBUG', default=True)
+ALLOWED_HOSTS = env.list('DJANGO_ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
-# Development database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
-# Enable GraphiQL in development
-RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_GRAPHIQL'] = True
-RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_INTROSPECTION'] = True
+# GraphiQL and introspection
+RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_GRAPHIQL'] = env.bool('ENABLE_GRAPHIQL', default=True)
+RAIL_DJANGO_GRAPHQL['SECURITY']['ENABLE_INTROSPECTION'] = env.bool('ENABLE_INTROSPECTION', default=True)
 
 # Email backend for development
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-
-# Development logging
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'root': {
-        'handlers': ['console'],
-    },
-}
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')
