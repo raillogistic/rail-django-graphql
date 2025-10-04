@@ -12,7 +12,11 @@ from django.db import models
 from django.db.models.fields import Field
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
 from graphene_django import DjangoObjectType
-from graphene_django.filter import DjangoFilterConnectionField
+# Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
+try:
+    from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
+except Exception:
+    DjangoFilterConnectionField = None  # Not required unless Relay is explicitly used
 from graphene_django.utils import DJANGO_FILTER_INSTALLED
 
 if DJANGO_FILTER_INSTALLED:

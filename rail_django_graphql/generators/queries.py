@@ -11,7 +11,11 @@ import graphene
 from django.db import models
 from django.db.models import Q
 from graphene_django import DjangoObjectType
-from graphene_django.filter import DjangoFilterConnectionField
+# Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
+try:
+    from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
+except Exception:
+    DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
 from ..core.settings import QueryGeneratorSettings
 from ..conf import get_schema_settings
@@ -139,7 +143,7 @@ class QueryGenerator:
         filter_class = self.filter_generator.generate_filter_set(model)
         complex_filter_input = self.filter_generator.generate_complex_filter_input(model)
 
-        if self.settings.use_relay:
+        if self.settings.use_relay and DjangoFilterConnectionField is not None:
             # Use Relay connection for cursor-based pagination
             return DjangoFilterConnectionField(
                 model_type,

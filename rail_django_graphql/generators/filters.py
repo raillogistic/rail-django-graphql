@@ -11,7 +11,11 @@ import graphene
 from django.db import models
 from django.db.models import Q
 from graphene_django import DjangoObjectType
-from graphene_django.filter import DjangoFilterConnectionField
+# Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
+try:
+    from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
+except Exception:
+    DjangoFilterConnectionField = None
 import django_filters
 from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter
 import logging
