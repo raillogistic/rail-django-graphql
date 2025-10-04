@@ -1,6 +1,0 @@
-# Testing requirements
--r base.txt
-
-pytest
-pytest-django
-coverage
