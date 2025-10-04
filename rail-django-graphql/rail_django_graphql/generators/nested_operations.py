@@ -6,8 +6,9 @@ validation, transaction management, and cascade handling for related objects.
 """
 
 from typing import Any, Dict, List, Optional, Type, Union, Set
+import re
 import graphene
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError
 from django.core.exceptions import ValidationError
 from django.db.models import Q
 
@@ -139,12 +140,26 @@ class NestedOperationHandler:
                 elif isinstance(value, (str, int)):
                     # Reference to existing object - convert ID to model instance
                     try:
-                        related_instance = field.related_model.objects.get(pk=value)
+                        pk_value = int(value) if isinstance(value, str) else value
+                    except (TypeError, ValueError):
+                        # Explicitly map error to the input field name
+                        raise ValidationError({
+                            field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                        })
+
+                    try:
+                        related_instance = field.related_model.objects.get(pk=pk_value)
                         regular_fields[field_name] = related_instance
                     except field.related_model.DoesNotExist:
-                        raise ValidationError(
-                            f"{field.related_model.__name__} with id '{value}' does not exist"
-                        )
+                        # Explicitly map error to the input field name
+                        raise ValidationError({
+                            field_name: f"{field.related_model.__name__} with id '{value}' does not exist."
+                        })
+                    except (TypeError, ValueError):
+                        # Ensure numeric coercion issues are mapped to the correct field
+                        raise ValidationError({
+                            field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                        })
                 elif hasattr(value, 'pk'):
                     # Already a model instance, use directly
                     regular_fields[field_name] = value
@@ -171,13 +186,19 @@ class NestedOperationHandler:
                         elif isinstance(item, (str, int)):
                             # Connect existing object to this instance
                             try:
+                                pk_value = int(item) if isinstance(item, str) else item
+                            except (TypeError, ValueError):
+                                raise ValidationError({
+                                    field_name: f"Field '{field_name}' expected a list of numeric IDs but got '{item}'."
+                                })
+                            try:
                                 related_field.related_model.objects.filter(
-                                    pk=item
+                                    pk=pk_value
                                 ).update(**{related_field.field.name: instance})
                             except Exception as e:
-                                raise ValidationError(
-                                    f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
-                                )
+                                raise ValidationError({
+                                    field_name: f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
+                                })
                                 
                 elif isinstance(value, dict):
                     # Handle operations like create, connect, disconnect
@@ -269,7 +290,19 @@ class NestedOperationHandler:
 
             return instance
 
+        except ValidationError as e:
+            # Preserve field-specific errors so mutation can map them to fields
+            raise e
+        except IntegrityError as e:
+            # Attempt to parse unique constraint violations and map to fields
+            fields = self._extract_unique_constraint_fields(model, e)
+            if fields:
+                message = f"Failed to create {model.__name__}: {str(e)}"
+                raise ValidationError({field: message for field in fields})
+            # Fallback to generic message if fields cannot be determined
+            raise ValidationError(f"Failed to create {model.__name__}: {str(e)}")
         except Exception as e:
+            # Wrap non-validation exceptions with context
             raise ValidationError(f"Failed to create {model.__name__}: {str(e)}")
 
     def handle_nested_update(
@@ -351,8 +384,24 @@ class NestedOperationHandler:
                         setattr(instance, field_name, new_instance)
                 elif isinstance(value, (str, int)):
                     # Reference to existing object
-                    related_instance = field.related_model.objects.get(pk=value)
-                    setattr(instance, field_name, related_instance)
+                    try:
+                        pk_value = int(value) if isinstance(value, str) else value
+                    except (TypeError, ValueError):
+                        raise ValidationError({
+                            field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                        })
+
+                    try:
+                        related_instance = field.related_model.objects.get(pk=pk_value)
+                        setattr(instance, field_name, related_instance)
+                    except field.related_model.DoesNotExist:
+                        raise ValidationError({
+                            field_name: f"{field.related_model.__name__} with id '{value}' does not exist."
+                        })
+                    except (TypeError, ValueError):
+                        raise ValidationError({
+                            field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                        })
 
             # Save the instance
             instance.save()
@@ -589,8 +638,62 @@ class NestedOperationHandler:
 
             return instance
 
-        except Exception as e:
+        except ValidationError as e:
+            # Preserve field-specific errors so mutation can map them to fields
+            raise e
+        except IntegrityError as e:
+            # Attempt to parse unique constraint violations and map to fields
+            fields = self._extract_unique_constraint_fields(model, e)
+            if fields:
+                message = f"Failed to update {model.__name__}: {str(e)}"
+                raise ValidationError({field: message for field in fields})
+            # Fallback to generic message if fields cannot be determined
             raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
+        except Exception as e:
+            # Wrap non-validation exceptions with context
+            raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
+
+    def _extract_unique_constraint_fields(self, model: Type[models.Model], error: Exception) -> List[str]:
+        """
+        Extract field names from database integrity error messages for unique constraints.
+
+        Supports common SQLite and PostgreSQL patterns. Returns model field names
+        when possible; otherwise returns the DB column names.
+        """
+        msg = str(error)
+        fields: List[str] = []
+
+        # SQLite / generic pattern: UNIQUE constraint failed: app_model.field[, app_model.field]
+        m = re.search(r"UNIQUE constraint failed: ([\w\., ]+)", msg)
+        if m:
+            cols = [part.strip() for part in m.group(1).split(',')]
+            for col in cols:
+                col_name = col.split('.')[-1]
+                field_name = self._map_column_to_field(model, col_name) or col_name
+                fields.append(field_name)
+
+        # PostgreSQL pattern: Key (field[, field])=(value[, value]) already exists.
+        if not fields:
+            m2 = re.search(r"Key \(([^\)]+)\)=\(([^\)]+)\) already exists", msg)
+            if m2:
+                cols = [c.strip() for c in m2.group(1).split(',')]
+                for col_name in cols:
+                    field_name = self._map_column_to_field(model, col_name) or col_name
+                    fields.append(field_name)
+
+        return fields
+
+    def _map_column_to_field(self, model: Type[models.Model], column: str) -> Optional[str]:
+        """
+        Map a DB column name to the Django model field name.
+        """
+        try:
+            for f in model._meta.get_fields():
+                if hasattr(f, 'column') and f.column == column:
+                    return f.name
+        except Exception:
+            pass
+        return None
 
     def handle_cascade_delete(
         self, 

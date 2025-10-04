@@ -110,14 +110,23 @@ class MutationGenerator:
                 except ValidationError as e:
                     # Create structured error objects for validation errors
                     error_objects = []
-                    if hasattr(e, 'error_dict'):
-                        # Field-specific validation errors
+                    # Prefer Django's message_dict for field-specific errors
+                    if hasattr(e, 'message_dict') and isinstance(getattr(e, 'message_dict'), dict):
+                        for field, messages in e.message_dict.items():
+                            for message in messages:
+                                error_objects.append(MutationError(field=field, message=str(message)))
+                    # Fallback to error_dict if present
+                    elif hasattr(e, 'error_dict') and isinstance(getattr(e, 'error_dict'), dict):
                         for field, errors in e.error_dict.items():
                             for error in errors:
                                 error_objects.append(MutationError(field=field, message=str(error)))
                     else:
-                        # General validation error
-                        error_objects.append(MutationError(field=None, message=str(e)))
+                        # General validation error: collect messages if available
+                        if hasattr(e, 'messages') and isinstance(getattr(e, 'messages'), list):
+                            for msg in e.messages:
+                                error_objects.append(MutationError(field=None, message=str(msg)))
+                        else:
+                            error_objects.append(MutationError(field=None, message=str(e)))
                     return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
@@ -342,14 +351,23 @@ class MutationGenerator:
                 except ValidationError as e:
                     # Create structured error objects for validation errors
                     error_objects = []
-                    if hasattr(e, 'error_dict'):
-                        # Field-specific validation errors
+                    # Prefer Django's message_dict for field-specific errors
+                    if hasattr(e, 'message_dict') and isinstance(getattr(e, 'message_dict'), dict):
+                        for field, messages in e.message_dict.items():
+                            for message in messages:
+                                error_objects.append(MutationError(field=field, message=str(message)))
+                    # Fallback to error_dict if present
+                    elif hasattr(e, 'error_dict') and isinstance(getattr(e, 'error_dict'), dict):
                         for field, errors in e.error_dict.items():
                             for error in errors:
                                 error_objects.append(MutationError(field=field, message=str(error)))
                     else:
-                        # General validation error
-                        error_objects.append(MutationError(field=None, message=str(e)))
+                        # General validation error: collect messages if available
+                        if hasattr(e, 'messages') and isinstance(getattr(e, 'messages'), list):
+                            for msg in e.messages:
+                                error_objects.append(MutationError(field=None, message=str(msg)))
+                        else:
+                            error_objects.append(MutationError(field=None, message=str(e)))
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
