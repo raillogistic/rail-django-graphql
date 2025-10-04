@@ -64,41 +64,41 @@ This plan defines the technical steps and unchecked to-dos to extract all deploy
 
 ## Phase 2 — Dockerization and Orchestration
 
-[ ] Create `Dockerfile` for Django app
-- [ ] Base image: `python:3.x-slim`
-- [ ] Install build deps and system libs (psycopg2, libpq, etc.)
-- [ ] Copy project, install Python deps via `pip`
-- [ ] Set working directory and `PYTHONUNBUFFERED=1`
-- [ ] Entrypoint runs migrations, collectstatic, then ASGI server
-- [ ] ASGI server: `daphne -b 0.0.0.0 -p 8000 config.asgi:application` (uvicorn optional for dev)
+[x] Create `Dockerfile` for Django app
+- [x] Base image: `python:3.x-slim`
+- [x] Install build deps and system libs (psycopg2, libpq, etc.)
+- [x] Copy project, install Python deps via `pip`
+- [x] Set working directory and `PYTHONUNBUFFERED=1`
+- [x] Entrypoint runs migrations, collectstatic, then ASGI server
+- [x] ASGI server: `daphne -b 0.0.0.0 -p 8000 config.asgi:application` (uvicorn optional for dev)
 
-[ ] Create `docker-compose.yml` (development baseline)
-- [ ] Services: `web` (Django), `db` (Postgres), `redis`, `nginx`
-- [ ] Volumes: `postgres_data`, `media`, `static`, `nginx_conf`
-- [ ] Env files: `.env` (dev) loaded into services
-- [ ] Bind mounts for live dev (optional)
+[x] Create `docker-compose.yml` (development baseline)
+- [x] Services: `web` (Django), `db` (Postgres), `redis`, `nginx`
+- [x] Volumes: `postgres_data`, `media`, `static`, `nginx_conf`
+- [x] Env files: `.env` (dev) loaded into services
+- [x] Bind mounts for live dev (optional)
 
-[ ] Create `docker-compose.prod.yml` (production overrides)
-- [ ] Use `.env.prod` for secret and production values
+[x] Create `docker-compose.prod.yml` (production overrides)
+- [x] Use `.env.prod` for secret and production values
 - [ ] Configure resource limits and restart policies
 - [ ] Add `backup` service (cron-based) for DB and media backups
-- [ ] Ensure static files served by Nginx from `static` volume
+- [x] Ensure static files served by Nginx from `static` volume
 
-[ ] Nginx configuration
-- [ ] Compose a `nginx.conf` with:
-  - [ ] `location /static/` and `/media/` served from volumes
-  - [ ] `location /` and `/graphql` proxied to `web:8000`
-  - [ ] Set headers and timeouts; gzip for text assets
+[x] Nginx configuration
+- [x] Compose a `nginx.conf` with:
+  - [x] `location /static/` and `/media/` served from volumes
+  - [x] `location /` and `/graphql` proxied to `web:8000`
+  - [x] Set headers and timeouts; gzip for text assets
   - [ ] Optional TLS termination (mount certs via volumes)
 
-[ ] Volume management
-- [ ] `postgres_data` for DB persistence
-- [ ] `media` for file uploads
-- [ ] `static` populated by `collectstatic`
+[x] Volume management
+- [x] `postgres_data` for DB persistence
+- [x] `media` for file uploads
+- [x] `static` populated by `collectstatic`
 - [ ] `backups` for DB and media backups retention
 
-[ ] Environment separation
-- [ ] Distinct `.env` and `.env.prod`
+[x] Environment separation
+- [x] Distinct `.env` and `.env.prod`
 - [ ] Compose profiles or separate files to target dev vs prod
 - [ ] Different cache TTLs, `DEBUG`, logging, and security settings
 

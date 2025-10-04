@@ -29,10 +29,10 @@ WORKDIR /app/django-graphql-boilerplate
 # Collect static (will output to /app/static per production settings)
 RUN python manage.py collectstatic --noinput || true
 
-# Gunicorn runtime env
-ENV GUNICORN_WORKERS=3 \
-    GUNICORN_TIMEOUT=120 \
-    GUNICORN_BIND=0.0.0.0:8000
+# ASGI runtime env
+ENV ASGI_WORKERS=3 \
+    ASGI_TIMEOUT=120 \
+    ASGI_BIND=0.0.0.0:8000
 
 # Health check script location (optional)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
@@ -41,5 +41,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
 # Expose app port
 EXPOSE 8000
 
-# Run gunicorn
-CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]
+# Copy entrypoint
+COPY django-graphql-boilerplate/deploy/docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Run ASGI server via entrypoint
+CMD ["/entrypoint.sh"]

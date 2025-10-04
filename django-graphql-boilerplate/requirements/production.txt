@@ -5,3 +5,5 @@ gunicorn
 psycopg2-binary
 redis
 django-redis
+\
+daphne
