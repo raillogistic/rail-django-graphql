@@ -196,39 +196,39 @@ RAIL_DJANGO_GRAPHQL = {
     # ========================================
     "SCHEMA_SETTINGS": {
         # Répertoire de sortie pour les schémas générés
-        "SCHEMA_OUTPUT_DIR": "generated_schema/",
+        "schema_output_dir": "generated_schema/",
         # Génération automatique du schéma GraphQL
-        "AUTO_GENERATE_SCHEMA": True,
+        "auto_generate_schema": True,
         # Convention de nommage pour les champs GraphQL (snake_case, camelCase)
-        "NAMING_CONVENTION": "snake_case",
+        "naming_convention": "snake_case",
         # Activer l'introspection GraphQL (utile pour le développement)
-        "ENABLE_INTROSPECTION": True,
+        "enable_introspection": True,
         # Activer l'interface GraphiQL/Playground
-        "ENABLE_PLAYGROUND": DEBUG,
+        "enable_playground": DEBUG,
         # Mode debug pour des messages d'erreur détaillés
-        "DEBUG_MODE": True,
+        "debug_mode": True,
         # Messages d'erreur verbeux
-        "VERBOSE_ERRORS": True,
+        "verbose_errors": True,
         # Applications à inclure (vide = toutes les applications)
-        "APPS_TO_INCLUDE": [],
+        "apps_to_include": [],
         # Applications à exclure de la génération du schéma
-        "APPS_TO_EXCLUDE": ["admin", "auth", "contenttypes", "sessions"],
+        "apps_to_exclude": ["admin", "auth", "contenttypes", "sessions"],
         # Modèles spécifiques à exclure
-        "MODELS_TO_EXCLUDE": ["LogEntry", "Session"],
+        "models_to_exclude": ["LogEntry", "Session"],
         # Activer les mutations GraphQL
-        "ENABLE_MUTATIONS": True,
+        "enable_mutations": True,
         # Activer les abonnements GraphQL (subscriptions)
-        "ENABLE_SUBSCRIPTIONS": False,
+        "enable_subscriptions": False,
         # Activer le système de filtrage avancé
-        "ENABLE_FILTERS": True,
+        "enable_filters": True,
         # Activer les opérations imbriquées (nested operations)
-        "ENABLE_NESTED_OPERATIONS": True,
+        "enable_nested_operations": True,
         # Activer le téléchargement de fichiers
-        "ENABLE_FILE_UPLOADS": True,
+        "enable_file_uploads": True,
         # Activer les scalaires personnalisés
-        "ENABLE_CUSTOM_SCALARS": True,
+        "enable_custom_scalars": True,
         # Activer la prise en charge de l'héritage de modèles
-        "ENABLE_INHERITANCE": True,
+        "enable_inheritance": True,
     },
     # ========================================
     # CONFIGURATION DES REQUÊTES

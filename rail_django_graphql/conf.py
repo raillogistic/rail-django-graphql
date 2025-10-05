@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
+from .core.settings import QueryGeneratorSettings, MutationGeneratorSettings, TypeGeneratorSettings
 from .defaults import LIBRARY_DEFAULTS, get_merged_settings
 
 logger = logging.getLogger(__name__)
@@ -433,6 +434,84 @@ def get_core_schema_settings(schema_name: Optional[str] = None) -> Dict[str, Any
 def get_query_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
     """Get query settings."""
     return get_setting("QUERY_SETTINGS", {}, schema_name)
+
+
+def get_query_generator_settings(schema_name: Optional[str] = None) -> QueryGeneratorSettings:
+    """
+    Get query generator settings as QueryGeneratorSettings dataclass instance.
+    
+    Args:
+        schema_name: Optional schema name for schema-specific settings
+        
+    Returns:
+        QueryGeneratorSettings: Configured query generator settings
+    """
+    settings_dict = get_setting("QUERY_SETTINGS", {}, schema_name)
+    
+    # Create QueryGeneratorSettings instance from dictionary
+    # Filter only the fields that exist in the dataclass
+    valid_fields = {
+        field.name for field in QueryGeneratorSettings.__dataclass_fields__.values()
+    }
+    
+    filtered_settings = {
+        key: value for key, value in settings_dict.items() 
+        if key in valid_fields
+    }
+    
+    return QueryGeneratorSettings(**filtered_settings)
+
+
+def get_mutation_generator_settings(schema_name: Optional[str] = None) -> MutationGeneratorSettings:
+    """
+    Get mutation generator settings as MutationGeneratorSettings dataclass instance.
+    
+    Args:
+        schema_name: Optional schema name for schema-specific settings
+        
+    Returns:
+        MutationGeneratorSettings: Configured mutation generator settings
+    """
+    settings_dict = get_setting("MUTATION_SETTINGS", {}, schema_name)
+    
+    # Create MutationGeneratorSettings instance from dictionary
+    # Filter only the fields that exist in the dataclass
+    valid_fields = {
+        field.name for field in MutationGeneratorSettings.__dataclass_fields__.values()
+    }
+    
+    filtered_settings = {
+        key: value for key, value in settings_dict.items() 
+        if key in valid_fields
+    }
+    
+    return MutationGeneratorSettings(**filtered_settings)
+
+
+def get_type_generator_settings(schema_name: Optional[str] = None) -> TypeGeneratorSettings:
+    """
+    Get type generator settings as TypeGeneratorSettings dataclass instance.
+    
+    Args:
+        schema_name: Optional schema name for schema-specific settings
+        
+    Returns:
+        TypeGeneratorSettings: Configured type generator settings
+    """
+    settings_dict = get_setting("TYPE_GENERATION_SETTINGS", {}, schema_name)
+    
+    # Create TypeGeneratorSettings instance from dictionary
+    # Filter only the fields that exist in the dataclass
+    valid_fields = {
+        field.name for field in TypeGeneratorSettings.__dataclass_fields__.values()
+    }
+    
+    filtered_settings = {
+        key: value for key, value in settings_dict.items() 
+        if key in valid_fields
+    }
+    
+    return TypeGeneratorSettings(**filtered_settings)
 
 
 def get_mutation_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:

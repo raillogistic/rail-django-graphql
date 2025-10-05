@@ -18,7 +18,7 @@ try:
 except Exception:
     DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
-from ..conf import get_query_settings
+from ..conf import get_query_generator_settings
 from ..core.settings import QueryGeneratorSettings
 from ..extensions.optimization import (
     QueryOptimizationConfig,
@@ -88,10 +88,10 @@ class QueryGenerator:
         """
         self.type_generator = type_generator
         self.schema_name = schema_name
-
+        
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            self.settings = get_query_settings(schema_name)
+            self.settings = get_query_generator_settings(schema_name)
         else:
             self.settings = settings
 
@@ -148,7 +148,6 @@ class QueryGenerator:
         complex_filter_input = self.filter_generator.generate_complex_filter_input(
             model
         )
-
         if self.settings.use_relay and DjangoFilterConnectionField is not None:
             # Use Relay connection for cursor-based pagination
             return DjangoFilterConnectionField(

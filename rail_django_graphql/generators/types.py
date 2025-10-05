@@ -23,7 +23,7 @@ from graphene_django.utils import DJANGO_FILTER_INSTALLED
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
 
-from ..conf import get_mutation_settings, get_type_generation_settings
+from ..conf import get_mutation_generator_settings, get_type_generator_settings
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
@@ -98,17 +98,12 @@ class TypeGenerator:
 
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            settings_dict = get_type_generation_settings(schema_name)
-            # Convert dictionary to TypeGeneratorSettings dataclass
-            if settings_dict:
-                self.settings = TypeGeneratorSettings(**settings_dict)
-            else:
-                self.settings = TypeGeneratorSettings()
+            self.settings = get_type_generator_settings(schema_name)
         else:
             self.settings = settings
 
         if mutation_settings is None:
-            self.mutation_settings = get_mutation_settings(schema_name)
+            self.mutation_settings = get_mutation_generator_settings(schema_name)
         else:
             self.mutation_settings = mutation_settings
 
@@ -144,8 +139,7 @@ class TypeGenerator:
 
         # Check both exclude_fields and excluded_fields (alias)
         # Handle case where settings might be a list instead of dict
-        
-        print("qqqqqqqqqqqq", self.settings)
+
         if isinstance(self.settings.exclude_fields, dict):
             excluded.update(self.settings.exclude_fields.get(model_name, []))
         elif isinstance(self.settings.exclude_fields, list):
