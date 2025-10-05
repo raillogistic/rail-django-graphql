@@ -73,7 +73,13 @@ class SchemaBuilder:
                 from .settings import SchemaSettings
 
                 # Get schema-specific settings
-                self.settings = get_core_schema_settings(schema_name)
+                settings_dict = get_core_schema_settings(schema_name)
+                if settings_dict:
+                    # Convert dictionary to SchemaSettings dataclass
+                    self.settings = SchemaSettings(**settings_dict)
+                else:
+                    # Use default settings if empty
+                    self.settings = SchemaSettings()
             except ImportError:
                 # Fallback to legacy settings
                 from .settings import SchemaSettings
@@ -134,7 +140,7 @@ class SchemaBuilder:
         Connects Django signals for automatic schema rebuilding.
         """
         post_migrate.connect(self._handle_post_migrate)
-        if self.settings.auto_refresh_on_model_change:
+        if getattr(self.settings, "auto_refresh_on_model_change", True):
             post_save.connect(self._handle_model_change)
             post_delete.connect(self._handle_model_change)
 
@@ -195,6 +201,7 @@ class SchemaBuilder:
         discovered_models = []
 
         for app_config in apps.get_app_configs():
+            print("xxxxxxxxxxxxxxxxx", app_config.name, self.settings)
             if app_config.name in self.settings.excluded_apps:
                 continue
 

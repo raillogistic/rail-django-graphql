@@ -25,7 +25,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "ENABLE_INTROSPECTION": True,
     "ENABLE_PLAYGROUND": True,
     
-    # Schema settings (dataclass-compatible) defaults
+    # ========================================
+    # Schema Settings (Enhanced)
+    # ========================================
     "SCHEMA_SETTINGS": {
         "excluded_apps": ["admin", "auth", "contenttypes", "sessions"],
         "excluded_models": [],
@@ -34,10 +36,27 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "auto_refresh_on_model_change": True,
         "enable_pagination": True,
         "auto_camelcase": False,
+        "SCHEMA_OUTPUT_DIR": "generated_schema/",
+        "AUTO_GENERATE_SCHEMA": True,
+        "NAMING_CONVENTION": "snake_case",
+        "ENABLE_INTROSPECTION": True,
+        "ENABLE_PLAYGROUND": True,
+        "DEBUG_MODE": True,
+        "VERBOSE_ERRORS": True,
+        "APPS_TO_INCLUDE": [],
+        "APPS_TO_EXCLUDE": ["admin", "auth", "contenttypes", "sessions"],
+        "MODELS_TO_EXCLUDE": ["LogEntry", "Session"],
+        "ENABLE_MUTATIONS": True,
+        "ENABLE_SUBSCRIPTIONS": False,
+        "ENABLE_FILTERS": True,
+        "ENABLE_NESTED_OPERATIONS": True,
+        "ENABLE_FILE_UPLOADS": True,
+        "ENABLE_CUSTOM_SCALARS": True,
+        "ENABLE_INHERITANCE": True,
     },
     
     # ========================================
-    # Query Settings
+    # Query Settings (Enhanced)
     # ========================================
     "QUERY_SETTINGS": {
         "ENABLE_FILTERING": True,
@@ -54,10 +73,19 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "MAX_QUERY_COMPLEXITY": 1000,
         "ENABLE_QUERY_COST_ANALYSIS": True,
         "QUERY_TIMEOUT": 30,  # seconds
+        "use_relay": False,
+        "generate_filters": True,
+        "generate_ordering": True,
+        "generate_pagination": True,
+        "enable_pagination": True,
+        "enable_ordering": True,
+        "default_page_size": 20,
+        "max_page_size": 100,
+        "additional_lookup_fields": {},
     },
     
     # ========================================
-    # Mutation Settings
+    # Mutation Settings (Enhanced)
     # ========================================
     "MUTATION_SETTINGS": {
         "ENABLE_CREATE": True,
@@ -76,6 +104,31 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
             "application/pdf", "text/plain", "text/csv",
             "application/json", "application/xml"
         ],
+        "generate_create": True,
+        "enable_create": True,
+        "generate_update": True,
+        "enable_update": True,
+        "generate_delete": True,
+        "enable_delete": True,
+        "generate_bulk": True,
+        "enable_bulk_operations": True,
+        "enable_method_mutations": True,
+        "method_mutation_prefix": "",
+        "include_private_methods": False,
+        "bulk_batch_size": 100,
+        "bulk_max_objects": 1000,
+        "bulk_transaction_timeout": 30,
+        "bulk_rate_limit": {
+            "max_operations_per_minute": 10,
+            "max_objects_per_hour": 10000,
+        },
+        "required_update_fields": {},
+        "enable_nested_relations": True,
+        "nested_relations_config": {
+            "max_depth": 3,
+            "enable_cascade_create": True,
+        },
+        "nested_field_config": {},
     },
     
     # ========================================
@@ -93,6 +146,82 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_COMPUTED_FIELDS": True,
         "ENABLE_REVERSE_RELATIONS": True,
         "MAX_RELATION_DEPTH": 3,
+    },
+    
+    # ========================================
+    # Type Generation Settings
+    # ========================================
+    "TYPE_GENERATION_SETTINGS": {
+        "exclude_fields": {},
+        "excluded_fields": {},
+        "include_fields": None,
+        "custom_field_mappings": {},
+        "generate_filters": True,
+        "enable_filtering": True,
+        "auto_camelcase": False,
+        "generate_descriptions": True,
+    },
+    
+    # ========================================
+    # Filtering Settings
+    # ========================================
+    "FILTERING": {
+        "ENABLE_FILTERS": True,
+        "DEFAULT_FILTER_OPERATORS": {
+            "CharField": [
+                "exact", "icontains", "startswith", "endswith", "iexact",
+                "contains", "istartswith", "iendswith", "regex", "iregex",
+                "in", "isnull"
+            ],
+            "TextField": [
+                "exact", "icontains", "startswith", "endswith", "iexact",
+                "contains", "istartswith", "iendswith", "regex", "iregex",
+                "in", "isnull"
+            ],
+            "IntegerField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "in", "isnull"
+            ],
+            "FloatField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "in", "isnull"
+            ],
+            "DecimalField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "in", "isnull"
+            ],
+            "BooleanField": ["exact", "isnull"],
+            "DateTimeField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "date", "year",
+                "month", "day", "week", "week_day", "quarter", "time",
+                "hour", "minute", "second", "isnull"
+            ],
+            "DateField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "year", "month",
+                "day", "week", "week_day", "quarter", "isnull"
+            ],
+            "TimeField": [
+                "exact", "gt", "gte", "lt", "lte", "range", "hour",
+                "minute", "second", "isnull"
+            ],
+        },
+        "ENABLE_LOGICAL_OPERATORS": True,
+        "ENABLE_RELATIONSHIP_FILTERS": True,
+        "MAX_FILTER_DEPTH": 3,
+        "ENABLE_CUSTOM_FILTERS": True,
+        "CUSTOM_FILTERS": {},
+        "ENABLE_FILTER_CACHING": True,
+        "FILTER_CACHE_TIMEOUT": 300,
+        "FILTER_CACHE_KEY_PREFIX": "graphql_filter",
+    },
+    
+    # ========================================
+    # Pagination Settings
+    # ========================================
+    "PAGINATION": {
+        "PAGINATION_SIZE": 20,
+        "DEFAULT_PAGE_SIZE": 20,
+        "MAX_PAGE_SIZE": 100,
+        "USE_RELAY_PAGINATION": False,
+        "ENABLE_CURSOR_PAGINATION": True,
+        "ENABLE_OFFSET_PAGINATION": True,
     },
     
     # ========================================
@@ -115,7 +244,14 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # ========================================
     # Security Settings
     # ========================================
-    "SECURITY_SETTINGS": {
+    "SECURITY": {
+        "MAX_QUERY_DEPTH": 10,
+        "MAX_QUERY_COMPLEXITY": 1000,
+        "QUERY_COST_ANALYSIS": True,
+        "QUERY_TIMEOUT": 30,
+        "MUTATION_PERMISSIONS": {},
+        "SENSITIVE_FIELDS": {},
+        "FIELD_PERMISSIONS": {},
         "ENABLE_RATE_LIMITING": False,
         "RATE_LIMIT_PER_MINUTE": 60,
         "RATE_LIMIT_PER_HOUR": 1000,
@@ -128,6 +264,79 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_CORS": True,
         "CORS_ALLOW_ALL_ORIGINS": False,
         "CORS_ALLOWED_ORIGINS": [],
+    },
+    
+    # ========================================
+    # Custom Scalars and Field Converters
+    # ========================================
+    "CUSTOM_SCALARS": {},
+    "FIELD_CONVERTERS": {},
+    
+    # ========================================
+    # Schema Hooks and Middleware
+    # ========================================
+    "SCHEMA_HOOKS": [],
+    "MIDDLEWARE": [],
+    
+    # ========================================
+    # Nested Operations Settings
+    # ========================================
+    "NESTED_OPERATIONS": {
+        "ENABLE_NESTED_CREATE": True,
+        "ENABLE_NESTED_UPDATE": True,
+        "ENABLE_NESTED_DELETE": True,
+        "BULK_THRESHOLD": 10,
+        "MAX_NESTING_DEPTH": 5,
+        "ENABLE_QUERY_OPTIMIZATION": True,
+        "ENABLE_DELETION_SAFETY_CHECKS": True,
+        "DEFAULT_DELETE_PROTECTION": True,
+        "REQUIRE_EXPLICIT_CASCADE": True,
+        "ENABLE_NESTED_VALIDATION": True,
+        "VALIDATE_RELATIONSHIPS": True,
+        "STRICT_TYPE_CHECKING": True,
+        "USE_TRANSACTIONS": True,
+        "TRANSACTION_ISOLATION_LEVEL": "READ_COMMITTED",
+    },
+    
+    # ========================================
+    # Relationship Handling Settings
+    # ========================================
+    "RELATIONSHIP_HANDLING": {
+        "FOREIGN_KEY_ON_DELETE": "protect",
+        "ONE_TO_MANY_ON_DELETE": "cascade",
+        "MANY_TO_MANY_ON_DELETE": "clear",
+        "FOREIGN_KEY_ON_UPDATE": "update",
+        "ONE_TO_MANY_ON_UPDATE": "merge",
+        "MANY_TO_MANY_ON_UPDATE": "replace",
+    },
+    
+    # ========================================
+    # Development Settings (Enhanced)
+    # ========================================
+    "DEVELOPMENT": {
+        "TESTING": False,
+        "CACHE_ENABLED": True,
+        "TEST_PAGE_SIZE": 5,
+        "VERBOSE_LOGGING": True,
+        "AUTO_RELOAD_SCHEMA": True,
+        "ENABLE_DEBUG_MODE": False,
+        "ENABLE_QUERY_PROFILING": False,
+        "ENABLE_SCHEMA_VALIDATION": True,
+        "ENABLE_TYPE_CHECKING": True,
+        "ENABLE_DEPRECATION_WARNINGS": True,
+        "ENABLE_PERFORMANCE_WARNINGS": True,
+    },
+    
+    # ========================================
+    # Internationalization Settings (Enhanced)
+    # ========================================
+    "I18N": {
+        "ENABLE_I18N": True,
+        "SUPPORTED_LANGUAGES": ["fr", "en"],
+        "DEFAULT_LANGUAGE": "fr",
+        "TRANSLATABLE_FIELDS": {},
+        "ENABLE_FIELD_TRANSLATION": False,
+        "ENABLE_ERROR_TRANSLATION": True,
     },
     
     # ========================================
@@ -238,14 +447,40 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     },
     
     # ========================================
-    # Internationalization Settings
+    # Internationalization Settings (Paramètres d'internationalisation)
     # ========================================
     "I18N_SETTINGS": {
-        "ENABLE_I18N": False,
-        "DEFAULT_LANGUAGE": "en",
-        "SUPPORTED_LANGUAGES": ["en", "fr", "es", "de"],
-        "ENABLE_FIELD_TRANSLATION": False,
-        "ENABLE_ERROR_TRANSLATION": True,
+        "ENABLE_I18N": False,  # Activer l'internationalisation
+        "DEFAULT_LANGUAGE": "fr",  # Langue par défaut (français)
+        "SUPPORTED_LANGUAGES": ["fr", "en", "es", "de"],  # Langues supportées
+        "ENABLE_FIELD_TRANSLATION": False,  # Activer la traduction des champs
+        "ENABLE_ERROR_TRANSLATION": True,  # Activer la traduction des erreurs
+        "FIELD_VERBOSE_NAMES": {
+            # Noms verbeux en français pour les champs communs
+            "id": "Identifiant",
+            "name": "Nom",
+            "title": "Titre", 
+            "description": "Description",
+            "created_at": "Créé le",
+            "updated_at": "Modifié le",
+            "is_active": "Actif",
+            "email": "Adresse e-mail",
+            "phone": "Téléphone",
+            "address": "Adresse",
+            "city": "Ville",
+            "country": "Pays",
+            "status": "Statut",
+            "type": "Type",
+            "category": "Catégorie",
+            "price": "Prix",
+            "quantity": "Quantité",
+            "total": "Total",
+            "date": "Date",
+            "time": "Heure",
+            "user": "Utilisateur",
+            "author": "Auteur",
+            "owner": "Propriétaire",
+        },
     },
     
     # ========================================

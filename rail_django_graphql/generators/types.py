@@ -12,6 +12,7 @@ from django.db import models
 from django.db.models.fields import Field
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
 from graphene_django import DjangoObjectType
+
 # Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
 try:
     from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
@@ -22,17 +23,17 @@ from graphene_django.utils import DJANGO_FILTER_INSTALLED
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
 
-from ..core.settings import TypeGeneratorSettings, MutationGeneratorSettings
-from ..conf import get_type_generator_settings, get_mutation_settings
-from .introspector import ModelIntrospector, FieldInfo
+from ..conf import get_mutation_settings, get_type_generation_settings
+from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
 from .inheritance import inheritance_handler
+from .introspector import FieldInfo, ModelIntrospector
 
 
 class TypeGenerator:
     """
     Generates GraphQL types from Django models, including object types,
     input types, and filter types.
-    
+
     This class supports:
     - Multi-schema type generation
     - Configurable field inclusion/exclusion
@@ -87,25 +88,30 @@ class TypeGenerator:
     ):
         """
         Initialize the TypeGenerator.
-        
+
         Args:
             settings: Type generator settings or None for defaults
             mutation_settings: Mutation generator settings or None for defaults
             schema_name: Name of the schema for multi-schema support
         """
         self.schema_name = schema_name
-        
+
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            self.settings = get_type_generator_settings(schema_name)
+            settings_dict = get_type_generation_settings(schema_name)
+            # Convert dictionary to TypeGeneratorSettings dataclass
+            if settings_dict:
+                self.settings = TypeGeneratorSettings(**settings_dict)
+            else:
+                self.settings = TypeGeneratorSettings()
         else:
             self.settings = settings
-            
+
         if mutation_settings is None:
             self.mutation_settings = get_mutation_settings(schema_name)
         else:
             self.mutation_settings = mutation_settings
-            
+
         # Type registries for caching generated types
         self._type_registry: Dict[Type[models.Model], Type[DjangoObjectType]] = {}
         self._input_type_registry: Dict[
@@ -138,11 +144,13 @@ class TypeGenerator:
 
         # Check both exclude_fields and excluded_fields (alias)
         # Handle case where settings might be a list instead of dict
+        
+        print("qqqqqqqqqqqq", self.settings)
         if isinstance(self.settings.exclude_fields, dict):
             excluded.update(self.settings.exclude_fields.get(model_name, []))
         elif isinstance(self.settings.exclude_fields, list):
             excluded.update(self.settings.exclude_fields)
-            
+
         if isinstance(self.settings.excluded_fields, dict):
             excluded.update(self.settings.excluded_fields.get(model_name, []))
         elif isinstance(self.settings.excluded_fields, list):
