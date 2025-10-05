@@ -154,10 +154,14 @@ flake8 rail_django_graphql/
 ### Basic Configuration
 ```python
 # settings.py
-RAIL_GRAPHQL = {
-    'AUTO_GENERATE_SCHEMA': True,
-    'ENABLE_INTROSPECTION': True,
-    'MAX_QUERY_DEPTH': 10,
+RAIL_DJANGO_GRAPHQL = {
+    'SCHEMA_SETTINGS': {
+        'auto_generate_schema': True,
+        'enable_introspection': True,
+    },
+    'SECURITY': {
+        'max_query_depth': 10,
+    },
 }
 
 GRAPHENE = {
@@ -168,21 +172,26 @@ GRAPHENE = {
 ### Advanced Configuration
 ```python
 # settings.py
-RAIL_GRAPHQL = {
+RAIL_DJANGO_GRAPHQL = {
     # Schema Generation
-    'AUTO_GENERATE_SCHEMA': True,
-    'AUTO_DISCOVER_MODELS': True,
+    'SCHEMA_SETTINGS': {
+        'auto_generate_schema': True,
+        'auto_discover_models': True,
+        'enable_introspection': False,  # Production
+    },
     
     # Security
-    'ENABLE_INTROSPECTION': False,  # Production
-    'MAX_QUERY_DEPTH': 15,
-    'MAX_QUERY_COMPLEXITY': 2000,
-    'ENABLE_QUERY_WHITELIST': True,
+    'SECURITY': {
+        'max_query_depth': 15,
+        'max_query_complexity': 2000,
+        'enable_query_whitelist': True,
+    },
     
     # Performance
-    'ENABLE_QUERY_OPTIMIZATION': True,
-    'ENABLE_DATALOADER': True,
-    'CACHE_TIMEOUT': 600,
+    'PERFORMANCE': {
+        'enable_query_optimization': True,
+        'enable_dataloader': True,
+        'cache_timeout': 600,
     
     # Permissions
     'DEFAULT_PERMISSION_CLASSES': [

@@ -37,14 +37,16 @@ TEST_GRAPHQL_SETTINGS = {
             "rail_django_graphql.middleware.GraphQLPerformanceMiddleware",
         ],
     },
-    "rail_django_graphql": {
-        "AUTHENTICATION_REQUIRED": False,
-        "PERMISSION_CLASSES": [],
-        "RATE_LIMITING": {
-            "ENABLED": False,
+    "RAIL_DJANGO_GRAPHQL": {
+        "SCHEMA_SETTINGS": {
+            "authentication_required": False,
+            "permission_classes": [],
         },
-        "LOGGING": {
-            "ENABLED": False,
+        "SECURITY": {
+            "enable_rate_limiting": False,
+        },
+        "DEVELOPMENT": {
+            "verbose_logging": False,
         },
     },
 }

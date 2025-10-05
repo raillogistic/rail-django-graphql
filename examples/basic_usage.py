@@ -44,12 +44,20 @@ GRAPHENE = {
 }
 
 # Rail Django GraphQL Settings
-RAIL_GRAPHQL = {
-    'AUTO_GENERATE_SCHEMA': True,
-    'ENABLE_DEBUGGING': True,
-    'ENABLE_INTROSPECTION': True,
-    'MAX_QUERY_DEPTH': 10,
-    'ENABLE_QUERY_OPTIMIZATION': True,
+RAIL_DJANGO_GRAPHQL = {
+    'SCHEMA_SETTINGS': {
+        'auto_generate_schema': True,
+        'enable_introspection': True,
+    },
+    'SECURITY': {
+        'max_query_depth': 10,
+    },
+    'PERFORMANCE': {
+        'enable_query_optimization': True,
+    },
+    'DEVELOPMENT': {
+        'enable_debugging': True,
+    },
 }
 """
 

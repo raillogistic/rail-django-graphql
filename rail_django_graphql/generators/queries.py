@@ -18,7 +18,7 @@ except Exception:
     DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
 from ..core.settings import QueryGeneratorSettings
-from ..conf import get_schema_settings
+from ..conf import get_query_settings
 from .types import TypeGenerator
 from .filters import AdvancedFilterGenerator
 from .inheritance import inheritance_handler
@@ -88,8 +88,7 @@ class QueryGenerator:
         
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            schema_settings = get_schema_settings(schema_name)
-            self.settings = schema_settings.get('query_generator', QueryGeneratorSettings())
+            self.settings = get_query_settings(schema_name)
         else:
             self.settings = settings
             

@@ -5,19 +5,26 @@ This module contains all default configuration values for the library.
 These can be overridden via Django settings or schema-specific overrides.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 # Library version and metadata
 LIBRARY_VERSION = "1.0.0"
 LIBRARY_NAME = "rail-django-graphql"
 
-# Core library defaults
+# Core library defaults - organized exactly as documented in settings.md
 LIBRARY_DEFAULTS: Dict[str, Any] = {
-    # Schema configuration
+    # ========================================
+    # Core Schema Settings
+    # ========================================
     "DEFAULT_SCHEMA": "main",
     "ENABLE_GRAPHIQL": True,
     "GRAPHIQL_TEMPLATE": "graphene/graphiql.html",
     "SCHEMA_ENDPOINT": "/graphql/",
+    "AUTHENTICATION_REQUIRED": False,
+    "PERMISSION_CLASSES": [],
+    "ENABLE_INTROSPECTION": True,
+    "ENABLE_PLAYGROUND": True,
+    
     # Schema settings (dataclass-compatible) defaults
     "SCHEMA_SETTINGS": {
         "excluded_apps": ["admin", "auth", "contenttypes", "sessions"],
@@ -29,13 +36,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "auto_camelcase": False,
     },
     
-    # Authentication and security
-    "AUTHENTICATION_REQUIRED": False,
-    "PERMISSION_CLASSES": [],
-    "ENABLE_INTROSPECTION": True,
-    "ENABLE_PLAYGROUND": True,
-    
-    # Query settings
+    # ========================================
+    # Query Settings
+    # ========================================
     "QUERY_SETTINGS": {
         "ENABLE_FILTERING": True,
         "ENABLE_ORDERING": True,
@@ -53,7 +56,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "QUERY_TIMEOUT": 30,  # seconds
     },
     
-    # Mutation settings
+    # ========================================
+    # Mutation Settings
+    # ========================================
     "MUTATION_SETTINGS": {
         "ENABLE_CREATE": True,
         "ENABLE_UPDATE": True,
@@ -73,7 +78,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         ],
     },
     
-    # Type generation settings
+    # ========================================
+    # Type Generation Settings
+    # ========================================
     "TYPE_SETTINGS": {
         "ENABLE_AUTO_CAMEL_CASE": True,
         "ENABLE_RELAY_NODES": False,
@@ -88,7 +95,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "MAX_RELATION_DEPTH": 3,
     },
     
-    # Performance settings
+    # ========================================
+    # Performance Settings
+    # ========================================
     "PERFORMANCE_SETTINGS": {
         "ENABLE_QUERY_OPTIMIZATION": True,
         "ENABLE_SELECT_RELATED": True,
@@ -103,30 +112,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "DATALOADER_CACHE_SIZE": 1000,
     },
     
-    # Caching configuration
-    "ENABLE_CACHING": False,
-    "CACHE_BACKEND": "default",
-    "CACHE_TIMEOUT": 300,  # 5 minutes
-    "CACHE_KEY_PREFIX": "rail_graphql",
-    "CACHE_VERSION": 1,
-    "ENABLE_CACHE_INVALIDATION": True,
-    "CACHE_INVALIDATION_SIGNALS": True,
-    
-    # Error handling
-    "ERROR_SETTINGS": {
-        "ENABLE_DETAILED_ERRORS": True,
-        "ENABLE_ERROR_CODES": True,
-        "ENABLE_FIELD_ERRORS": True,
-        "ENABLE_VALIDATION_ERRORS": True,
-        "ENABLE_PERMISSION_ERRORS": True,
-        "ENABLE_AUTHENTICATION_ERRORS": True,
-        "ENABLE_RATE_LIMIT_ERRORS": True,
-        "ERROR_MESSAGE_LANGUAGE": "en",
-        "ENABLE_ERROR_LOGGING": True,
-        "LOG_LEVEL": "ERROR",
-    },
-    
-    # Security settings
+    # ========================================
+    # Security Settings
+    # ========================================
     "SECURITY_SETTINGS": {
         "ENABLE_RATE_LIMITING": False,
         "RATE_LIMIT_PER_MINUTE": 60,
@@ -142,19 +130,36 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "CORS_ALLOWED_ORIGINS": [],
     },
     
-    # Monitoring and logging
-    "MONITORING_SETTINGS": {
-        "ENABLE_METRICS": False,
-        "METRICS_BACKEND": "prometheus",
-        "ENABLE_QUERY_LOGGING": False,
-        "ENABLE_PERFORMANCE_LOGGING": False,
-        "ENABLE_ERROR_TRACKING": False,
-        "ERROR_TRACKING_DSN": None,
-        "ENABLE_HEALTH_CHECKS": True,
-        "HEALTH_CHECK_ENDPOINT": "/health/",
+    # ========================================
+    # Error Handling Settings
+    # ========================================
+    "ERROR_SETTINGS": {
+        "ENABLE_DETAILED_ERRORS": True,
+        "ENABLE_ERROR_CODES": True,
+        "ENABLE_FIELD_ERRORS": True,
+        "ENABLE_VALIDATION_ERRORS": True,
+        "ENABLE_PERMISSION_ERRORS": True,
+        "ENABLE_AUTHENTICATION_ERRORS": True,
+        "ENABLE_RATE_LIMIT_ERRORS": True,
+        "ERROR_MESSAGE_LANGUAGE": "en",
+        "ENABLE_ERROR_LOGGING": True,
+        "LOG_LEVEL": "ERROR",
     },
     
-    # File upload settings
+    # ========================================
+    # Caching Settings
+    # ========================================
+    "ENABLE_CACHING": False,
+    "CACHE_BACKEND": "default",
+    "CACHE_TIMEOUT": 300,  # 5 minutes
+    "CACHE_KEY_PREFIX": "rail_graphql",
+    "CACHE_VERSION": 1,
+    "ENABLE_CACHE_INVALIDATION": True,
+    "CACHE_INVALIDATION_SIGNALS": True,
+    
+    # ========================================
+    # File Upload Settings
+    # ========================================
     "FILE_UPLOAD_SETTINGS": {
         "ENABLE_FILE_UPLOADS": True,
         "MAX_FILE_SIZE": 10 * 1024 * 1024,  # 10MB
@@ -170,17 +175,23 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_FILE_VALIDATION": True,
     },
     
-    # Extension settings
-    "EXTENSION_SETTINGS": {
-        "ENABLE_AUTH_EXTENSION": True,
-        "ENABLE_PERMISSION_EXTENSION": True,
-        "ENABLE_CACHING_EXTENSION": True,
-        "ENABLE_MONITORING_EXTENSION": False,
-        "ENABLE_FILE_EXTENSION": True,
-        "ENABLE_HEALTH_EXTENSION": True,
+    # ========================================
+    # Monitoring Settings
+    # ========================================
+    "MONITORING_SETTINGS": {
+        "ENABLE_METRICS": False,
+        "METRICS_BACKEND": "prometheus",
+        "ENABLE_QUERY_LOGGING": False,
+        "ENABLE_PERFORMANCE_LOGGING": False,
+        "ENABLE_ERROR_TRACKING": False,
+        "ERROR_TRACKING_DSN": None,
+        "ENABLE_HEALTH_CHECKS": True,
+        "HEALTH_CHECK_ENDPOINT": "/health/",
     },
     
-    # Development settings
+    # ========================================
+    # Development Settings
+    # ========================================
     "DEVELOPMENT_SETTINGS": {
         "ENABLE_DEBUG_MODE": False,
         "ENABLE_QUERY_PROFILING": False,
@@ -190,7 +201,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_PERFORMANCE_WARNINGS": True,
     },
     
-    # Schema registry settings
+    # ========================================
+    # Schema Registry Settings
+    # ========================================
     "SCHEMA_REGISTRY": {
         "ENABLE_AUTO_DISCOVERY": True,
         "DISCOVERY_MODULES": ["models", "schema", "graphql"],
@@ -199,7 +212,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "SCHEMA_CACHE_TIMEOUT": 3600,  # 1 hour
     },
     
-    # Middleware settings
+    # ========================================
+    # Middleware Settings
+    # ========================================
     "MIDDLEWARE_SETTINGS": {
         "ENABLE_PERFORMANCE_MIDDLEWARE": True,
         "ENABLE_AUTHENTICATION_MIDDLEWARE": True,
@@ -210,7 +225,21 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_ERROR_HANDLING_MIDDLEWARE": True,
     },
     
-    # Internationalization
+    # ========================================
+    # Extension Settings
+    # ========================================
+    "EXTENSION_SETTINGS": {
+        "ENABLE_AUTH_EXTENSION": True,
+        "ENABLE_PERMISSION_EXTENSION": True,
+        "ENABLE_CACHING_EXTENSION": True,
+        "ENABLE_MONITORING_EXTENSION": False,
+        "ENABLE_FILE_EXTENSION": True,
+        "ENABLE_HEALTH_EXTENSION": True,
+    },
+    
+    # ========================================
+    # Internationalization Settings
+    # ========================================
     "I18N_SETTINGS": {
         "ENABLE_I18N": False,
         "DEFAULT_LANGUAGE": "en",
@@ -219,7 +248,9 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "ENABLE_ERROR_TRANSLATION": True,
     },
     
-    # Testing settings
+    # ========================================
+    # Testing Settings
+    # ========================================
     "TESTING_SETTINGS": {
         "ENABLE_TEST_MODE": False,
         "ENABLE_MOCK_DATA": False,
@@ -230,13 +261,19 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     },
 }
 
+# ========================================
 # Schema-specific default overrides
+# ========================================
 SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "admin": {
         "AUTHENTICATION_REQUIRED": True,
         "ENABLE_INTROSPECTION": False,
         "ENABLE_GRAPHIQL": False,
         "PERMISSION_CLASSES": ["rail_django_graphql.permissions.IsAdminUser"],
+        "SECURITY_SETTINGS": {
+            "ENABLE_RATE_LIMITING": True,
+            "RATE_LIMIT_PER_MINUTE": 50,
+        },
     },
     "public": {
         "AUTHENTICATION_REQUIRED": False,
@@ -245,24 +282,39 @@ SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
         "QUERY_SETTINGS": {
             "MAX_QUERY_DEPTH": 5,
             "MAX_QUERY_COMPLEXITY": 500,
+            "DEFAULT_PAGE_SIZE": 10,
         },
     },
     "api": {
         "AUTHENTICATION_REQUIRED": True,
         "ENABLE_INTROSPECTION": False,
         "ENABLE_GRAPHIQL": False,
-        "ENABLE_RATE_LIMITING": True,
-        "RATE_LIMIT_PER_MINUTE": 100,
+        "SECURITY_SETTINGS": {
+            "ENABLE_RATE_LIMITING": True,
+            "RATE_LIMIT_PER_MINUTE": 100,
+        },
+    },
+    "internal": {
+        "AUTHENTICATION_REQUIRED": True,
+        "ENABLE_INTROSPECTION": False,
+        "QUERY_SETTINGS": {
+            "MAX_QUERY_DEPTH": 15,
+            "ENABLE_AGGREGATION": True,
+        },
     },
 }
 
+# ========================================
 # Environment-specific defaults
+# ========================================
 ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "development": {
         "ENABLE_GRAPHIQL": True,
         "ENABLE_INTROSPECTION": True,
-        "ENABLE_DEBUG_MODE": True,
-        "ENABLE_QUERY_PROFILING": True,
+        "DEVELOPMENT_SETTINGS": {
+            "ENABLE_DEBUG_MODE": True,
+            "ENABLE_QUERY_PROFILING": True,
+        },
         "ERROR_SETTINGS": {
             "ENABLE_DETAILED_ERRORS": True,
             "LOG_LEVEL": "DEBUG",
@@ -279,7 +331,9 @@ ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "production": {
         "ENABLE_GRAPHIQL": False,
         "ENABLE_INTROSPECTION": False,
-        "ENABLE_DEBUG_MODE": False,
+        "DEVELOPMENT_SETTINGS": {
+            "ENABLE_DEBUG_MODE": False,
+        },
         "SECURITY_SETTINGS": {
             "ENABLE_RATE_LIMITING": True,
             "ENABLE_QUERY_WHITELIST": True,
@@ -293,17 +347,38 @@ ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
 
 
 def get_default_settings() -> Dict[str, Any]:
-    """Get a copy of the default library settings."""
+    """
+    Get a copy of the default library settings.
+    
+    Returns:
+        Dict[str, Any]: Copy of LIBRARY_DEFAULTS
+    """
     return LIBRARY_DEFAULTS.copy()
 
 
 def get_schema_defaults(schema_name: str) -> Dict[str, Any]:
-    """Get default settings for a specific schema."""
+    """
+    Get default settings for a specific schema.
+    
+    Args:
+        schema_name: Name of the schema to get defaults for
+        
+    Returns:
+        Dict[str, Any]: Schema-specific default settings
+    """
     return SCHEMA_DEFAULTS.get(schema_name, {}).copy()
 
 
 def get_environment_defaults(environment: str) -> Dict[str, Any]:
-    """Get default settings for a specific environment."""
+    """
+    Get default settings for a specific environment.
+    
+    Args:
+        environment: Environment name (development, testing, production)
+        
+    Returns:
+        Dict[str, Any]: Environment-specific default settings
+    """
     return ENVIRONMENT_DEFAULTS.get(environment, {}).copy()
 
 
@@ -311,11 +386,20 @@ def merge_settings(*settings_dicts: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge multiple settings dictionaries with deep merging for nested dicts.
     
+    This function performs a deep merge where nested dictionaries are merged
+    recursively rather than being completely replaced.
+    
     Args:
         *settings_dicts: Variable number of settings dictionaries to merge
         
     Returns:
-        Merged settings dictionary
+        Dict[str, Any]: Merged settings dictionary
+        
+    Example:
+        >>> base = {"A": {"x": 1, "y": 2}, "B": 3}
+        >>> override = {"A": {"y": 20, "z": 30}, "C": 4}
+        >>> merge_settings(base, override)
+        {"A": {"x": 1, "y": 20, "z": 30}, "B": 3, "C": 4}
     """
     result = {}
     
@@ -329,3 +413,86 @@ def merge_settings(*settings_dicts: Dict[str, Any]) -> Dict[str, Any]:
                 result[key] = value
                 
     return result
+
+
+def get_merged_settings(
+    schema_name: Optional[str] = None,
+    environment: Optional[str] = None,
+    custom_settings: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Get merged settings from all sources in priority order.
+    
+    Priority order (highest to lowest):
+    1. custom_settings parameter
+    2. schema-specific defaults
+    3. environment-specific defaults  
+    4. library defaults
+    
+    Args:
+        schema_name: Name of schema for schema-specific defaults
+        environment: Environment name for environment-specific defaults
+        custom_settings: Custom settings to override defaults
+        
+    Returns:
+        Dict[str, Any]: Merged settings dictionary
+    """
+    settings_to_merge = [get_default_settings()]
+    
+    if environment:
+        env_defaults = get_environment_defaults(environment)
+        if env_defaults:
+            settings_to_merge.append(env_defaults)
+    
+    if schema_name:
+        schema_defaults = get_schema_defaults(schema_name)
+        if schema_defaults:
+            settings_to_merge.append(schema_defaults)
+    
+    if custom_settings:
+        settings_to_merge.append(custom_settings)
+    
+    return merge_settings(*settings_to_merge)
+
+
+def validate_settings(settings: Dict[str, Any]) -> List[str]:
+    """
+    Validate settings configuration and return list of validation errors.
+    
+    Args:
+        settings: Settings dictionary to validate
+        
+    Returns:
+        List[str]: List of validation error messages (empty if valid)
+    """
+    errors = []
+    
+    # Validate required settings exist
+    required_settings = ["DEFAULT_SCHEMA", "SCHEMA_SETTINGS"]
+    for setting in required_settings:
+        if setting not in settings:
+            errors.append(f"Required setting '{setting}' is missing")
+    
+    # Validate numeric ranges
+    if "QUERY_SETTINGS" in settings:
+        query_settings = settings["QUERY_SETTINGS"]
+        
+        if "DEFAULT_PAGE_SIZE" in query_settings and query_settings["DEFAULT_PAGE_SIZE"] <= 0:
+            errors.append("DEFAULT_PAGE_SIZE must be greater than 0")
+            
+        if "MAX_PAGE_SIZE" in query_settings and query_settings["MAX_PAGE_SIZE"] <= 0:
+            errors.append("MAX_PAGE_SIZE must be greater than 0")
+            
+        if ("DEFAULT_PAGE_SIZE" in query_settings and 
+            "MAX_PAGE_SIZE" in query_settings and
+            query_settings["DEFAULT_PAGE_SIZE"] > query_settings["MAX_PAGE_SIZE"]):
+            errors.append("DEFAULT_PAGE_SIZE cannot be greater than MAX_PAGE_SIZE")
+    
+    # Validate file upload settings
+    if "FILE_UPLOAD_SETTINGS" in settings:
+        file_settings = settings["FILE_UPLOAD_SETTINGS"]
+        
+        if "MAX_FILE_SIZE" in file_settings and file_settings["MAX_FILE_SIZE"] <= 0:
+            errors.append("MAX_FILE_SIZE must be greater than 0")
+    
+    return errors

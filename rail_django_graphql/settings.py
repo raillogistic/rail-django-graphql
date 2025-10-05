@@ -10,8 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -190,50 +190,46 @@ LOGGING = {
     },
 }
 
-rail_django_graphql = {
+RAIL_DJANGO_GRAPHQL = {
     # ========================================
     # CONFIGURATION GÉNÉRALE DU SCHÉMA
     # ========================================
-    # Répertoire de sortie pour les schémas générés
-    "SCHEMA_OUTPUT_DIR": "generated_schema/",
-    # Génération automatique du schéma GraphQL
-    "AUTO_GENERATE_SCHEMA": True,
-    # Convention de nommage pour les champs GraphQL (snake_case, camelCase)
-    "NAMING_CONVENTION": "snake_case",
-    # Activer l'introspection GraphQL (utile pour le développement)
-    "ENABLE_INTROSPECTION": True,
-    # Activer l'interface GraphiQL/Playground
-    "ENABLE_PLAYGROUND": DEBUG,
-    # Mode debug pour des messages d'erreur détaillés
-    "DEBUG_MODE": True,
-    # Messages d'erreur verbeux
-    "VERBOSE_ERRORS": True,
-    # ========================================
-    # INCLUSION/EXCLUSION DES MODÈLES
-    # ========================================
-    # Applications à inclure (vide = toutes les applications)
-    "APPS_TO_INCLUDE": [],
-    # Applications à exclure de la génération du schéma
-    "APPS_TO_EXCLUDE": ["admin", "auth", "contenttypes", "sessions"],
-    # Modèles spécifiques à exclure
-    "MODELS_TO_EXCLUDE": ["LogEntry", "Session"],
-    # ========================================
-    # FONCTIONNALITÉS PRINCIPALES
-    # ========================================
-    # Activer les mutations GraphQL
-    "ENABLE_MUTATIONS": True,
-    # Activer les abonnements GraphQL (subscriptions)
-    "ENABLE_SUBSCRIPTIONS": False,
-    # Activer le système de filtrage avancé
-    "ENABLE_FILTERS": True,
-    # Activer les opérations imbriquées (nested operations)
-    "ENABLE_NESTED_OPERATIONS": True,
-    # Activer le téléchargement de fichiers
-    "ENABLE_FILE_UPLOADS": True,
-    # Activer les scalaires personnalisés
-    "ENABLE_CUSTOM_SCALARS": True,
-    # Activer la prise en charge de l'héritage de modèles
-    "ENABLE_INHERITANCE": True,
+    "SCHEMA_SETTINGS": {
+        # Répertoire de sortie pour les schémas générés
+        "SCHEMA_OUTPUT_DIR": "generated_schema/",
+        # Génération automatique du schéma GraphQL
+        "AUTO_GENERATE_SCHEMA": True,
+        # Convention de nommage pour les champs GraphQL (snake_case, camelCase)
+        "NAMING_CONVENTION": "snake_case",
+        # Activer l'introspection GraphQL (utile pour le développement)
+        "ENABLE_INTROSPECTION": True,
+        # Activer l'interface GraphiQL/Playground
+        "ENABLE_PLAYGROUND": DEBUG,
+        # Mode debug pour des messages d'erreur détaillés
+        "DEBUG_MODE": True,
+        # Messages d'erreur verbeux
+        "VERBOSE_ERRORS": True,
+        # Applications à inclure (vide = toutes les applications)
+        "APPS_TO_INCLUDE": [],
+        # Applications à exclure de la génération du schéma
+        "APPS_TO_EXCLUDE": ["admin", "auth", "contenttypes", "sessions"],
+        # Modèles spécifiques à exclure
+        "MODELS_TO_EXCLUDE": ["LogEntry", "Session"],
+        # Activer les mutations GraphQL
+        "ENABLE_MUTATIONS": True,
+        # Activer les abonnements GraphQL (subscriptions)
+        "ENABLE_SUBSCRIPTIONS": False,
+        # Activer le système de filtrage avancé
+        "ENABLE_FILTERS": True,
+        # Activer les opérations imbriquées (nested operations)
+        "ENABLE_NESTED_OPERATIONS": True,
+        # Activer le téléchargement de fichiers
+        "ENABLE_FILE_UPLOADS": True,
+        # Activer les scalaires personnalisés
+        "ENABLE_CUSTOM_SCALARS": True,
+        # Activer la prise en charge de l'héritage de modèles
+        "ENABLE_INHERITANCE": True,
+    },
     # ========================================
     # CONFIGURATION DES REQUÊTES
     # ========================================
@@ -249,27 +245,26 @@ rail_django_graphql = {
         "enable_pagination": True,
         # Activer le tri (alias pour generate_ordering)
         "enable_ordering": True,
-        # Taille de page par défaut pour la pagination
+        # Taille de page par défaut
         "default_page_size": 20,
-        # Taille de page maximale autorisée
+        # Taille de page maximale
         "max_page_size": 100,
-        # Champs de recherche supplémentaires par modèle
+        # Champs de recherche supplémentaires
         "additional_lookup_fields": {
-            # 'Post': ['slug', 'uuid'],
-            # 'User': ['username', 'email'],
+            # Exemple: "User": ["email", "username"]
         },
     },
     # ========================================
     # CONFIGURATION DES MUTATIONS
     # ========================================
     "MUTATION_SETTINGS": {
-        # Activer les mutations de création
+        # Activer la génération de mutations de création
         "generate_create": True,
         "enable_create": True,
-        # Activer les mutations de mise à jour
+        # Activer la génération de mutations de mise à jour
         "generate_update": True,
         "enable_update": True,
-        # Activer les mutations de suppression
+        # Activer la génération de mutations de suppression
         "generate_delete": True,
         "enable_delete": True,
         # Activer les opérations en lot (bulk operations)
@@ -277,79 +272,71 @@ rail_django_graphql = {
         "enable_bulk_operations": True,
         # Activer les mutations de méthodes personnalisées
         "enable_method_mutations": True,
-        # Préfixe pour les noms de mutations de méthodes
+        # Préfixe pour les mutations de méthodes
         "method_mutation_prefix": "",
-        # Inclure les méthodes privées (commençant par _)
+        # Inclure les méthodes privées dans les mutations
         "include_private_methods": False,
-        # Taille de lot maximale pour les opérations en lot
+        # Taille de lot par défaut pour les opérations en lot
         "bulk_batch_size": 100,
-        # Nombre maximum d'objets par opération en lot
+        # Nombre maximum d'objets pour les opérations en lot
         "bulk_max_objects": 1000,
-        # Timeout des transactions en lot (en secondes)
+        # Timeout pour les transactions en lot (en secondes)
         "bulk_transaction_timeout": 30,
         # Limitation du taux pour les opérations en lot
         "bulk_rate_limit": {
             "max_operations_per_minute": 10,
             "max_objects_per_hour": 10000,
         },
-        # Champs requis pour les opérations de mise à jour par modèle
+        # Champs requis pour les mutations de mise à jour
         "required_update_fields": {
-            # 'Post': ['title'],
-            # 'User': ['email'],
+            # Exemple: "User": ["email"]
         },
-        # ========================================
-        # RELATIONS IMBRIQUÉES (NESTED RELATIONS)
-        # ========================================
-        # Contrôle global des relations imbriquées
+        # Activer les relations imbriquées dans les mutations
         "enable_nested_relations": True,
-        # Configuration par modèle des relations imbriquées
+        # Configuration des relations imbriquées
         "nested_relations_config": {
-            # 'Post': True,     # Activer pour le modèle Post
-            # 'Comment': False, # Désactiver pour le modèle Comment
-            # 'User': True,     # Activer pour le modèle User
-            # 'Tags': True,     # Activer pour le modèle User
+            # Profondeur maximale des relations imbriquées
+            "max_depth": 3,
+            # Activer la création en cascade
+            "enable_cascade_create": True,
         },
-        # Configuration granulaire par champ des relations imbriquées
+        # Configuration des champs imbriqués par modèle
         "nested_field_config": {
             "Post": {
                 "category": True,  # Activer les opérations imbriquées pour category
-                # "comments": False,     # Désactiver les commentaires imbriqués
-                # "related_posts": True, # Activer les posts liés imbriqués
-                # "tags": True,          # Activer les tags imbriqués
-                # "author": False,       # Désactiver les mises à jour d'auteur imbriquées
+                "tags": {
+                    "enable_create": True,
+                    "enable_update": False,
+                },
             },
-            # "Comment": {
-            #     "replies": False,      # Désactiver les réponses imbriquées
-            # },
+            # Ajouter d'autres modèles selon les besoins
         },
     },
     # ========================================
     # CONFIGURATION DES TYPES
     # ========================================
     "TYPE_SETTINGS": {
-        # Champs à exclure par modèle
+        # Champs à exclure globalement
         "exclude_fields": {
-            # 'User': ['password', 'last_login'],
-            # 'Post': ['internal_notes'],
+            # Exemple: "User": ["password", "last_login"]
         },
-        # Alias pour exclude_fields
         "excluded_fields": {
-            # 'User': ['password_hash'],
+            # Alias pour exclude_fields (rétrocompatibilité)
         },
-        # Champs à inclure par modèle (si None, inclure tous les champs non exclus)
+        # Champs à inclure spécifiquement
         "include_fields": {
-            # 'User': ['id', 'username', 'email', 'first_name', 'last_name'],
+            # Exemple: "User": ["id", "username", "email"]
         },
-        # Mappages de types de champs personnalisés
+        # Mappages de champs personnalisés
         "custom_field_mappings": {
-            # 'JSONField': 'graphene.JSONString',
+            # Exemple: "User.profile_picture": "String"
         },
-        # Activer la génération de filtres pour les types
+        # Générer des filtres pour les types
         "generate_filters": True,
         "enable_filtering": True,
-        # Activer la conversion automatique en camelCase
+        # Conversion automatique en camelCase
         "auto_camelcase": False,
-        # Activer les descriptions de champs
+        # Générer des descriptions pour les champs
         "generate_descriptions": True,
     },
     # ========================================
@@ -358,7 +345,7 @@ rail_django_graphql = {
     "FILTERING": {
         # Activer le système de filtrage
         "ENABLE_FILTERS": True,
-        # Opérateurs de filtre par défaut par type de champ
+        # Opérateurs de filtre par défaut pour chaque type de champ
         "DEFAULT_FILTER_OPERATORS": {
             "CharField": [
                 "exact",
@@ -460,15 +447,15 @@ rail_django_graphql = {
         },
         # Activer les opérateurs logiques (AND, OR, NOT)
         "ENABLE_LOGICAL_OPERATORS": True,
-        # Activer le filtrage sur les relations
+        # Activer les filtres sur les relations
         "ENABLE_RELATIONSHIP_FILTERS": True,
-        # Profondeur maximale pour le filtrage sur les relations
+        # Profondeur maximale des filtres imbriqués
         "MAX_FILTER_DEPTH": 3,
         # Activer les filtres personnalisés
         "ENABLE_CUSTOM_FILTERS": True,
-        # Filtres personnalisés par modèle
+        # Définition des filtres personnalisés
         "CUSTOM_FILTERS": {
-            # 'Post': 'myapp.filters.PostFilterSet',
+            # Exemple: "search": "icontains"
         },
         # Activer la mise en cache des filtres
         "ENABLE_FILTER_CACHING": True,
@@ -481,12 +468,12 @@ rail_django_graphql = {
     # CONFIGURATION DE LA PAGINATION
     # ========================================
     "PAGINATION": {
-        # Taille de page par défaut
+        # Taille de pagination par défaut
         "PAGINATION_SIZE": 20,
         "DEFAULT_PAGE_SIZE": 20,
         # Taille de page maximale
         "MAX_PAGE_SIZE": 100,
-        # Activer la pagination Relay
+        # Utiliser la pagination Relay
         "USE_RELAY_PAGINATION": False,
         # Activer la pagination par curseur
         "ENABLE_CURSOR_PAGINATION": True,
@@ -494,10 +481,10 @@ rail_django_graphql = {
         "ENABLE_OFFSET_PAGINATION": True,
     },
     # ========================================
-    # SÉCURITÉ ET PERMISSIONS
+    # CONFIGURATION DE LA SÉCURITÉ
     # ========================================
     "SECURITY": {
-        # Profondeur maximale des requêtes (protection contre les attaques de profondeur)
+        # Profondeur maximale des requêtes
         "MAX_QUERY_DEPTH": 10,
         # Complexité maximale des requêtes
         "MAX_QUERY_COMPLEXITY": 1000,
@@ -507,28 +494,26 @@ rail_django_graphql = {
         "QUERY_TIMEOUT": 30,
         # Permissions pour les mutations
         "MUTATION_PERMISSIONS": {
-            # 'create': 'rail_django_graphql.permissions.IsAuthenticated',
-            # 'update': 'rail_django_graphql.permissions.IsOwnerOrReadOnly',
-            # 'delete': 'rail_django_graphql.permissions.IsOwnerOrAdmin',
+            # Exemple: "User": ["create", "update", "delete"]
         },
         # Champs sensibles à masquer
         "SENSITIVE_FIELDS": {
-            # 'User': ['password', 'password_hash', 'secret_key'],
+            # Exemple: "User": ["password", "secret_key"]
         },
-        # Permissions pour l'accès aux champs sensibles
+        # Permissions par champ
         "FIELD_PERMISSIONS": {
-            # 'sensitive_field': 'your_app.view_sensitive_data'
+            # Exemple: "User.email": ["authenticated"]
         },
     },
     # ========================================
-    # OPTIMISATION DES PERFORMANCES
+    # CONFIGURATION DES PERFORMANCES
     # ========================================
     "PERFORMANCE": {
         # Activer l'optimisation des requêtes
         "ENABLE_QUERY_OPTIMIZATION": True,
-        # Activer la mise en cache des schémas
+        # Activer la mise en cache du schéma
         "ENABLE_SCHEMA_CACHING": True,
-        # Timeout du cache des schémas (en secondes)
+        # Timeout du cache du schéma (en secondes)
         "SCHEMA_CACHE_TIMEOUT": 3600,
         # Activer le monitoring des performances
         "PERFORMANCE_MONITORING": True,
@@ -536,37 +521,31 @@ rail_django_graphql = {
         "SLOW_QUERY_THRESHOLD": 1000,
         # Activer la compression des réponses
         "ENABLE_RESPONSE_COMPRESSION": True,
-        # Taille de lot pour les opérations en lot par modèle
+        # Tailles de lot spécifiques par modèle
         "MODEL_SPECIFIC_BATCH_SIZES": {
-            # 'LargeModel': 50,   # Modèles volumineux
-            # 'SmallModel': 500,  # Modèles légers
+            # Exemple: "User": 50, "Post": 100
         },
     },
     # ========================================
     # SCALAIRES ET CONVERTISSEURS PERSONNALISÉS
     # ========================================
     "CUSTOM_SCALARS": {
-        # Scalaires personnalisés pour les types de champs Django
-        # 'JSONField': 'rail_django_graphql.scalars.JSONScalar',
-        # 'UUIDField': 'rail_django_graphql.scalars.UUIDScalar',
-        # 'EmailField': 'rail_django_graphql.scalars.EmailScalar',
-        # 'URLField': 'rail_django_graphql.scalars.URLScalar',
+        # Exemple: "DateTime": "graphene.DateTime",
+        # "JSON": "graphene_django.extras.DjangoJSONType",
+        # "Upload": "graphene_file_upload.scalars.Upload",
     },
     "FIELD_CONVERTERS": {
-        # Convertisseurs personnalisés pour les types de champs
-        # 'custom_field': 'your_app.converters.CustomFieldConverter',
+        # Exemple: "models.JSONField": "graphene.JSONString"
     },
     # ========================================
-    # HOOKS ET EXTENSIONS
+    # HOOKS ET MIDDLEWARE
     # ========================================
     "SCHEMA_HOOKS": [
-        # Hooks personnalisés pour la génération de schéma
-        # 'your_app.hooks.pre_schema_generation',
-        # 'your_app.hooks.post_schema_generation',
+        # Exemple: "myapp.hooks.pre_schema_build",
+        # "myapp.hooks.post_schema_build",
     ],
     "MIDDLEWARE": [
-        # Middleware GraphQL personnalisé
-        # 'your_app.middleware.CustomGraphQLMiddleware',
+        # Exemple: "myapp.middleware.CustomGraphQLMiddleware",
     ],
     # ========================================
     # OPÉRATIONS IMBRIQUÉES AVANCÉES
@@ -576,28 +555,28 @@ rail_django_graphql = {
         "ENABLE_NESTED_CREATE": True,
         "ENABLE_NESTED_UPDATE": True,
         "ENABLE_NESTED_DELETE": True,
-        # Paramètres de performance
+        # Seuil pour les opérations en lot
         "BULK_THRESHOLD": 10,
         "MAX_NESTING_DEPTH": 5,
         "ENABLE_QUERY_OPTIMIZATION": True,
-        # Paramètres de sécurité
+        # Vérifications de sécurité pour les suppressions
         "ENABLE_DELETION_SAFETY_CHECKS": True,
         "DEFAULT_DELETE_PROTECTION": True,
         "REQUIRE_EXPLICIT_CASCADE": True,
-        # Paramètres de validation
+        # Validation des opérations imbriquées
         "ENABLE_NESTED_VALIDATION": True,
         "VALIDATE_RELATIONSHIPS": True,
         "STRICT_TYPE_CHECKING": True,
-        # Paramètres de transaction
+        # Gestion des transactions
         "USE_TRANSACTIONS": True,
         "TRANSACTION_ISOLATION_LEVEL": "READ_COMMITTED",
     },
     "RELATIONSHIP_HANDLING": {
-        # Comportements par défaut pour les relations
+        # Comportement par défaut pour les suppressions de relations
         "FOREIGN_KEY_ON_DELETE": "protect",
         "ONE_TO_MANY_ON_DELETE": "cascade",
         "MANY_TO_MANY_ON_DELETE": "clear",
-        # Comportements de mise à jour
+        # Comportement par défaut pour les mises à jour de relations
         "FOREIGN_KEY_ON_UPDATE": "update",
         "ONE_TO_MANY_ON_UPDATE": "merge",
         "MANY_TO_MANY_ON_UPDATE": "replace",
@@ -621,15 +600,15 @@ rail_django_graphql = {
     # INTERNATIONALISATION
     # ========================================
     "I18N": {
-        # Activer la prise en charge multilingue
+        # Activer l'internationalisation
         "ENABLE_I18N": True,
         # Langues supportées
         "SUPPORTED_LANGUAGES": ["fr", "en"],
         # Langue par défaut
         "DEFAULT_LANGUAGE": "fr",
-        # Champs traduisibles par modèle
+        # Champs traduisibles
         "TRANSLATABLE_FIELDS": {
-            # 'Post': ['title', 'content', 'description'],
+            # Exemple: "Post": ["title", "content"]
         },
     },
 }

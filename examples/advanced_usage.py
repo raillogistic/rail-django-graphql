@@ -29,34 +29,42 @@ from rail_django_graphql.optimization import QueryOptimizer
 # Advanced Django Settings Configuration
 ADVANCED_SETTINGS = """
 # settings.py - Advanced Configuration
-RAIL_GRAPHQL = {
+RAIL_DJANGO_GRAPHQL = {
     # Schema Generation
-    'AUTO_GENERATE_SCHEMA': True,
-    'AUTO_DISCOVER_MODELS': True,
-    'SCHEMA_OUTPUT_PATH': 'schema.json',
+    'SCHEMA_SETTINGS': {
+        'auto_generate_schema': True,
+        'auto_discover_models': True,
+        'schema_output_path': 'schema.json',
+        'enable_introspection': False,  # Disabled in production
+    },
     
     # Security
-    'ENABLE_INTROSPECTION': False,  # Disabled in production
-    'MAX_QUERY_DEPTH': 15,
-    'MAX_QUERY_COMPLEXITY': 2000,
-    'ENABLE_QUERY_WHITELIST': True,
-    'ALLOWED_QUERY_HASHES': [
-        'hash1', 'hash2'  # Pre-approved query hashes
-    ],
+    'SECURITY': {
+        'max_query_depth': 15,
+        'max_query_complexity': 2000,
+        'enable_query_whitelist': True,
+        'allowed_query_hashes': [
+            'hash1', 'hash2'  # Pre-approved query hashes
+        ],
+    },
     
     # Performance
-    'ENABLE_QUERY_OPTIMIZATION': True,
-    'ENABLE_DATALOADER': True,
-    'CACHE_TIMEOUT': 600,
-    'ENABLE_QUERY_CACHING': True,
-    'CACHE_KEY_PREFIX': 'graphql:',
+    'PERFORMANCE': {
+        'enable_query_optimization': True,
+        'enable_dataloader': True,
+        'cache_timeout': 600,
+        'enable_query_caching': True,
+        'cache_key_prefix': 'graphql:',
+        'enable_performance_monitoring': True,
+    },
     
-    # Debugging & Monitoring
-    'ENABLE_DEBUGGING': False,  # Disabled in production
-    'LOG_QUERIES': True,
-    'LOG_SLOW_QUERIES': True,
-    'SLOW_QUERY_THRESHOLD': 0.5,  # seconds
-    'ENABLE_PERFORMANCE_MONITORING': True,
+    # Development & Debugging
+    'DEVELOPMENT': {
+        'enable_debugging': False,  # Disabled in production
+        'log_queries': True,
+        'log_slow_queries': True,
+        'slow_query_threshold': 0.5,  # seconds
+    },
     
     # Permissions
     'DEFAULT_PERMISSION_CLASSES': [

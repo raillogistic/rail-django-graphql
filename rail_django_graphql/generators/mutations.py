@@ -26,7 +26,7 @@ class MutationError(graphene.ObjectType):
     message = graphene.String(required=True, description="Le message d'erreur décrivant ce qui s'est mal passé")
 
 from ..core.settings import MutationGeneratorSettings
-from ..conf import get_schema_settings
+from ..conf import get_mutation_settings
 from .types import TypeGenerator
 from .introspector import ModelIntrospector, MethodInfo
 from .nested_operations import NestedOperationHandler
@@ -56,8 +56,7 @@ class MutationGenerator:
         
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            schema_settings = get_schema_settings(schema_name)
-            self.settings = schema_settings.get('mutation_generator', MutationGeneratorSettings())
+            self.settings = get_mutation_settings(schema_name)
         else:
             self.settings = settings
             

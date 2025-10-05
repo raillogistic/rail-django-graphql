@@ -69,12 +69,11 @@ class SchemaBuilder:
         # Load settings using the new configuration system
         if settings is None:
             try:
-                from ..conf import get_schema_settings
+                from ..conf import get_core_schema_settings
                 from .settings import SchemaSettings
 
                 # Get schema-specific settings
-                config = get_schema_settings(schema_name)
-                self.settings = SchemaSettings(**config.get("SCHEMA_SETTINGS", {}))
+                self.settings = get_core_schema_settings(schema_name)
             except ImportError:
                 # Fallback to legacy settings
                 from .settings import SchemaSettings
@@ -102,91 +101,21 @@ class SchemaBuilder:
     def type_generator(self):
         """Lazy-loaded type generator."""
         if self._type_generator is None:
-            from ..core.settings import TypeGeneratorSettings
             from ..generators.types import TypeGenerator
 
-            try:
-                from ..conf import get_schema_settings
-
-                type_config = get_schema_settings(self.schema_name).get(
-                    "TYPE_SETTINGS", {}
-                )
-                # Convert dict to TypeGeneratorSettings object, filtering valid parameters
-                valid_params = {}
-                if type_config:
-                    # Map config keys to TypeGeneratorSettings field names
-                    field_mapping = {
-                        "EXCLUDE_FIELDS": "exclude_fields",
-                        "EXCLUDED_FIELDS": "excluded_fields",
-                        "INCLUDE_FIELDS": "include_fields",
-                        "CUSTOM_FIELD_MAPPINGS": "custom_field_mappings",
-                        "GENERATE_FILTERS": "generate_filters",
-                        "ENABLE_FILTERING": "enable_filtering",
-                        "AUTO_CAMELCASE": "auto_camelcase",
-                        "ENABLE_AUTO_CAMEL_CASE": "auto_camelcase",  # Alias
-                        "GENERATE_DESCRIPTIONS": "generate_descriptions",
-                    }
-                    for config_key, value in type_config.items():
-                        if config_key in field_mapping:
-                            valid_params[field_mapping[config_key]] = value
-
-                type_settings = TypeGeneratorSettings(**valid_params)
-                self._type_generator = TypeGenerator(
-                    settings=type_settings, schema_name=self.schema_name
-                )
-            except ImportError:
-                self._type_generator = TypeGenerator(settings=TypeGeneratorSettings())
+            self._type_generator = TypeGenerator(schema_name=self.schema_name)
         return self._type_generator
 
     @property
     def query_generator(self):
         """Lazy-loaded query generator."""
         if self._query_generator is None:
-            from ..core.settings import QueryGeneratorSettings
             from ..generators.queries import QueryGenerator
 
-            try:
-                from ..conf import get_schema_settings
-
-                query_config = get_schema_settings(self.schema_name).get(
-                    "QUERY_SETTINGS", {}
-                )
-
-                # Convert dictionary to QueryGeneratorSettings object
-                if isinstance(query_config, dict):
-                    # Map configuration keys to QueryGeneratorSettings fields
-                    settings_kwargs = {}
-                    for key, value in query_config.items():
-                        if key == "GENERATE_FILTERS":
-                            settings_kwargs["generate_filters"] = value
-                        elif key == "GENERATE_ORDERING":
-                            settings_kwargs["generate_ordering"] = value
-                        elif key == "GENERATE_PAGINATION":
-                            settings_kwargs["generate_pagination"] = value
-                        elif key == "USE_RELAY":
-                            settings_kwargs["use_relay"] = value
-                        elif key == "DEFAULT_PAGE_SIZE":
-                            settings_kwargs["default_page_size"] = value
-                        elif key == "MAX_PAGE_SIZE":
-                            settings_kwargs["max_page_size"] = value
-                        elif key == "ENABLE_PAGINATION":
-                            settings_kwargs["enable_pagination"] = value
-                        elif key == "ENABLE_ORDERING":
-                            settings_kwargs["enable_ordering"] = value
-                        elif key == "ADDITIONAL_LOOKUP_FIELDS":
-                            settings_kwargs["additional_lookup_fields"] = value
-
-                    query_settings = QueryGeneratorSettings(**settings_kwargs)
-                else:
-                    query_settings = query_config
-
-                self._query_generator = QueryGenerator(
-                    self.type_generator,
-                    settings=query_settings,
-                    schema_name=self.schema_name,
-                )
-            except ImportError:
-                self._query_generator = QueryGenerator(self.type_generator)
+            self._query_generator = QueryGenerator(
+                self.type_generator,
+                schema_name=self.schema_name,
+            )
         return self._query_generator
 
     @property
@@ -195,27 +124,9 @@ class SchemaBuilder:
         if self._mutation_generator is None:
             from ..generators.mutations import MutationGenerator
 
-            try:
-                from ..conf import get_schema_settings
-                from .config_loader import ConfigLoader
-
-                # Load mutation settings for this schema
-                mutation_settings = ConfigLoader.load_mutation_settings(
-                    self.schema_name
-                )
-                self._mutation_generator = MutationGenerator(
-                    self.type_generator, mutation_settings, schema_name=self.schema_name
-                )
-            except ImportError:
-                # Fallback to legacy loading
-                from .config_loader import load_mutation_settings_legacy
-
-                mutation_settings = load_mutation_settings_legacy()
-                from ..generators.mutations import MutationGenerator
-
-                self._mutation_generator = MutationGenerator(
-                    self.type_generator, mutation_settings
-                )
+            self._mutation_generator = MutationGenerator(
+                self.type_generator, schema_name=self.schema_name
+            )
         return self._mutation_generator
 
     def _connect_signals(self) -> None:

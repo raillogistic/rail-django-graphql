@@ -59,7 +59,6 @@ class MultiSchemaGraphQLView(GraphQLView):
 
             # Check if schema is enabled
             if not getattr(schema_info, "enabled", True):
-
                 return self._schema_disabled_response(schema_name)
 
             # Apply schema-specific configuration

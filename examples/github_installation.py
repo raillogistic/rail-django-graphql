@@ -111,13 +111,21 @@ if not settings.configured:
             },
         ],
         # Rail Django GraphQL Configuration
-        RAIL_GRAPHQL={
-            'AUTO_GENERATE_SCHEMA': True,
-            'ENABLE_INTROSPECTION': True,  # Enable for development
-            'ENABLE_DEBUGGING': True,      # Enable for development
-            'MAX_QUERY_DEPTH': 10,
-            'ENABLE_QUERY_OPTIMIZATION': True,
-            'ENABLE_DATALOADER': True,
+        RAIL_DJANGO_GRAPHQL={
+            'SCHEMA_SETTINGS': {
+                'auto_generate_schema': True,
+                'enable_introspection': True,  # Enable for development
+            },
+            'SECURITY': {
+                'max_query_depth': 10,
+            },
+            'PERFORMANCE': {
+                'enable_query_optimization': True,
+                'enable_dataloader': True,
+            },
+            'DEVELOPMENT': {
+                'enable_debugging': True,      # Enable for development
+            },
         },
         GRAPHENE={
             'SCHEMA': 'myproject.schema.schema',

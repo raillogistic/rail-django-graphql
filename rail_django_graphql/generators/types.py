@@ -23,7 +23,7 @@ if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
 
 from ..core.settings import TypeGeneratorSettings, MutationGeneratorSettings
-from ..conf import get_schema_settings
+from ..conf import get_type_generator_settings, get_mutation_settings
 from .introspector import ModelIntrospector, FieldInfo
 from .inheritance import inheritance_handler
 
@@ -97,14 +97,12 @@ class TypeGenerator:
         
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            schema_settings = get_schema_settings(schema_name)
-            self.settings = schema_settings.get('type_generator', TypeGeneratorSettings())
+            self.settings = get_type_generator_settings(schema_name)
         else:
             self.settings = settings
             
         if mutation_settings is None:
-            schema_settings = get_schema_settings(schema_name)
-            self.mutation_settings = schema_settings.get('mutation_generator', MutationGeneratorSettings())
+            self.mutation_settings = get_mutation_settings(schema_name)
         else:
             self.mutation_settings = mutation_settings
             
