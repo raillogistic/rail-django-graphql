@@ -14,14 +14,19 @@ logger = logging.getLogger(__name__)
 
 # Import the new configuration system
 try:
-    from ..conf import get_settings, get_schema_settings
-    from ..defaults import DEFAULT_SETTINGS
+    from ..conf import (
+        settings as conf_settings,
+        get_schema_settings as conf_get_schema_settings,
+        validate_configuration as conf_validate_configuration,
+    )
+    NEW_CONFIG_AVAILABLE = True
 except ImportError:
     # Fallback for development
     logger.warning("New configuration system not available, using legacy loader")
-    get_settings = None
-    get_schema_settings = None
-    DEFAULT_SETTINGS = {}
+    conf_settings = None
+    conf_get_schema_settings = None
+    conf_validate_configuration = None
+    NEW_CONFIG_AVAILABLE = False
 
 # Legacy imports for backward compatibility
 try:
@@ -51,8 +56,8 @@ class ConfigLoader:
         Returns:
             Dictionary containing the configuration, or empty dict if not found.
         """
-        if get_settings:
-            return get_settings()
+        if NEW_CONFIG_AVAILABLE and conf_settings:
+            return conf_settings.get_all_settings()
         return get_rail_django_graphql_settings_legacy()
 
     @staticmethod
@@ -66,8 +71,8 @@ class ConfigLoader:
         Returns:
             Dictionary containing schema-specific configuration
         """
-        if get_schema_settings:
-            return get_schema_settings(schema_name)
+        if NEW_CONFIG_AVAILABLE and conf_get_schema_settings:
+            return conf_get_schema_settings(schema_name).get_all_settings()
         return {}
 
     @staticmethod
@@ -81,8 +86,8 @@ class ConfigLoader:
         Returns:
             MutationGeneratorSettings instance with configuration from Django settings.
         """
-        if get_settings and schema_name:
-            config = get_schema_settings(schema_name)
+        if NEW_CONFIG_AVAILABLE and schema_name and conf_get_schema_settings:
+            config = conf_get_schema_settings(schema_name).get_all_settings()
             mutation_config = config.get("MUTATION_SETTINGS", {})
         else:
             mutation_config = ConfigLoader.get_rail_django_graphql_settings().get("MUTATION_SETTINGS", {})
@@ -100,8 +105,8 @@ class ConfigLoader:
         Returns:
             TypeGeneratorSettings instance with configuration from Django settings.
         """
-        if get_settings and schema_name:
-            config = get_schema_settings(schema_name)
+        if NEW_CONFIG_AVAILABLE and schema_name and conf_get_schema_settings:
+            config = conf_get_schema_settings(schema_name).get_all_settings()
             type_config = config.get("TYPE_SETTINGS", {})
         else:
             type_config = ConfigLoader.get_rail_django_graphql_settings().get("TYPE_SETTINGS", {})
@@ -119,8 +124,8 @@ class ConfigLoader:
         Returns:
             SchemaSettings instance with configuration from Django settings.
         """
-        if get_settings and schema_name:
-            config = get_schema_settings(schema_name)
+        if NEW_CONFIG_AVAILABLE and schema_name and conf_get_schema_settings:
+            config = conf_get_schema_settings(schema_name).get_all_settings()
         else:
             config = ConfigLoader.get_rail_django_graphql_settings()
         
@@ -135,9 +140,13 @@ class ConfigLoader:
             True if configuration is valid, False otherwise.
         """
         try:
-            if get_settings:
-                from ..conf import validate_configuration as new_validate
-                return new_validate()
+            if NEW_CONFIG_AVAILABLE and conf_validate_configuration:
+                try:
+                    conf_validate_configuration()
+                    return True
+                except Exception as e:
+                    logger.error(f"New configuration validation failed: {e}")
+                    return False
             else:
                 return validate_configuration_legacy()
         except Exception as e:
@@ -145,11 +154,11 @@ class ConfigLoader:
             return False
 
     @staticmethod
-    def debug_configuration() -> None:
+    def debug_configuration_new() -> None:
         """
         Print debug information about the current configuration.
         """
-        if get_settings:
+        if NEW_CONFIG_AVAILABLE:
             debug_configuration_new()
         else:
             debug_configuration_legacy()
@@ -168,21 +177,25 @@ class ConfigLoader:
             Setting value or default
         """
         try:
-            if get_settings:
-                if schema_name:
-                    config = get_schema_settings(schema_name)
+            if NEW_CONFIG_AVAILABLE and conf_settings:
+                proxy = (
+                    conf_get_schema_settings(schema_name)
+                    if (schema_name and conf_get_schema_settings)
+                    else conf_settings
+                )
+                # Support dot notation for nested dict
+                if "." in key:
+                    keys = key.split(".")
+                    root = keys[0]
+                    value = proxy.get(root, default)
+                    for k in keys[1:]:
+                        if isinstance(value, dict) and k in value:
+                            value = value[k]
+                        else:
+                            return default
+                    return value
                 else:
-                    config = get_settings()
-                
-                # Support dot notation
-                keys = key.split('.')
-                value = config
-                for k in keys:
-                    if isinstance(value, dict) and k in value:
-                        value = value[k]
-                    else:
-                        return default
-                return value
+                    return proxy.get(key, default)
             else:
                 # Legacy fallback
                 config = get_rail_django_graphql_settings_legacy()
@@ -352,7 +365,7 @@ def load_schema_settings_from_config(config: Dict[str, Any]) -> 'SchemaSettings'
 
 
 # Legacy functions
-def load_mutation_settings() -> 'MutationGeneratorSettings':
+def load_mutation_settings_legacy() -> 'MutationGeneratorSettings':
     """
     Legacy function to load MutationGeneratorSettings from Django settings.
 
@@ -364,7 +377,7 @@ def load_mutation_settings() -> 'MutationGeneratorSettings':
     return load_mutation_settings_from_config(mutation_config)
 
 
-def load_type_settings() -> 'TypeGeneratorSettings':
+def load_type_settings_legacy() -> 'TypeGeneratorSettings':
     """
     Legacy function to load TypeGeneratorSettings from Django settings.
 
@@ -376,48 +389,10 @@ def load_type_settings() -> 'TypeGeneratorSettings':
     return load_type_settings_from_config(type_config)
 
 
-def load_schema_settings() -> 'SchemaSettings':
-    """
-    Legacy function to load SchemaSettings from Django settings.
-
-    Returns:
-        SchemaSettings instance with configuration from Django settings.
-    """
-    config = get_rail_django_graphql_settings_legacy()
-    return load_schema_settings_from_config(config)
-    """
-    Load SchemaSettings from Django settings.
-
-    Returns:
-        SchemaSettings instance with configuration from Django settings.
-    """
-    config = get_rail_django_graphql_settings()
-
-    # Create settings instance with loaded configuration
-    schema_settings = SchemaSettings(
-        auto_generate_schema=config.get("AUTO_GENERATE_SCHEMA", True),
-        auto_refresh_on_model_change=config.get("AUTO_REFRESH_ON_MODEL_CHANGE", True),
-        schema_output_dir=config.get("SCHEMA_OUTPUT_DIR", "generated_schema/"),
-        apps_to_include=config.get("APPS_TO_INCLUDE", []),
-        apps_to_exclude=config.get(
-            "APPS_TO_EXCLUDE", ["admin", "auth", "contenttypes"]
-        ),
-        models_to_exclude=config.get("MODELS_TO_EXCLUDE", []),
-        enable_mutations=config.get("ENABLE_MUTATIONS", True),
-        enable_subscriptions=config.get("ENABLE_SUBSCRIPTIONS", False),
-        pagination_size=config.get("PAGINATION_SIZE", 20),
-        max_query_depth=config.get("MAX_QUERY_DEPTH", 10),
-        enable_filters=config.get("ENABLE_FILTERS", True),
-        enable_nested_operations=config.get("ENABLE_NESTED_OPERATIONS", True),
-        enable_file_uploads=config.get("ENABLE_FILE_UPLOADS", True),
-        enable_custom_scalars=config.get("ENABLE_CUSTOM_SCALARS", True),
-        enable_inheritance=config.get("ENABLE_INHERITANCE", True),
-    )
-
-    return schema_settings
+# Note: legacy load_schema_settings is redundant because ConfigLoader.load_schema_settings covers both
 
 
-def validate_configuration(config: dict) -> dict:
+def validate_configuration_dict(config: dict) -> dict:
     """
     Valide la configuration rail_django_graphql avec validation complète du schéma.
 
@@ -797,11 +772,11 @@ def _validate_cross_section_dependencies(config: dict, errors: list) -> None:
             )
 
 
-def debug_configuration() -> None:
+def debug_configuration_new() -> None:
     """
     Print debug information about the current configuration.
     """
-    config = get_rail_django_graphql_settings()
+    config = ConfigLoader.get_rail_django_graphql_settings()
     print("=== rail_django_graphql Configuration Debug ===")
     print(f"Full config: {config}")
 
@@ -822,3 +797,32 @@ def debug_configuration() -> None:
         print("MUTATION_SETTINGS not found in configuration")
 
     print("=== End Configuration Debug ===")
+
+
+def debug_configuration_legacy() -> None:
+    """Legacy debug function to print current configuration from Django settings."""
+    config = get_rail_django_graphql_settings_legacy()
+    print("=== Legacy rail_django_graphql Configuration Debug ===")
+    print(f"Full legacy config: {config}")
+    if "MUTATION_SETTINGS" in config:
+        mutation_settings = config["MUTATION_SETTINGS"]
+        print(f"MUTATION_SETTINGS found: {mutation_settings}")
+    else:
+        print("MUTATION_SETTINGS not found in legacy configuration")
+    print("=== End Legacy Configuration Debug ===")
+
+
+def validate_configuration_legacy() -> bool:
+    """
+    Legacy wrapper to validate configuration using legacy schema.
+
+    Returns:
+        True if legacy configuration is valid, False otherwise.
+    """
+    try:
+        config = get_rail_django_graphql_settings_legacy()
+        validate_configuration_dict(config)
+        return True
+    except Exception as e:
+        logger.error(f"Legacy configuration validation failed: {e}")
+        return False

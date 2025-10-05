@@ -208,9 +208,9 @@ class SchemaBuilder:
                 )
             except ImportError:
                 # Fallback to legacy loading
-                from .config_loader import load_mutation_settings
+                from .config_loader import load_mutation_settings_legacy
 
-                mutation_settings = load_mutation_settings()
+                mutation_settings = load_mutation_settings_legacy()
                 from ..generators.mutations import MutationGenerator
 
                 self._mutation_generator = MutationGenerator(
