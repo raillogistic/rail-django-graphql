@@ -261,7 +261,7 @@ class SchemaBuilder:
         model_name = model.__name__
 
         # Check app exclusions
-        if app_label in self.settings.SchemaInfo:
+        if app_label in getattr(self.settings, "excluded_apps", []):
             return False
 
         # Check model exclusions
@@ -633,7 +633,7 @@ class SchemaBuilder:
             app_label: Django app label to unregister
         """
         if app_label not in self.settings.excluded_apps:
-            self.settings.excluded_apps.add(app_label)
+            self.settings.excluded_apps.append(app_label)
             self.rebuild_schema()
             logger.info(
                 f"App '{app_label}' unregistered from schema '{self.schema_name}' generation"
@@ -663,7 +663,7 @@ class SchemaBuilder:
         """
         model_identifier = model.__name__ if isinstance(model, type) else model
         if model_identifier not in self.settings.excluded_models:
-            self.settings.excluded_models.add(model_identifier)
+            self.settings.excluded_models.append(model_identifier)
             self.rebuild_schema()
             logger.info(
                 f"Model '{model_identifier}' unregistered from schema '{self.schema_name}' generation"
