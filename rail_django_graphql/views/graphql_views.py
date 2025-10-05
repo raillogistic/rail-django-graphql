@@ -4,13 +4,13 @@ Multi-schema GraphQL views for handling multiple GraphQL schemas with different 
 
 import json
 import logging
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
-from django.http import HttpRequest, HttpResponse, JsonResponse, Http404
-from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.views.generic import View
 from django.conf import settings
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
+from django.views.generic import View
 
 try:
     from graphene_django.views import GraphQLView
@@ -24,71 +24,73 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
+@method_decorator(csrf_exempt, name="dispatch")
 class MultiSchemaGraphQLView(GraphQLView):
     """
     GraphQL view that supports multiple schemas with per-schema configuration.
-    
+
     This view extends the standard GraphQLView to support:
     - Dynamic schema selection based on URL parameters
     - Per-schema authentication requirements
     - Schema-specific GraphiQL configuration
     - Custom error handling per schema
     """
-    
+
     def __init__(self, **kwargs):
         """Initialize the multi-schema view."""
         super().__init__(**kwargs)
         self._schema_cache = {}
-    
+
     def dispatch(self, request: HttpRequest, *args, **kwargs):
         """
         Dispatch the request to the appropriate schema handler.
-        
+
         Args:
             request: HTTP request object
             schema_name: Name of the schema to use (from URL)
         """
-        schema_name = kwargs.get('schema_name', 'default')
-        
+        schema_name = kwargs.get("schema_name", "default")
+
         try:
             # Get schema configuration
             schema_info = self._get_schema_info(schema_name)
             if not schema_info:
                 return self._schema_not_found_response(schema_name)
-            
+
             # Check if schema is enabled
-            if not schema_info.get('enabled', True):
+            if not getattr(schema_info, "enabled", True):
+
                 return self._schema_disabled_response(schema_name)
-            
+
             # Apply schema-specific configuration
             self._configure_for_schema(schema_info)
-            
+
             # Check authentication requirements
             if not self._check_authentication(request, schema_info):
                 return self._authentication_required_response()
-            
+
             # Set the schema for this request
             self.schema = self._get_schema_instance(schema_name, schema_info)
-            
+
             return super().dispatch(request, *args, **kwargs)
-            
+
         except Exception as e:
             logger.error(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
-    
+
     def _get_schema_info(self, schema_name: str) -> Optional[Dict[str, Any]]:
         """
         Get schema information from the registry.
-        
+
         Args:
             schema_name: Name of the schema
-            
+
         Returns:
             Schema information dictionary or None if not found
         """
         try:
             from ..core.registry import schema_registry
+
             return schema_registry.get_schema(schema_name)
         except ImportError:
             logger.warning("Schema registry not available")
@@ -96,247 +98,269 @@ class MultiSchemaGraphQLView(GraphQLView):
         except Exception as e:
             logger.error(f"Error getting schema info for '{schema_name}': {e}")
             return None
-    
+
     def _get_schema_instance(self, schema_name: str, schema_info: Dict[str, Any]):
         """
         Get or create a schema instance for the given schema name.
-        
+
         Args:
             schema_name: Name of the schema
             schema_info: Schema information dictionary
-            
+
         Returns:
             GraphQL schema instance
         """
         # Check cache first
         if schema_name in self._schema_cache:
             return self._schema_cache[schema_name]
-        
+
         try:
             from ..core.registry import schema_registry
-            schema = schema_registry.get_schema(schema_name)
-            
+
+            builder = schema_registry.get_schema_builder(schema_name)
+            schema_instance = builder.get_schema()
+
             # Cache the schema
-            self._schema_cache[schema_name] = schema
-            return schema
-            
+            self._schema_cache[schema_name] = schema_instance
+            return schema_instance
+
         except Exception as e:
             logger.error(f"Error getting schema instance for '{schema_name}': {e}")
             raise
-    
+
     def _configure_for_schema(self, schema_info: Dict[str, Any]):
         """
         Configure the view for the specific schema.
-        
+
         Args:
             schema_info: Schema information dictionary
         """
-        schema_settings = schema_info.get('settings', {})
-        
+        schema_settings = getattr(schema_info, "settings", {}) or {}
+
         # Configure GraphiQL
-        self.graphiql = schema_settings.get('enable_graphiql', True)
-        
+        self.graphiql = schema_settings.get("enable_graphiql", True)
+
         # Configure other view settings
-        if 'pretty' in schema_settings:
-            self.pretty = schema_settings['pretty']
-        
-        if 'batch' in schema_settings:
-            self.batch = schema_settings['batch']
-    
-    def _check_authentication(self, request: HttpRequest, schema_info: Dict[str, Any]) -> bool:
+        if "pretty" in schema_settings:
+            self.pretty = schema_settings["pretty"]
+
+        if "batch" in schema_settings:
+            self.batch = schema_settings["batch"]
+
+    def _check_authentication(
+        self, request: HttpRequest, schema_info: Dict[str, Any]
+    ) -> bool:
         """
         Check if the request meets authentication requirements for the schema.
-        
+
         Args:
             request: HTTP request object
             schema_info: Schema information dictionary
-            
+
         Returns:
             True if authentication is satisfied, False otherwise
         """
-        schema_settings = schema_info.get('settings', {})
-        auth_required = schema_settings.get('authentication_required', False)
-        
+        schema_settings = getattr(schema_info, "settings", {}) or {}
+        auth_required = schema_settings.get("authentication_required", False)
+
         if not auth_required:
             return True
-        
+
         # Check if user is authenticated
-        if hasattr(request, 'user') and request.user.is_authenticated:
+        if hasattr(request, "user") and request.user.is_authenticated:
             return True
-        
+
         # Check for API key or token authentication
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Bearer ') or auth_header.startswith('Token '):
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
             # Custom token validation logic can be added here
             return self._validate_token(auth_header, schema_settings)
-        
+
         return False
-    
-    def _validate_token(self, auth_header: str, schema_settings: Dict[str, Any]) -> bool:
+
+    def _validate_token(
+        self, auth_header: str, schema_settings: Dict[str, Any]
+    ) -> bool:
         """
         Validate authentication token for schema access.
-        
+
         Args:
             auth_header: Authorization header value
             schema_settings: Schema-specific settings
-            
+
         Returns:
             True if token is valid, False otherwise
         """
         # This is a placeholder for custom token validation
         # Implement your authentication logic here
         return True
-    
+
     def _schema_not_found_response(self, schema_name: str) -> JsonResponse:
         """Return a 404 response for unknown schemas."""
-        return JsonResponse({
-            'errors': [{
-                'message': f"Schema '{schema_name}' not found",
-                'extensions': {
-                    'code': 'SCHEMA_NOT_FOUND',
-                    'schema_name': schema_name
-                }
-            }]
-        }, status=404)
-    
+        return JsonResponse(
+            {
+                "errors": [
+                    {
+                        "message": f"Schema '{schema_name}' not found",
+                        "extensions": {
+                            "code": "SCHEMA_NOT_FOUND",
+                            "schema_name": schema_name,
+                        },
+                    }
+                ]
+            },
+            status=404,
+        )
+
     def _schema_disabled_response(self, schema_name: str) -> JsonResponse:
         """Return a 503 response for disabled schemas."""
-        return JsonResponse({
-            'errors': [{
-                'message': f"Schema '{schema_name}' is currently disabled",
-                'extensions': {
-                    'code': 'SCHEMA_DISABLED',
-                    'schema_name': schema_name
-                }
-            }]
-        }, status=503)
-    
+        return JsonResponse(
+            {
+                "errors": [
+                    {
+                        "message": f"Schema '{schema_name}' is currently disabled",
+                        "extensions": {
+                            "code": "SCHEMA_DISABLED",
+                            "schema_name": schema_name,
+                        },
+                    }
+                ]
+            },
+            status=503,
+        )
+
     def _authentication_required_response(self) -> JsonResponse:
         """Return a 401 response for authentication failures."""
-        return JsonResponse({
-            'errors': [{
-                'message': 'Authentication required for this schema',
-                'extensions': {
-                    'code': 'AUTHENTICATION_REQUIRED'
-                }
-            }]
-        }, status=401)
-    
+        return JsonResponse(
+            {
+                "errors": [
+                    {
+                        "message": "Authentication required for this schema",
+                        "extensions": {"code": "AUTHENTICATION_REQUIRED"},
+                    }
+                ]
+            },
+            status=401,
+        )
+
     def _error_response(self, error_message: str) -> JsonResponse:
         """Return a 500 response for internal errors."""
-        return JsonResponse({
-            'errors': [{
-                'message': 'Internal server error',
-                'extensions': {
-                    'code': 'INTERNAL_ERROR',
-                    'details': error_message if settings.DEBUG else None
-                }
-            }]
-        }, status=500)
+        return JsonResponse(
+            {
+                "errors": [
+                    {
+                        "message": "Internal server error",
+                        "extensions": {
+                            "code": "INTERNAL_ERROR",
+                            "details": error_message if settings.DEBUG else None,
+                        },
+                    }
+                ]
+            },
+            status=500,
+        )
 
 
 class SchemaListView(View):
     """
     View for listing available GraphQL schemas and their metadata.
     """
-    
+
     def get(self, request: HttpRequest) -> JsonResponse:
         """
         Return a list of available schemas with their metadata.
-        
+
         Returns:
             JSON response with schema list
         """
         try:
             from ..core.registry import schema_registry
-            
+
             schemas = []
-            for schema_name in schema_registry.list_schemas():
-                schema_info = schema_registry.get_schema_info(schema_name)
+            for schema_info in schema_registry.list_schemas():
                 if schema_info:
-                    # Filter sensitive information
+                    settings_dict = getattr(schema_info, "settings", {}) or {}
                     public_info = {
-                        'name': schema_info['name'],
-                        'description': schema_info.get('description', ''),
-                        'version': schema_info.get('version', '1.0.0'),
-                        'enabled': schema_info.get('enabled', True),
-                        'graphiql_enabled': schema_info.get('settings', {}).get('enable_graphiql', True),
-                        'authentication_required': schema_info.get('settings', {}).get('authentication_required', False)
+                        "name": getattr(schema_info, "name", ""),
+                        "description": getattr(schema_info, "description", ""),
+                        "version": getattr(schema_info, "version", "1.0.0"),
+                        "enabled": getattr(schema_info, "enabled", True),
+                        "graphiql_enabled": settings_dict.get("enable_graphiql", True),
+                        "authentication_required": settings_dict.get(
+                            "authentication_required", False
+                        ),
                     }
                     schemas.append(public_info)
-            
-            return JsonResponse({
-                'schemas': schemas,
-                'count': len(schemas)
-            })
-            
+
+            return JsonResponse({"schemas": schemas, "count": len(schemas)})
+
         except ImportError:
-            return JsonResponse({
-                'error': 'Schema registry not available'
-            }, status=503)
+            return JsonResponse({"error": "Schema registry not available"}, status=503)
         except Exception as e:
             logger.error(f"Error listing schemas: {e}")
-            return JsonResponse({
-                'error': 'Failed to list schemas'
-            }, status=500)
+            return JsonResponse({"error": "Failed to list schemas"}, status=500)
 
 
 class GraphQLPlaygroundView(View):
     """
     Custom GraphQL Playground view with schema-specific configuration.
     """
-    
-    def get(self, request: HttpRequest, schema_name: str = 'default') -> HttpResponse:
+
+    def get(self, request: HttpRequest, schema_name: str = "default") -> HttpResponse:
         """
         Render GraphQL Playground for the specified schema.
-        
+
         Args:
             request: HTTP request object
             schema_name: Name of the schema
-            
+
         Returns:
             HTML response with GraphQL Playground
         """
         try:
             from ..core.registry import schema_registry
-            
+
             # Get schema info
-            schema_info = schema_registry.get_schema_info(schema_name)
+            schema_info = schema_registry.get_schema(schema_name)
             if not schema_info:
                 raise Http404(f"Schema '{schema_name}' not found")
-            
+
             # Check if GraphiQL is enabled for this schema
-            schema_settings = schema_info.get('settings', {})
-            if not schema_settings.get('enable_graphiql', True):
+            schema_settings = getattr(schema_info, "settings", {}) or {}
+            if not schema_settings.get("enable_graphiql", True):
                 return HttpResponse(
                     f"GraphQL Playground is disabled for schema '{schema_name}'",
-                    status=403
+                    status=403,
                 )
-            
+
             # Generate playground HTML
             playground_html = self._generate_playground_html(schema_name, schema_info)
-            return HttpResponse(playground_html, content_type='text/html')
-            
+            return HttpResponse(playground_html, content_type="text/html")
+
         except ImportError:
             return HttpResponse("Schema registry not available", status=503)
         except Exception as e:
             logger.error(f"Error rendering playground for schema '{schema_name}': {e}")
             return HttpResponse("Failed to load GraphQL Playground", status=500)
-    
-    def _generate_playground_html(self, schema_name: str, schema_info: Dict[str, Any]) -> str:
+
+    def _generate_playground_html(
+        self, schema_name: str, schema_info: Dict[str, Any]
+    ) -> str:
         """
         Generate HTML for GraphQL Playground.
-        
+
         Args:
             schema_name: Name of the schema
             schema_info: Schema information dictionary
-            
+
         Returns:
             HTML string for the playground
         """
         endpoint_url = f"/graphql/{schema_name}/"
-        schema_description = schema_info.get('description', f'GraphQL Playground for {schema_name}')
-        
+        schema_description = getattr(
+            schema_info, "description", f"GraphQL Playground for {schema_name}"
+        )
+
         return f"""
         <!DOCTYPE html>
         <html>

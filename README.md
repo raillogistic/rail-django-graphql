@@ -160,12 +160,23 @@ schema = SchemaBuilder.build(
 # urls.py
 from django.contrib import admin
 from django.urls import path, include
-from rail_django_graphql.views import GraphQLView
+from graphene_django.views import GraphQLView
+from rail_django_graphql.views.graphql_views import (
+    MultiSchemaGraphQLView,
+    SchemaListView,
+    GraphQLPlaygroundView,
+)
 from rail_django_graphql.health_urls import health_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Single schema endpoint (backward compatible)
     path('graphql/', GraphQLView.as_view(graphiql=True)),
+    # Multi-schema endpoints
+    path('graphql/<str:schema_name>/', MultiSchemaGraphQLView.as_view(), name='graphql-by-schema'),
+    path('schemas/', SchemaListView.as_view(), name='graphql-schemas'),
+    path('playground/<str:schema_name>/', GraphQLPlaygroundView.as_view(), name='graphql-playground'),
+    # Health endpoints
     path('health/', include(health_urlpatterns)),
 ]
 ```
@@ -180,6 +191,81 @@ python manage.py runserver
 Visit `http://localhost:8000/graphql/` to access the GraphiQL interface.
 
 ## Advanced Usage
+### Multi-Schema Setup
+
+The library supports multiple schemas with per-schema settings, endpoints, and GraphiQL control.
+
+1) Enable multi-schema in settings and register schemas via the registry:
+
+```python
+# settings.py
+RAIL_DJANGO_GRAPHQL = {
+    "MULTI_SCHEMA_ENABLED": True,
+}
+
+# myapp/schema_config.py
+from rail_django_graphql.core.registry import schema_registry
+
+schema_registry.register_schema(
+    name="public_api",
+    description="Public API for customers",
+    version="1.0.0",
+    apps=["customers", "products"],
+    models=["Customer", "Product"],
+    enabled=True,
+    settings={
+        "enable_graphiql": True,
+        "authentication_required": False,
+    },
+)
+
+schema_registry.register_schema(
+    name="admin_api",
+    description="Admin API for internal use",
+    version="1.0.0",
+    apps=["customers", "products", "orders"],
+    models=["Customer", "Product", "Order", "User"],
+    enabled=True,
+    settings={
+        "enable_graphiql": True,
+        "authentication_required": True,
+    },
+)
+```
+
+2) Configure URLs to expose per-schema endpoints:
+
+```python
+from django.urls import path
+from rail_django_graphql.views.graphql_views import MultiSchemaGraphQLView, SchemaListView, GraphQLPlaygroundView
+
+urlpatterns = [
+    path('graphql/<str:schema_name>/', MultiSchemaGraphQLView.as_view(), name='graphql-by-schema'),
+    path('schemas/', SchemaListView.as_view(), name='graphql-schemas'),
+    path('playground/<str:schema_name>/', GraphQLPlaygroundView.as_view(), name='graphql-playground'),
+]
+```
+
+Endpoints provided:
+- `GET/POST /graphql/<schema_name>/` — Execute queries against the specified schema
+- `GET /schemas/` — List registered schemas and their metadata
+- `GET /playground/<schema_name>/` — Open a schema-specific GraphQL Playground
+
+3) Control per-schema authentication and GraphiQL:
+
+```python
+schema_registry.register_schema(
+    name="secure_api",
+    enabled=True,
+    settings={
+        "authentication_required": True,
+        "permission_classes": ["django.contrib.auth.permissions.IsAuthenticated"],
+        "enable_graphiql": False,  # Disable GraphiQL for production
+    },
+)
+```
+
+See more details in `rail_django_graphql/views/graphql_views.py` and the integration tests in `rail_django_graphql/tests/integration/test_multi_schema.py`.
 
 ### Custom Type Generation
 
