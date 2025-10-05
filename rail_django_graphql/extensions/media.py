@@ -1,592 +1,448 @@
 """
-Système de gestion des médias pour Django GraphQL Auto-Generation.
+Middleware de monitoring des performances pour Django GraphQL Auto.
 
-Ce module fournit des fonctionnalités avancées pour :
-- Génération d'URLs de médias
-- Pipeline de traitement d'images
-- Génération de miniatures
-- Intégration CDN
-- Abstraction des backends de stockage
+Ce module fournit un middleware complet pour surveiller:
+- Les performances des requêtes GraphQL
+- L'utilisation des ressources
+- Les métriques de cache
+- Les alertes de performance
+- Les rapports détaillés
 """
 
-import os
-import io
-from typing import Dict, List, Optional, Type, Any, Union, Tuple
-from pathlib import Path
-import hashlib
-import uuid
-from datetime import datetime
-from urllib.parse import urljoin
+import logging
+import time
+import threading
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Callable, Deque
+from datetime import datetime, timedelta
 
 import graphene
-from graphene import ObjectType, Field, String, Boolean, Int, List as GrapheneList
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from django.core.files.storage import default_storage, Storage
-from django.core.files.base import ContentFile
 from django.conf import settings
-from django.db import models
-from django.utils.text import slugify
+from django.core.cache import cache
+from django.utils.deprecation import MiddlewareMixin
 
-try:
-    from PIL import Image, ImageOps, ImageFilter
-    PIL_AVAILABLE = True
-except ImportError:
-    PIL_AVAILABLE = False
+from ..extensions.optimization import get_performance_monitor
+from ..extensions.caching import get_cache_manager
 
-try:
-    import boto3
-    from botocore.exceptions import ClientError
-    BOTO3_AVAILABLE = True
-except ImportError:
-    BOTO3_AVAILABLE = False
-
-from ..core.settings import GraphQLAutoConfig
+logger = logging.getLogger(__name__)
 
 
-class MediaProcessingError(Exception):
-    """Exception levée lors du traitement des médias."""
-    pass
-
-
-class ThumbnailSize(graphene.ObjectType):
-    """Taille de miniature disponible."""
+@dataclass
+class RequestMetrics:
+    """Métriques pour une requête individuelle."""
     
-    name = graphene.String(description="Nom de la taille")
-    width = graphene.Int(description="Largeur en pixels")
-    height = graphene.Int(description="Hauteur en pixels")
-    quality = graphene.Int(description="Qualité de compression (1-100)")
-
-
-class MediaInfo(graphene.ObjectType):
-    """Informations détaillées sur un média."""
+    request_id: str
+    query_name: str
+    start_time: float
+    end_time: Optional[float] = None
+    execution_time: Optional[float] = None
     
-    id = graphene.String(description="Identifiant unique du média")
-    name = graphene.String(description="Nom original du fichier")
-    size = graphene.Int(description="Taille du fichier en octets")
-    content_type = graphene.String(description="Type MIME du fichier")
-    url = graphene.String(description="URL d'accès au fichier original")
-    cdn_url = graphene.String(description="URL CDN du fichier")
-    path = graphene.String(description="Chemin de stockage du fichier")
-    checksum = graphene.String(description="Somme de contrôle MD5 du fichier")
-    uploaded_at = graphene.DateTime(description="Date et heure de téléchargement")
+    # Métriques de performance
+    database_queries: int = 0
+    database_time: float = 0.0
+    cache_hits: int = 0
+    cache_misses: int = 0
     
-    # Informations spécifiques aux images
-    width = graphene.Int(description="Largeur de l'image en pixels")
-    height = graphene.Int(description="Hauteur de l'image en pixels")
-    format = graphene.String(description="Format de l'image (JPEG, PNG, etc.)")
+    # Métriques de ressources
+    memory_usage: float = 0.0
+    cpu_usage: float = 0.0
     
-    # Miniatures disponibles
-    thumbnails = graphene.List(
-        lambda: ThumbnailInfo,
-        description="Liste des miniatures générées"
-    )
+    # Informations sur la requête
+    query_complexity: Optional[int] = None
+    query_depth: Optional[int] = None
+    user_id: Optional[int] = None
+    
+    # Erreurs
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    
+    @property
+    def is_slow_query(self) -> bool:
+        """Détermine si la requête est considérée comme lente."""
+        slow_threshold = getattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD', 1.0)
+        return self.execution_time and self.execution_time > slow_threshold
+    
+    @property
+    def is_complex_query(self) -> bool:
+        """Détermine si la requête est considérée comme complexe."""
+        complexity_threshold = getattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD', 100)
+        return self.query_complexity and self.query_complexity > complexity_threshold
 
 
-class ThumbnailInfo(graphene.ObjectType):
-    """Informations sur une miniature."""
+@dataclass
+class PerformanceAlert:
+    """Alerte de performance."""
     
-    size_name = graphene.String(description="Nom de la taille de miniature")
-    width = graphene.Int(description="Largeur en pixels")
-    height = graphene.Int(description="Hauteur en pixels")
-    url = graphene.String(description="URL d'accès à la miniature")
-    cdn_url = graphene.String(description="URL CDN de la miniature")
-    file_size = graphene.Int(description="Taille du fichier en octets")
+    alert_type: str  # 'slow_query', 'high_complexity', 'memory_usage', etc.
+    severity: str    # 'low', 'medium', 'high', 'critical'
+    message: str
+    timestamp: datetime
+    request_metrics: RequestMetrics
+    threshold_value: Optional[float] = None
+    actual_value: Optional[float] = None
 
 
-class StorageBackend:
-    """Classe de base pour les backends de stockage."""
+class PerformanceAggregator:
+    """Agrégateur de métriques de performance."""
     
-    def save(self, name: str, content: ContentFile) -> str:
-        """
-        Sauvegarde un fichier.
+    def __init__(self, window_size: int = 1000):
+        self.window_size = window_size
+        self.metrics_history: Deque[RequestMetrics] = deque(maxlen=window_size)
+        self.alerts_history: Deque[PerformanceAlert] = deque(maxlen=100)
+        self.lock = threading.Lock()
         
-        Args:
-            name: Nom du fichier
-            content: Contenu du fichier
+        # Statistiques agrégées
+        self._stats_cache = {}
+        self._last_stats_update = 0
+        self._stats_cache_duration = 60  # 1 minute
+    
+    def add_metrics(self, metrics: RequestMetrics):
+        """Ajoute des métriques à l'historique."""
+        with self.lock:
+            self.metrics_history.append(metrics)
+            self._invalidate_stats_cache()
             
-        Returns:
-            str: Chemin du fichier sauvegardé
-        """
-        raise NotImplementedError
+            # Vérifier les alertes
+            self._check_alerts(metrics)
     
-    def url(self, name: str) -> str:
-        """
-        Génère l'URL d'accès au fichier.
+    def get_aggregated_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques agrégées."""
+        current_time = time.time()
         
-        Args:
-            name: Nom du fichier
+        # Utiliser le cache si disponible et récent
+        if (self._stats_cache and 
+            current_time - self._last_stats_update < self._stats_cache_duration):
+            return self._stats_cache
+        
+        with self.lock:
+            if not self.metrics_history:
+                return {}
             
-        Returns:
-            str: URL d'accès au fichier
-        """
-        raise NotImplementedError
-    
-    def delete(self, name: str) -> bool:
-        """
-        Supprime un fichier.
-        
-        Args:
-            name: Nom du fichier
+            # Calculer les statistiques
+            total_requests = len(self.metrics_history)
+            successful_requests = sum(1 for m in self.metrics_history if not m.errors)
             
-        Returns:
-            bool: True si la suppression a réussi
-        """
-        raise NotImplementedError
-    
-    def exists(self, name: str) -> bool:
-        """
-        Vérifie si un fichier existe.
-        
-        Args:
-            name: Nom du fichier
+            execution_times = [m.execution_time for m in self.metrics_history if m.execution_time]
+            if execution_times:
+                avg_execution_time = sum(execution_times) / len(execution_times)
+                max_execution_time = max(execution_times)
+                min_execution_time = min(execution_times)
+                p95_execution_time = sorted(execution_times)[int(len(execution_times) * 0.95)]
+            else:
+                avg_execution_time = max_execution_time = min_execution_time = p95_execution_time = 0
             
-        Returns:
-            bool: True si le fichier existe
-        """
-        raise NotImplementedError
-
-
-class LocalStorageBackend(StorageBackend):
-    """Backend de stockage local utilisant le système de fichiers."""
+            # Statistiques de cache
+            total_cache_hits = sum(m.cache_hits for m in self.metrics_history)
+            total_cache_misses = sum(m.cache_misses for m in self.metrics_history)
+            cache_hit_rate = (total_cache_hits / (total_cache_hits + total_cache_misses) * 100 
+                             if total_cache_hits + total_cache_misses > 0 else 0)
+            
+            # Requêtes lentes
+            slow_queries = sum(1 for m in self.metrics_history if m.is_slow_query)
+            slow_query_rate = (slow_queries / total_requests * 100) if total_requests > 0 else 0
+            
+            # Requêtes complexes
+            complex_queries = sum(1 for m in self.metrics_history if m.is_complex_query)
+            complex_query_rate = (complex_queries / total_requests * 100) if total_requests > 0 else 0
+            
+            # Top requêtes par temps d'exécution
+            top_slow_queries = sorted(
+                [m for m in self.metrics_history if m.execution_time],
+                key=lambda m: m.execution_time,
+                reverse=True
+            )[:10]
+            
+            stats = {
+                'total_requests': total_requests,
+                'successful_requests': successful_requests,
+                'success_rate': (successful_requests / total_requests * 100) if total_requests > 0 else 0,
+                'avg_execution_time': avg_execution_time,
+                'max_execution_time': max_execution_time,
+                'min_execution_time': min_execution_time,
+                'p95_execution_time': p95_execution_time,
+                'cache_hit_rate': cache_hit_rate,
+                'slow_query_rate': slow_query_rate,
+                'complex_query_rate': complex_query_rate,
+                'top_slow_queries': [
+                    {
+                        'query_name': m.query_name,
+                        'execution_time': m.execution_time,
+                        'timestamp': datetime.fromtimestamp(m.start_time)
+                    }
+                    for m in top_slow_queries
+                ],
+                'recent_alerts': [
+                    {
+                        'type': alert.alert_type,
+                        'severity': alert.severity,
+                        'message': alert.message,
+                        'timestamp': alert.timestamp
+                    }
+                    for alert in list(self.alerts_history)[-10:]
+                ]
+            }
+            
+            # Mettre en cache les statistiques
+            self._stats_cache = stats
+            self._last_stats_update = current_time
+            
+            return stats
     
-    def __init__(self, settings: GraphQLAutoConfig):
-        self.settings = settings
-        self.storage = default_storage
+    def _invalidate_stats_cache(self):
+        """Invalide le cache des statistiques."""
+        self._stats_cache = {}
+        self._last_stats_update = 0
     
-    def save(self, name: str, content: ContentFile) -> str:
-        """Sauvegarde un fichier localement."""
-        return self.storage.save(name, content)
-    
-    def url(self, name: str) -> str:
-        """Génère l'URL locale du fichier."""
-        return self.storage.url(name)
-    
-    def delete(self, name: str) -> bool:
-        """Supprime un fichier local."""
-        try:
-            self.storage.delete(name)
-            return True
-        except Exception:
-            return False
-    
-    def exists(self, name: str) -> bool:
-        """Vérifie si un fichier local existe."""
-        return self.storage.exists(name)
-
-
-class S3StorageBackend(StorageBackend):
-    """Backend de stockage Amazon S3."""
-    
-    def __init__(self, settings: GraphQLAutoConfig):
-        if not BOTO3_AVAILABLE:
-            raise MediaProcessingError("boto3 n'est pas installé. Installez-le avec: pip install boto3")
+    def _check_alerts(self, metrics: RequestMetrics):
+        """Vérifie et génère des alertes basées sur les métriques."""
+        alerts = []
         
-        self.settings = settings
-        self.bucket_name = getattr(settings, 'AWS_S3_BUCKET_NAME', None)
-        self.region = getattr(settings, 'AWS_S3_REGION', 'us-east-1')
-        self.access_key = getattr(settings, 'AWS_ACCESS_KEY_ID', None)
-        self.secret_key = getattr(settings, 'AWS_SECRET_ACCESS_KEY', None)
+        # Alerte pour requête lente
+        if metrics.is_slow_query:
+            alerts.append(PerformanceAlert(
+                alert_type='slow_query',
+                severity='medium' if metrics.execution_time < 5.0 else 'high',
+                message=f"Slow query detected: {metrics.query_name} took {metrics.execution_time:.2f}s",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=getattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD', 1.0),
+                actual_value=metrics.execution_time
+            ))
         
-        if not all([self.bucket_name, self.access_key, self.secret_key]):
-            raise MediaProcessingError("Configuration S3 incomplète")
+        # Alerte pour requête complexe
+        if metrics.is_complex_query:
+            alerts.append(PerformanceAlert(
+                alert_type='high_complexity',
+                severity='medium',
+                message=f"Complex query detected: {metrics.query_name} has complexity {metrics.query_complexity}",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=getattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD', 100),
+                actual_value=metrics.query_complexity
+            ))
         
-        self.s3_client = boto3.client(
-            's3',
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
-            region_name=self.region
+        # Alerte pour utilisation mémoire élevée
+        memory_threshold = getattr(settings, 'GRAPHQL_MEMORY_THRESHOLD', 100.0)  # MB
+        if metrics.memory_usage > memory_threshold:
+            alerts.append(PerformanceAlert(
+                alert_type='high_memory_usage',
+                severity='high',
+                message=f"High memory usage: {metrics.query_name} used {metrics.memory_usage:.2f}MB",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=memory_threshold,
+                actual_value=metrics.memory_usage
+            ))
+        
+        # Ajouter les alertes à l'historique
+        for alert in alerts:
+            self.alerts_history.append(alert)
+            
+            # Logger les alertes critiques
+            if alert.severity in ['high', 'critical']:
+                logger.warning(f"Performance Alert: {alert.message}")
+
+
+# Instance globale de l'agrégateur
+_performance_aggregator: Optional[PerformanceAggregator] = None
+
+
+def get_performance_aggregator() -> PerformanceAggregator:
+    """Retourne l'instance globale de l'agrégateur de performance."""
+    global _performance_aggregator
+    if _performance_aggregator is None:
+        _performance_aggregator = PerformanceAggregator()
+    return _performance_aggregator
+
+
+class GraphQLPerformanceMiddleware(MiddlewareMixin):
+    """
+    Middleware pour surveiller les performances des requêtes GraphQL.
+    
+    Ce middleware collecte des métriques détaillées sur chaque requête GraphQL
+    et les agrège pour fournir des insights sur les performances.
+    """
+    
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.aggregator = get_performance_aggregator()
+        self.performance_monitor = get_performance_monitor()
+        self.cache_manager = get_cache_manager()
+    
+    def process_request(self, request):
+        """Traite le début d'une requête."""
+        # Générer un ID unique pour la requête
+        request._graphql_request_id = f"req_{int(time.time() * 1000)}_{id(request)}"
+        request._graphql_start_time = time.time()
+        
+        # Initialiser les métriques de la requête
+        request._graphql_metrics = RequestMetrics(
+            request_id=request._graphql_request_id,
+            query_name="unknown",
+            start_time=request._graphql_start_time,
+            user_id=getattr(request.user, 'id', None) if hasattr(request, 'user') else None
+        )
+        
+        return None
+    
+    def process_response(self, request, response):
+        """Traite la fin d'une requête."""
+        if not hasattr(request, '_graphql_metrics'):
+            return response
+        
+        # Finaliser les métriques
+        end_time = time.time()
+        metrics = request._graphql_metrics
+        metrics.end_time = end_time
+        metrics.execution_time = end_time - metrics.start_time
+        
+        # Récupérer les statistiques de cache
+        cache_stats = self.cache_manager.get_stats()
+        metrics.cache_hits = cache_stats.hits
+        metrics.cache_misses = cache_stats.misses
+        
+        # Ajouter les métriques à l'agrégateur
+        self.aggregator.add_metrics(metrics)
+        
+        # Ajouter des headers de performance si configuré
+        if getattr(settings, 'GRAPHQL_PERFORMANCE_HEADERS', False):
+            response['X-GraphQL-Execution-Time'] = f"{metrics.execution_time:.3f}"
+            response['X-GraphQL-Cache-Hit-Rate'] = f"{cache_stats.hit_rate:.1f}"
+            if metrics.query_complexity:
+                response['X-GraphQL-Query-Complexity'] = str(metrics.query_complexity)
+        
+        return response
+    
+    def process_exception(self, request, exception):
+        """Traite les exceptions."""
+        if hasattr(request, '_graphql_metrics'):
+            metrics = request._graphql_metrics
+            metrics.errors.append(str(exception))
+            
+            # Finaliser les métriques même en cas d'erreur
+            end_time = time.time()
+            metrics.end_time = end_time
+            metrics.execution_time = end_time - metrics.start_time
+            
+            # Ajouter les métriques à l'agrégateur
+            self.aggregator.add_metrics(metrics)
+        
+        return None
+
+
+class GraphQLPerformanceView:
+    """Vue pour exposer les métriques de performance via une API."""
+    
+    def __init__(self):
+        self.aggregator = get_performance_aggregator()
+    
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques de performance."""
+        return self.aggregator.get_aggregated_stats()
+    
+    def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retourne les alertes récentes."""
+        alerts = list(self.aggregator.alerts_history)[-limit:]
+        return [
+            {
+                'type': alert.alert_type,
+                'severity': alert.severity,
+                'message': alert.message,
+                'timestamp': alert.timestamp.isoformat(),
+                'query_name': alert.request_metrics.query_name,
+                'execution_time': alert.request_metrics.execution_time,
+                'threshold_value': alert.threshold_value,
+                'actual_value': alert.actual_value
+            }
+            for alert in alerts
+        ]
+    
+    def get_slow_queries(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Retourne les requêtes les plus lentes."""
+        slow_queries = [
+            m for m in self.aggregator.metrics_history 
+            if m.execution_time and m.is_slow_query
+        ]
+        
+        # Trier par temps d'exécution décroissant
+        slow_queries.sort(key=lambda m: m.execution_time, reverse=True)
+        
+        return [
+            {
+                'query_name': m.query_name,
+                'execution_time': m.execution_time,
+                'timestamp': datetime.fromtimestamp(m.start_time).isoformat(),
+                'user_id': m.user_id,
+                'query_complexity': m.query_complexity,
+                'database_queries': m.database_queries,
+                'cache_hits': m.cache_hits,
+                'cache_misses': m.cache_misses
+            }
+            for m in slow_queries[:limit]
+        ]
+
+
+# Fonction utilitaire pour configurer le middleware
+def setup_performance_monitoring():
+    """Configure le monitoring des performances."""
+    # Vérifier que le middleware est configuré
+    middleware_classes = getattr(settings, 'MIDDLEWARE', [])
+    middleware_name = 'django_graphql_auto.middleware.performance.GraphQLPerformanceMiddleware'
+    
+    if middleware_name not in middleware_classes:
+        logger.warning(
+            f"GraphQLPerformanceMiddleware not found in MIDDLEWARE settings. "
+            f"Add '{middleware_name}' to MIDDLEWARE to enable performance monitoring."
         )
     
-    def save(self, name: str, content: ContentFile) -> str:
-        """Sauvegarde un fichier sur S3."""
-        try:
-            self.s3_client.put_object(
-                Bucket=self.bucket_name,
-                Key=name,
-                Body=content.read(),
-                ContentType=getattr(content, 'content_type', 'application/octet-stream')
+    # Configurer les seuils par défaut si non définis
+    if not hasattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD'):
+        settings.GRAPHQL_SLOW_QUERY_THRESHOLD = 1.0
+    
+    if not hasattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD'):
+        settings.GRAPHQL_COMPLEXITY_THRESHOLD = 100
+    
+    if not hasattr(settings, 'GRAPHQL_MEMORY_THRESHOLD'):
+        settings.GRAPHQL_MEMORY_THRESHOLD = 100.0
+    
+    logger.info("GraphQL performance monitoring configured")
+
+
+# Décorateur pour surveiller des fonctions spécifiques
+def monitor_performance(query_name: Optional[str] = None):
+    """
+    Décorateur pour surveiller les performances d'une fonction.
+    
+    Args:
+        query_name: Nom de la requête (optionnel)
+    """
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            aggregator = get_performance_aggregator()
+            
+            # Créer les métriques
+            metrics = RequestMetrics(
+                request_id=f"func_{int(time.time() * 1000)}_{id(func)}",
+                query_name=query_name or func.__name__,
+                start_time=start_time
             )
-            return name
-        except ClientError as e:
-            raise MediaProcessingError(f"Erreur lors de la sauvegarde S3: {e}")
-    
-    def url(self, name: str) -> str:
-        """Génère l'URL S3 du fichier."""
-        return f"https://{self.bucket_name}.s3.{self.region}.amazonaws.com/{name}"
-    
-    def delete(self, name: str) -> bool:
-        """Supprime un fichier S3."""
-        try:
-            self.s3_client.delete_object(Bucket=self.bucket_name, Key=name)
-            return True
-        except ClientError:
-            return False
-    
-    def exists(self, name: str) -> bool:
-        """Vérifie si un fichier S3 existe."""
-        try:
-            self.s3_client.head_object(Bucket=self.bucket_name, Key=name)
-            return True
-        except ClientError:
-            return False
-
-
-class CDNManager:
-    """Gestionnaire d'intégration CDN."""
-    
-    def __init__(self, settings: GraphQLAutoConfig):
-        self.settings = settings
-        self.cdn_base_url = getattr(settings, 'CDN_BASE_URL', None)
-        self.cdn_enabled = getattr(settings, 'CDN_ENABLED', False)
-    
-    def get_cdn_url(self, file_path: str) -> Optional[str]:
-        """
-        Génère l'URL CDN pour un fichier.
-        
-        Args:
-            file_path: Chemin du fichier
             
-        Returns:
-            Optional[str]: URL CDN ou None si CDN désactivé
-        """
-        if not self.cdn_enabled or not self.cdn_base_url:
-            return None
-        
-        return urljoin(self.cdn_base_url.rstrip('/') + '/', file_path.lstrip('/'))
-    
-    def purge_cache(self, file_paths: List[str]) -> bool:
-        """
-        Purge le cache CDN pour les fichiers spécifiés.
-        
-        Args:
-            file_paths: Liste des chemins de fichiers à purger
-            
-        Returns:
-            bool: True si la purge a réussi
-        """
-        # Implémentation spécifique au CDN utilisé
-        # Exemple pour CloudFlare, AWS CloudFront, etc.
-        return True
-
-
-class ImageProcessor:
-    """Processeur d'images avec génération de miniatures."""
-    
-    def __init__(self, settings: GraphQLAutoConfig):
-        if not PIL_AVAILABLE:
-            raise MediaProcessingError("Pillow n'est pas installé. Installez-le avec: pip install Pillow")
-        
-        self.settings = settings
-        self.thumbnail_sizes = getattr(settings, 'THUMBNAIL_SIZES', {
-            'small': {'width': 150, 'height': 150, 'quality': 85},
-            'medium': {'width': 300, 'height': 300, 'quality': 85},
-            'large': {'width': 800, 'height': 600, 'quality': 90},
-        })
-        self.optimize_images = getattr(settings, 'OPTIMIZE_IMAGES', True)
-        self.progressive_jpeg = getattr(settings, 'PROGRESSIVE_JPEG', True)
-    
-    def is_image(self, file: Union[InMemoryUploadedFile, TemporaryUploadedFile]) -> bool:
-        """
-        Vérifie si un fichier est une image.
-        
-        Args:
-            file: Fichier à vérifier
-            
-        Returns:
-            bool: True si c'est une image
-        """
-        try:
-            with Image.open(file) as img:
-                img.verify()
-            file.seek(0)  # Reset file pointer
-            return True
-        except Exception:
-            return False
-    
-    def get_image_info(self, file: Union[InMemoryUploadedFile, TemporaryUploadedFile]) -> Dict[str, Any]:
-        """
-        Extrait les informations d'une image.
-        
-        Args:
-            file: Fichier image
-            
-        Returns:
-            Dict[str, Any]: Informations sur l'image
-        """
-        try:
-            with Image.open(file) as img:
-                info = {
-                    'width': img.width,
-                    'height': img.height,
-                    'format': img.format,
-                    'mode': img.mode,
-                    'has_transparency': img.mode in ('RGBA', 'LA') or 'transparency' in img.info
-                }
-            file.seek(0)
-            return info
-        except Exception as e:
-            raise MediaProcessingError(f"Erreur lors de l'analyse de l'image: {e}")
-    
-    def optimize_image(self, image: Image.Image, format: str = 'JPEG', quality: int = 85) -> io.BytesIO:
-        """
-        Optimise une image.
-        
-        Args:
-            image: Image PIL à optimiser
-            format: Format de sortie
-            quality: Qualité de compression
-            
-        Returns:
-            io.BytesIO: Image optimisée
-        """
-        output = io.BytesIO()
-        
-        # Conversion en RGB si nécessaire pour JPEG
-        if format == 'JPEG' and image.mode in ('RGBA', 'LA', 'P'):
-            # Créer un fond blanc pour les images avec transparence
-            background = Image.new('RGB', image.size, (255, 255, 255))
-            if image.mode == 'P':
-                image = image.convert('RGBA')
-            background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
-            image = background
-        
-        # Options de sauvegarde
-        save_kwargs = {
-            'format': format,
-            'quality': quality,
-            'optimize': self.optimize_images
-        }
-        
-        if format == 'JPEG' and self.progressive_jpeg:
-            save_kwargs['progressive'] = True
-        
-        image.save(output, **save_kwargs)
-        output.seek(0)
-        return output
-    
-    def generate_thumbnail(self, image: Image.Image, size_config: Dict[str, Any]) -> io.BytesIO:
-        """
-        Génère une miniature.
-        
-        Args:
-            image: Image source
-            size_config: Configuration de la taille
-            
-        Returns:
-            io.BytesIO: Miniature générée
-        """
-        width = size_config['width']
-        height = size_config['height']
-        quality = size_config.get('quality', 85)
-        
-        # Redimensionnement avec conservation des proportions
-        thumbnail = image.copy()
-        thumbnail.thumbnail((width, height), Image.Resampling.LANCZOS)
-        
-        # Centrage sur un canvas de la taille exacte demandée
-        if thumbnail.size != (width, height):
-            canvas = Image.new('RGB', (width, height), (255, 255, 255))
-            offset = ((width - thumbnail.width) // 2, (height - thumbnail.height) // 2)
-            canvas.paste(thumbnail, offset)
-            thumbnail = canvas
-        
-        return self.optimize_image(thumbnail, 'JPEG', quality)
-    
-    def process_image(self, file: Union[InMemoryUploadedFile, TemporaryUploadedFile]) -> Dict[str, Any]:
-        """
-        Traite une image et génère ses miniatures.
-        
-        Args:
-            file: Fichier image à traiter
-            
-        Returns:
-            Dict[str, Any]: Informations sur l'image traitée et ses miniatures
-        """
-        if not self.is_image(file):
-            raise MediaProcessingError("Le fichier n'est pas une image valide")
-        
-        # Informations de base
-        image_info = self.get_image_info(file)
-        
-        # Ouverture de l'image
-        with Image.open(file) as img:
-            # Correction de l'orientation EXIF
-            img = ImageOps.exif_transpose(img)
-            
-            # Génération des miniatures
-            thumbnails = {}
-            for size_name, size_config in self.thumbnail_sizes.items():
-                thumbnail_data = self.generate_thumbnail(img, size_config)
-                thumbnails[size_name] = {
-                    'data': thumbnail_data,
-                    'width': size_config['width'],
-                    'height': size_config['height'],
-                    'size': len(thumbnail_data.getvalue())
-                }
-            
-            # Image optimisée originale
-            optimized_original = self.optimize_image(img, image_info['format'] or 'JPEG')
-        
-        file.seek(0)
-        
-        return {
-            'info': image_info,
-            'optimized_original': optimized_original,
-            'thumbnails': thumbnails
-        }
-
-
-class MediaManager:
-    """Gestionnaire principal des médias."""
-    
-    def __init__(self, settings: GraphQLAutoConfig):
-        self.settings = settings
-        self.storage_backend = self._get_storage_backend()
-        self.cdn_manager = CDNManager(settings)
-        self.image_processor = ImageProcessor(settings) if PIL_AVAILABLE else None
-        
-    def _get_storage_backend(self) -> StorageBackend:
-        """
-        Sélectionne le backend de stockage approprié.
-        
-        Returns:
-            StorageBackend: Backend de stockage configuré
-        """
-        backend_type = getattr(self.settings, 'STORAGE_BACKEND', 'local')
-        
-        if backend_type == 's3':
-            return S3StorageBackend(self.settings)
-        else:
-            return LocalStorageBackend(self.settings)
-    
-    def generate_media_path(self, filename: str, media_type: str = 'general') -> str:
-        """
-        Génère un chemin pour un média.
-        
-        Args:
-            filename: Nom du fichier
-            media_type: Type de média (image, document, etc.)
-            
-        Returns:
-            str: Chemin généré
-        """
-        file_extension = Path(filename).suffix.lower()
-        unique_name = f"{uuid.uuid4().hex}{file_extension}"
-        
-        now = datetime.now()
-        date_path = f"{now.year}/{now.month:02d}/{now.day:02d}"
-        
-        return f"media/{media_type}/{date_path}/{unique_name}"
-    
-    def save_media(self, file: Union[InMemoryUploadedFile, TemporaryUploadedFile]) -> MediaInfo:
-        """
-        Sauvegarde un média avec traitement automatique.
-        
-        Args:
-            file: Fichier à sauvegarder
-            
-        Returns:
-            MediaInfo: Informations sur le média sauvegardé
-        """
-        # Détermination du type de média
-        is_image = self.image_processor and self.image_processor.is_image(file)
-        media_type = 'images' if is_image else 'documents'
-        
-        # Génération du chemin
-        media_path = self.generate_media_path(file.name, media_type)
-        
-        # Traitement spécifique aux images
-        thumbnails = []
-        image_info = {}
-        
-        if is_image:
-            processed = self.image_processor.process_image(file)
-            image_info = processed['info']
-            
-            # Sauvegarde de l'image optimisée
-            optimized_content = ContentFile(
-                processed['optimized_original'].getvalue(),
-                name=Path(media_path).name
-            )
-            saved_path = self.storage_backend.save(media_path, optimized_content)
-            
-            # Sauvegarde des miniatures
-            for size_name, thumb_data in processed['thumbnails'].items():
-                thumb_path = media_path.replace(
-                    Path(media_path).name,
-                    f"thumb_{size_name}_{Path(media_path).name}"
-                )
-                thumb_content = ContentFile(
-                    thumb_data['data'].getvalue(),
-                    name=Path(thumb_path).name
-                )
-                thumb_saved_path = self.storage_backend.save(thumb_path, thumb_content)
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                metrics.errors.append(str(e))
+                raise
+            finally:
+                # Finaliser les métriques
+                end_time = time.time()
+                metrics.end_time = end_time
+                metrics.execution_time = end_time - start_time
                 
-                thumbnails.append(ThumbnailInfo(
-                    size_name=size_name,
-                    width=thumb_data['width'],
-                    height=thumb_data['height'],
-                    url=self.storage_backend.url(thumb_saved_path),
-                    cdn_url=self.cdn_manager.get_cdn_url(thumb_saved_path),
-                    file_size=thumb_data['size']
-                ))
-        else:
-            # Sauvegarde directe pour les non-images
-            content = ContentFile(file.read(), name=Path(media_path).name)
-            saved_path = self.storage_backend.save(media_path, content)
-            file.seek(0)
+                # Ajouter à l'agrégateur
+                aggregator.add_metrics(metrics)
         
-        # Calcul du checksum
-        file.seek(0)
-        checksum = hashlib.md5(file.read()).hexdigest()
-        file.seek(0)
-        
-        # URL principale
-        main_url = self.storage_backend.url(saved_path)
-        cdn_url = self.cdn_manager.get_cdn_url(saved_path)
-        
-        return MediaInfo(
-            id=str(uuid.uuid4()),
-            name=file.name,
-            size=file.size,
-            content_type=file.content_type,
-            url=main_url,
-            cdn_url=cdn_url,
-            path=saved_path,
-            checksum=checksum,
-            uploaded_at=datetime.now(),
-            width=image_info.get('width'),
-            height=image_info.get('height'),
-            format=image_info.get('format'),
-            thumbnails=thumbnails
-        )
-    
-    def delete_media(self, media_path: str) -> bool:
-        """
-        Supprime un média et ses miniatures.
-        
-        Args:
-            media_path: Chemin du média à supprimer
-            
-        Returns:
-            bool: True si la suppression a réussi
-        """
-        success = True
-        
-        # Suppression du fichier principal
-        if not self.storage_backend.delete(media_path):
-            success = False
-        
-        # Suppression des miniatures (si c'est une image)
-        base_path = Path(media_path)
-        for size_name in self.image_processor.thumbnail_sizes.keys() if self.image_processor else []:
-            thumb_path = str(base_path.parent / f"thumb_{size_name}_{base_path.name}")
-            if self.storage_backend.exists(thumb_path):
-                if not self.storage_backend.delete(thumb_path):
-                    success = False
-        
-        # Purge du cache CDN
-        if self.cdn_manager.cdn_enabled:
-            self.cdn_manager.purge_cache([media_path])
-        
-        return success
+        return wrapper
+    return decorator
