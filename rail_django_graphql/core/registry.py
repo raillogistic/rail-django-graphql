@@ -237,15 +237,44 @@ class SchemaRegistry:
             # Import SchemaBuilder to avoid circular imports
             try:
                 from .schema import SchemaBuilder
-                from ..conf import get_schema_settings
-                
-                # Get schema-specific settings
-                settings = get_schema_settings(name)
-                
-                # Create schema builder with schema-specific settings
-                builder = SchemaBuilder(settings=settings, schema_name=name)
+                from .settings import SchemaSettings
+                from ..conf import get_schema_settings, configure_schema_settings
+
+                # Apply schema-specific overrides from the registered SchemaInfo.settings
+                # Map known keys to the configuration system and SchemaSettings
+                if schema_info.settings:
+                    overrides = {}
+                    schema_settings_overrides = {}
+
+                    # Promote top-level library flags to uppercase for SettingsProxy
+                    for key, value in schema_info.settings.items():
+                        # Normalize key casing for proxy-level settings
+                        upper_key = key.upper()
+                        if upper_key in {"ENABLE_GRAPHIQL", "AUTHENTICATION_REQUIRED"}:
+                            overrides[upper_key] = value
+                        # Collect dataclass-specific overrides under SCHEMA_SETTINGS
+                        if key in {"enable_graphiql", "excluded_apps", "excluded_models", "auto_refresh_on_model_change"}:
+                            schema_settings_overrides[key] = value
+
+                    # Attach schema-level overrides if any
+                    if schema_settings_overrides:
+                        overrides["SCHEMA_SETTINGS"] = schema_settings_overrides
+
+                    if overrides:
+                        # Register overrides for this schema so SettingsProxy can resolve them
+                        configure_schema_settings(name, **overrides)
+
+                # Retrieve the resolved settings proxy for this schema
+                settings_proxy = get_schema_settings(name)
+
+                # Build a concrete SchemaSettings dataclass from nested SCHEMA_SETTINGS
+                schema_settings_dict = settings_proxy.get("SCHEMA_SETTINGS", {})
+                schema_settings = SchemaSettings(**(schema_settings_dict or {}))
+
+                # Create schema builder with a proper dataclass settings instance
+                builder = SchemaBuilder(settings=schema_settings, schema_name=name)
                 self._schema_builders[name] = builder
-                
+
             except ImportError as e:
                 logger.error(f"Could not import SchemaBuilder: {e}")
                 raise

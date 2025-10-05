@@ -18,6 +18,16 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "ENABLE_GRAPHIQL": True,
     "GRAPHIQL_TEMPLATE": "graphene/graphiql.html",
     "SCHEMA_ENDPOINT": "/graphql/",
+    # Schema settings (dataclass-compatible) defaults
+    "SCHEMA_SETTINGS": {
+        "excluded_apps": ["admin", "auth", "contenttypes", "sessions"],
+        "excluded_models": [],
+        "enable_introspection": True,
+        "enable_graphiql": True,
+        "auto_refresh_on_model_change": True,
+        "enable_pagination": True,
+        "auto_camelcase": False,
+    },
     
     # Authentication and security
     "AUTHENTICATION_REQUIRED": False,

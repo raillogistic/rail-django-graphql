@@ -288,27 +288,64 @@ def load_schema_settings_from_config(config: Dict[str, Any]) -> 'SchemaSettings'
         SchemaSettings instance with configuration.
     """
     if not SchemaSettings:
-        raise ImportError("SchemaSettings not available")
+       raise ImportError("SchemaSettings not available")
+   
+    # Map lowercase to uppercase keys for backward compatibility
+    key_mapping = {
+        "excluded_apps": "APPS_TO_EXCLUDE",
+        "excluded_models": "MODELS_TO_EXCLUDE", 
+        "enable_introspection": "ENABLE_INTROSPECTION",
+        "enable_graphiql": "ENABLE_GRAPHIQL",
+        "auto_refresh_on_model_change": "AUTO_REFRESH_ON_MODEL_CHANGE",
+        "enable_pagination": "ENABLE_PAGINATION",
+        "auto_camelcase": "AUTO_CAMELCASE",
+    }
+    
+    # Helper function to get value with fallback mapping
+    def get_config_value(lowercase_key: str, default: Any) -> Any:
+        sentinel = object()
+        uppercase_key = key_mapping.get(lowercase_key)
+
+        # Prefer attribute-style access via .get if available (SettingsProxy or dict)
+        if hasattr(config, "get"):
+            # Try lowercase direct
+            value = config.get(lowercase_key, sentinel)
+            if value is not sentinel:
+                return value
+            # Try uppercase direct
+            if uppercase_key:
+                value = config.get(uppercase_key, sentinel)
+                if value is not sentinel:
+                    return value
+            # Try nested SCHEMA_SETTINGS
+            nested = config.get("SCHEMA_SETTINGS", {})
+            if hasattr(nested, "get"):
+                value = nested.get(lowercase_key, sentinel)
+                if value is not sentinel:
+                    return value
+        else:
+            # Fallback plain dict-like access
+            try:
+                if lowercase_key in config:
+                    return config[lowercase_key]
+                if uppercase_key and uppercase_key in config:
+                    return config[uppercase_key]
+                nested = config.get("SCHEMA_SETTINGS", {})
+                if isinstance(nested, dict) and lowercase_key in nested:
+                    return nested[lowercase_key]
+            except Exception:
+                pass
+        return default
     
     # Create settings instance with loaded configuration
     schema_settings = SchemaSettings(
-        auto_generate_schema=config.get("AUTO_GENERATE_SCHEMA", True),
-        auto_refresh_on_model_change=config.get("AUTO_REFRESH_ON_MODEL_CHANGE", True),
-        schema_output_dir=config.get("SCHEMA_OUTPUT_DIR", "generated_schema/"),
-        apps_to_include=config.get("APPS_TO_INCLUDE", []),
-        apps_to_exclude=config.get(
-            "APPS_TO_EXCLUDE", ["admin", "auth", "contenttypes"]
-        ),
-        models_to_exclude=config.get("MODELS_TO_EXCLUDE", []),
-        enable_mutations=config.get("ENABLE_MUTATIONS", True),
-        enable_subscriptions=config.get("ENABLE_SUBSCRIPTIONS", False),
-        pagination_size=config.get("PAGINATION_SIZE", 20),
-        max_query_depth=config.get("MAX_QUERY_DEPTH", 10),
-        enable_filters=config.get("ENABLE_FILTERS", True),
-        enable_nested_operations=config.get("ENABLE_NESTED_OPERATIONS", True),
-        enable_file_uploads=config.get("ENABLE_FILE_UPLOADS", True),
-        enable_custom_scalars=config.get("ENABLE_CUSTOM_SCALARS", True),
-        enable_inheritance=config.get("ENABLE_INHERITANCE", True),
+        excluded_apps=get_config_value("excluded_apps", ["admin", "auth", "contenttypes", "sessions"]),
+        excluded_models=get_config_value("excluded_models", []),
+        enable_introspection=get_config_value("enable_introspection", True),
+        enable_graphiql=get_config_value("enable_graphiql", True),
+        auto_refresh_on_model_change=get_config_value("auto_refresh_on_model_change", True),
+        enable_pagination=get_config_value("enable_pagination", True),
+        auto_camelcase=get_config_value("auto_camelcase", False),
     )
 
     return schema_settings
