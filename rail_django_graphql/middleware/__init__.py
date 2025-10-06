@@ -6,6 +6,8 @@ This package contains middleware components for:
 - Query optimization
 - Caching integration
 - Security enhancements
+- Authentication and authorization
+- Rate limiting and audit logging
 """
 
 from .performance import (
@@ -16,10 +18,17 @@ from .performance import (
     monitor_performance
 )
 
+from .auth_middleware import (
+    GraphQLAuthenticationMiddleware,
+    GraphQLRateLimitMiddleware
+)
+
 __all__ = [
     'GraphQLPerformanceMiddleware',
     'GraphQLPerformanceView', 
     'get_performance_aggregator',
     'setup_performance_monitoring',
-    'monitor_performance'
+    'monitor_performance',
+    'GraphQLAuthenticationMiddleware',
+    'GraphQLRateLimitMiddleware'
 ]

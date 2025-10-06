@@ -10,22 +10,22 @@ Ce module fournit un middleware complet pour surveiller:
 """
 
 import logging
-import time
 import threading
+import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, Deque
 from datetime import datetime, timedelta
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 import graphene
 from django.conf import settings
 from django.core.cache import cache
+from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.views import View
-from django.http import JsonResponse
 
-from ..extensions.optimization import get_performance_monitor
 from ..extensions.caching import get_cache_manager
+from ..extensions.optimization import get_performance_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -371,19 +371,19 @@ class GraphQLPerformanceView(View):
 
     def get(self, request, *args, **kwargs):
         """Endpoint GET pour récupérer les métriques de performance."""
-        action = request.GET.get('action', 'stats')
-        
-        if action == 'stats':
+        action = request.GET.get("action", "stats")
+
+        if action == "stats":
             data = self.get_performance_stats()
-        elif action == 'alerts':
-            limit = int(request.GET.get('limit', 50))
+        elif action == "alerts":
+            limit = int(request.GET.get("limit", 50))
             data = self.get_recent_alerts(limit)
-        elif action == 'slow_queries':
-            limit = int(request.GET.get('limit', 20))
+        elif action == "slow_queries":
+            limit = int(request.GET.get("limit", 20))
             data = self.get_slow_queries(limit)
         else:
-            data = {'error': 'Invalid action. Use: stats, alerts, or slow_queries'}
-            
+            data = {"error": "Invalid action. Use: stats, alerts, or slow_queries"}
+
         return JsonResponse(data, safe=False)
 
     def get_performance_stats(self) -> Dict[str, Any]:
