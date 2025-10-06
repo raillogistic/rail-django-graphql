@@ -1,466 +1,448 @@
 """
-Debug mode enhancements for Django GraphQL Auto-Generation.
+Middleware de monitoring des performances pour Django GraphQL Auto.
 
-This module provides comprehensive debugging tools, detailed error information,
-and development utilities for GraphQL schema development and troubleshooting.
+Ce module fournit un middleware complet pour surveiller:
+- Les performances des requêtes GraphQL
+- L'utilisation des ressources
+- Les métriques de cache
+- Les alertes de performance
+- Les rapports détaillés
 """
 
-import json
-import time
-import traceback
 import logging
-from typing import Any, Dict, List, Optional, Union
-from datetime import datetime
-from functools import wraps
+import time
+import threading
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Callable, Deque
+from datetime import datetime, timedelta
 
 import graphene
-from graphql import GraphQLError
-from graphql.execution import ExecutionResult
-from graphql.language import print_ast
 from django.conf import settings
-from django.core.serializers.json import DjangoJSONEncoder
+from django.core.cache import cache
+from django.utils.deprecation import MiddlewareMixin
 
-from .exceptions import GraphQLAutoError, ErrorCode
+from ..extensions.optimization import get_performance_monitor
+from ..extensions.caching import get_cache_manager
 
 logger = logging.getLogger(__name__)
 
 
-class DebugInfo:
-    """Classe pour collecter et formater les informations de débogage."""
+@dataclass
+class RequestMetrics:
+    """Métriques pour une requête individuelle."""
     
-    def __init__(self):
-        self.start_time = time.time()
-        self.queries = []
-        self.errors = []
-        self.performance_data = {}
-        self.context_data = {}
+    request_id: str
+    query_name: str
+    start_time: float
+    end_time: Optional[float] = None
+    execution_time: Optional[float] = None
     
-    def add_query(self, query: str, variables: Dict = None, operation_name: str = None):
-        """Ajoute une requête à la liste de débogage."""
-        self.queries.append({
-            'query': query,
-            'variables': variables or {},
-            'operation_name': operation_name,
-            'timestamp': datetime.now().isoformat(),
-        })
+    # Métriques de performance
+    database_queries: int = 0
+    database_time: float = 0.0
+    cache_hits: int = 0
+    cache_misses: int = 0
     
-    def add_error(self, error: Exception, context: Dict = None):
-        """Ajoute une erreur à la liste de débogage."""
-        error_info = {
-            'type': type(error).__name__,
-            'message': str(error),
-            'timestamp': datetime.now().isoformat(),
-            'traceback': traceback.format_exc() if settings.DEBUG else None,
-        }
-        
-        if context:
-            error_info['context'] = context
-        
-        if isinstance(error, GraphQLAutoError):
-            error_info.update({
-                'code': error.code.value,
-                'field': error.field,
-                'details': error.details,
-            })
-        
-        self.errors.append(error_info)
+    # Métriques de ressources
+    memory_usage: float = 0.0
+    cpu_usage: float = 0.0
     
-    def add_performance_data(self, key: str, value: Any):
-        """Ajoute des données de performance."""
-        self.performance_data[key] = value
+    # Informations sur la requête
+    query_complexity: Optional[int] = None
+    query_depth: Optional[int] = None
+    user_id: Optional[int] = None
     
-    def add_context_data(self, key: str, value: Any):
-        """Ajoute des données de contexte."""
-        self.context_data[key] = value
+    # Erreurs
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
     
-    def get_execution_time(self) -> float:
-        """Retourne le temps d'exécution total."""
-        return time.time() - self.start_time
+    @property
+    def is_slow_query(self) -> bool:
+        """Détermine si la requête est considérée comme lente."""
+        slow_threshold = getattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD', 1.0)
+        return self.execution_time and self.execution_time > slow_threshold
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convertit les informations de débogage en dictionnaire."""
-        return {
-            'execution_time': self.get_execution_time(),
-            'queries': self.queries,
-            'errors': self.errors,
-            'performance': self.performance_data,
-            'context': self.context_data,
-            'timestamp': datetime.now().isoformat(),
-        }
+    @property
+    def is_complex_query(self) -> bool:
+        """Détermine si la requête est considérée comme complexe."""
+        complexity_threshold = getattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD', 100)
+        return self.query_complexity and self.query_complexity > complexity_threshold
 
 
-class GraphQLDebugMiddleware:
-    """Middleware de débogage pour GraphQL."""
+@dataclass
+class PerformanceAlert:
+    """Alerte de performance."""
     
-    def __init__(self):
-        self.enabled = getattr(settings, 'GRAPHQL_DEBUG', settings.DEBUG)
-        self.include_query_ast = getattr(settings, 'GRAPHQL_DEBUG_INCLUDE_AST', False)
-        self.include_variables = getattr(settings, 'GRAPHQL_DEBUG_INCLUDE_VARIABLES', True)
-        self.include_context = getattr(settings, 'GRAPHQL_DEBUG_INCLUDE_CONTEXT', False)
+    alert_type: str  # 'slow_query', 'high_complexity', 'memory_usage', etc.
+    severity: str    # 'low', 'medium', 'high', 'critical'
+    message: str
+    timestamp: datetime
+    request_metrics: RequestMetrics
+    threshold_value: Optional[float] = None
+    actual_value: Optional[float] = None
+
+
+class PerformanceAggregator:
+    """Agrégateur de métriques de performance."""
     
-    def process_request(self, request, query, variables=None, operation_name=None):
-        """Traite la requête entrante."""
-        if not self.enabled:
-            return
+    def __init__(self, window_size: int = 1000):
+        self.window_size = window_size
+        self.metrics_history: Deque[RequestMetrics] = deque(maxlen=window_size)
+        self.alerts_history: Deque[PerformanceAlert] = deque(maxlen=100)
+        self.lock = threading.Lock()
         
-        debug_info = DebugInfo()
-        request.graphql_debug = debug_info
+        # Statistiques agrégées
+        self._stats_cache = {}
+        self._last_stats_update = 0
+        self._stats_cache_duration = 60  # 1 minute
+    
+    def add_metrics(self, metrics: RequestMetrics):
+        """Ajoute des métriques à l'historique."""
+        with self.lock:
+            self.metrics_history.append(metrics)
+            self._invalidate_stats_cache()
+            
+            # Vérifier les alertes
+            self._check_alerts(metrics)
+    
+    def get_aggregated_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques agrégées."""
+        current_time = time.time()
         
-        # Ajout de la requête
-        debug_info.add_query(query, variables, operation_name)
+        # Utiliser le cache si disponible et récent
+        if (self._stats_cache and 
+            current_time - self._last_stats_update < self._stats_cache_duration):
+            return self._stats_cache
         
-        # Ajout des données de contexte
-        if self.include_context and hasattr(request, 'user'):
-            debug_info.add_context_data('user', {
-                'id': getattr(request.user, 'id', None),
-                'username': getattr(request.user, 'username', 'anonymous'),
-                'is_authenticated': getattr(request.user, 'is_authenticated', False),
-            })
+        with self.lock:
+            if not self.metrics_history:
+                return {}
+            
+            # Calculer les statistiques
+            total_requests = len(self.metrics_history)
+            successful_requests = sum(1 for m in self.metrics_history if not m.errors)
+            
+            execution_times = [m.execution_time for m in self.metrics_history if m.execution_time]
+            if execution_times:
+                avg_execution_time = sum(execution_times) / len(execution_times)
+                max_execution_time = max(execution_times)
+                min_execution_time = min(execution_times)
+                p95_execution_time = sorted(execution_times)[int(len(execution_times) * 0.95)]
+            else:
+                avg_execution_time = max_execution_time = min_execution_time = p95_execution_time = 0
+            
+            # Statistiques de cache
+            total_cache_hits = sum(m.cache_hits for m in self.metrics_history)
+            total_cache_misses = sum(m.cache_misses for m in self.metrics_history)
+            cache_hit_rate = (total_cache_hits / (total_cache_hits + total_cache_misses) * 100 
+                             if total_cache_hits + total_cache_misses > 0 else 0)
+            
+            # Requêtes lentes
+            slow_queries = sum(1 for m in self.metrics_history if m.is_slow_query)
+            slow_query_rate = (slow_queries / total_requests * 100) if total_requests > 0 else 0
+            
+            # Requêtes complexes
+            complex_queries = sum(1 for m in self.metrics_history if m.is_complex_query)
+            complex_query_rate = (complex_queries / total_requests * 100) if total_requests > 0 else 0
+            
+            # Top requêtes par temps d'exécution
+            top_slow_queries = sorted(
+                [m for m in self.metrics_history if m.execution_time],
+                key=lambda m: m.execution_time,
+                reverse=True
+            )[:10]
+            
+            stats = {
+                'total_requests': total_requests,
+                'successful_requests': successful_requests,
+                'success_rate': (successful_requests / total_requests * 100) if total_requests > 0 else 0,
+                'avg_execution_time': avg_execution_time,
+                'max_execution_time': max_execution_time,
+                'min_execution_time': min_execution_time,
+                'p95_execution_time': p95_execution_time,
+                'cache_hit_rate': cache_hit_rate,
+                'slow_query_rate': slow_query_rate,
+                'complex_query_rate': complex_query_rate,
+                'top_slow_queries': [
+                    {
+                        'query_name': m.query_name,
+                        'execution_time': m.execution_time,
+                        'timestamp': datetime.fromtimestamp(m.start_time)
+                    }
+                    for m in top_slow_queries
+                ],
+                'recent_alerts': [
+                    {
+                        'type': alert.alert_type,
+                        'severity': alert.severity,
+                        'message': alert.message,
+                        'timestamp': alert.timestamp
+                    }
+                    for alert in list(self.alerts_history)[-10:]
+                ]
+            }
+            
+            # Mettre en cache les statistiques
+            self._stats_cache = stats
+            self._last_stats_update = current_time
+            
+            return stats
+    
+    def _invalidate_stats_cache(self):
+        """Invalide le cache des statistiques."""
+        self._stats_cache = {}
+        self._last_stats_update = 0
+    
+    def _check_alerts(self, metrics: RequestMetrics):
+        """Vérifie et génère des alertes basées sur les métriques."""
+        alerts = []
         
-        debug_info.add_context_data('request_method', request.method)
-        debug_info.add_context_data('request_path', request.path)
+        # Alerte pour requête lente
+        if metrics.is_slow_query:
+            alerts.append(PerformanceAlert(
+                alert_type='slow_query',
+                severity='medium' if metrics.execution_time < 5.0 else 'high',
+                message=f"Slow query detected: {metrics.query_name} took {metrics.execution_time:.2f}s",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=getattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD', 1.0),
+                actual_value=metrics.execution_time
+            ))
+        
+        # Alerte pour requête complexe
+        if metrics.is_complex_query:
+            alerts.append(PerformanceAlert(
+                alert_type='high_complexity',
+                severity='medium',
+                message=f"Complex query detected: {metrics.query_name} has complexity {metrics.query_complexity}",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=getattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD', 100),
+                actual_value=metrics.query_complexity
+            ))
+        
+        # Alerte pour utilisation mémoire élevée
+        memory_threshold = getattr(settings, 'GRAPHQL_MEMORY_THRESHOLD', 100.0)  # MB
+        if metrics.memory_usage > memory_threshold:
+            alerts.append(PerformanceAlert(
+                alert_type='high_memory_usage',
+                severity='high',
+                message=f"High memory usage: {metrics.query_name} used {metrics.memory_usage:.2f}MB",
+                timestamp=datetime.now(),
+                request_metrics=metrics,
+                threshold_value=memory_threshold,
+                actual_value=metrics.memory_usage
+            ))
+        
+        # Ajouter les alertes à l'historique
+        for alert in alerts:
+            self.alerts_history.append(alert)
+            
+            # Logger les alertes critiques
+            if alert.severity in ['high', 'critical']:
+                logger.warning(f"Performance Alert: {alert.message}")
+
+
+# Instance globale de l'agrégateur
+_performance_aggregator: Optional[PerformanceAggregator] = None
+
+
+def get_performance_aggregator() -> PerformanceAggregator:
+    """Retourne l'instance globale de l'agrégateur de performance."""
+    global _performance_aggregator
+    if _performance_aggregator is None:
+        _performance_aggregator = PerformanceAggregator()
+    return _performance_aggregator
+
+
+class GraphQLPerformanceMiddleware(MiddlewareMixin):
+    """
+    Middleware pour surveiller les performances des requêtes GraphQL.
+    
+    Ce middleware collecte des métriques détaillées sur chaque requête GraphQL
+    et les agrège pour fournir des insights sur les performances.
+    """
+    
+    def __init__(self, get_response):
+        super().__init__(get_response)
+        self.aggregator = get_performance_aggregator()
+        self.performance_monitor = get_performance_monitor()
+        self.cache_manager = get_cache_manager()
+    
+    def process_request(self, request):
+        """Traite le début d'une requête."""
+        # Générer un ID unique pour la requête
+        request._graphql_request_id = f"req_{int(time.time() * 1000)}_{id(request)}"
+        request._graphql_start_time = time.time()
+        
+        # Initialiser les métriques de la requête
+        request._graphql_metrics = RequestMetrics(
+            request_id=request._graphql_request_id,
+            query_name="unknown",
+            start_time=request._graphql_start_time,
+            user_id=getattr(request.user, 'id', None) if hasattr(request, 'user') else None
+        )
+        
+        return None
     
     def process_response(self, request, response):
-        """Traite la réponse sortante."""
-        if not self.enabled or not hasattr(request, 'graphql_debug'):
+        """Traite la fin d'une requête."""
+        if not hasattr(request, '_graphql_metrics'):
             return response
         
-        debug_info = request.graphql_debug
+        # Finaliser les métriques
+        end_time = time.time()
+        metrics = request._graphql_metrics
+        metrics.end_time = end_time
+        metrics.execution_time = end_time - metrics.start_time
         
-        # Ajout des informations de débogage à la réponse
-        if hasattr(response, 'data') and isinstance(response.data, dict):
-            response.data['_debug'] = debug_info.to_dict()
+        # Récupérer les statistiques de cache
+        cache_stats = self.cache_manager.get_stats()
+        metrics.cache_hits = cache_stats.hits
+        metrics.cache_misses = cache_stats.misses
+        
+        # Ajouter les métriques à l'agrégateur
+        self.aggregator.add_metrics(metrics)
+        
+        # Ajouter des headers de performance si configuré
+        if getattr(settings, 'GRAPHQL_PERFORMANCE_HEADERS', False):
+            response['X-GraphQL-Execution-Time'] = f"{metrics.execution_time:.3f}"
+            response['X-GraphQL-Cache-Hit-Rate'] = f"{cache_stats.hit_rate:.1f}"
+            if metrics.query_complexity:
+                response['X-GraphQL-Query-Complexity'] = str(metrics.query_complexity)
         
         return response
     
-    def process_error(self, request, error):
-        """Traite les erreurs."""
-        if not self.enabled or not hasattr(request, 'graphql_debug'):
-            return
-        
-        debug_info = request.graphql_debug
-        debug_info.add_error(error)
-
-
-class QueryAnalyzer:
-    """Analyseur de requêtes GraphQL pour le débogage."""
-    
-    @staticmethod
-    def analyze_query(query_ast) -> Dict[str, Any]:
-        """
-        Analyse une requête GraphQL et retourne des informations détaillées.
-        
-        Args:
-            query_ast: AST de la requête GraphQL
+    def process_exception(self, request, exception):
+        """Traite les exceptions."""
+        if hasattr(request, '_graphql_metrics'):
+            metrics = request._graphql_metrics
+            metrics.errors.append(str(exception))
             
-        Returns:
-            Dict contenant les informations d'analyse
-        """
-        analysis = {
-            'operations': [],
-            'fragments': [],
-            'complexity_estimate': 0,
-            'depth_estimate': 0,
-            'field_count': 0,
-        }
-        
-        if not query_ast or not hasattr(query_ast, 'definitions'):
-            return analysis
-        
-        for definition in query_ast.definitions:
-            if hasattr(definition, 'operation'):
-                # Opération (query, mutation, subscription)
-                operation_info = {
-                    'type': definition.operation.value,
-                    'name': definition.name.value if definition.name else None,
-                    'fields': QueryAnalyzer._extract_fields(definition.selection_set),
-                }
-                analysis['operations'].append(operation_info)
-                
-                # Calcul de la complexité et profondeur
-                depth = QueryAnalyzer._calculate_depth(definition.selection_set)
-                analysis['depth_estimate'] = max(analysis['depth_estimate'], depth)
-                
-                field_count = QueryAnalyzer._count_fields(definition.selection_set)
-                analysis['field_count'] += field_count
-                analysis['complexity_estimate'] += field_count
+            # Finaliser les métriques même en cas d'erreur
+            end_time = time.time()
+            metrics.end_time = end_time
+            metrics.execution_time = end_time - metrics.start_time
             
-            elif hasattr(definition, 'name') and definition.name:
-                # Fragment
-                fragment_info = {
-                    'name': definition.name.value,
-                    'type': definition.type_condition.name.value,
-                    'fields': QueryAnalyzer._extract_fields(definition.selection_set),
-                }
-                analysis['fragments'].append(fragment_info)
+            # Ajouter les métriques à l'agrégateur
+            self.aggregator.add_metrics(metrics)
         
-        return analysis
-    
-    @staticmethod
-    def _extract_fields(selection_set, depth=0) -> List[Dict[str, Any]]:
-        """Extrait les champs d'un selection set."""
-        fields = []
-        
-        if not selection_set or not hasattr(selection_set, 'selections'):
-            return fields
-        
-        for selection in selection_set.selections:
-            if hasattr(selection, 'name'):
-                field_info = {
-                    'name': selection.name.value,
-                    'depth': depth,
-                    'arguments': {},
-                    'subfields': [],
-                }
-                
-                # Arguments
-                if hasattr(selection, 'arguments') and selection.arguments:
-                    for arg in selection.arguments:
-                        field_info['arguments'][arg.name.value] = str(arg.value.value)
-                
-                # Sous-champs
-                if hasattr(selection, 'selection_set') and selection.selection_set:
-                    field_info['subfields'] = QueryAnalyzer._extract_fields(
-                        selection.selection_set, depth + 1
-                    )
-                
-                fields.append(field_info)
-        
-        return fields
-    
-    @staticmethod
-    def _calculate_depth(selection_set, current_depth=1) -> int:
-        """Calcule la profondeur maximale d'un selection set."""
-        if not selection_set or not hasattr(selection_set, 'selections'):
-            return current_depth
-        
-        max_depth = current_depth
-        
-        for selection in selection_set.selections:
-            if hasattr(selection, 'selection_set') and selection.selection_set:
-                depth = QueryAnalyzer._calculate_depth(
-                    selection.selection_set, current_depth + 1
-                )
-                max_depth = max(max_depth, depth)
-        
-        return max_depth
-    
-    @staticmethod
-    def _count_fields(selection_set) -> int:
-        """Compte le nombre total de champs dans un selection set."""
-        if not selection_set or not hasattr(selection_set, 'selections'):
-            return 0
-        
-        count = 0
-        
-        for selection in selection_set.selections:
-            count += 1
-            if hasattr(selection, 'selection_set') and selection.selection_set:
-                count += QueryAnalyzer._count_fields(selection.selection_set)
-        
-        return count
+        return None
 
 
-class PerformanceProfiler:
-    """Profileur de performance pour GraphQL."""
+class GraphQLPerformanceView:
+    """Vue pour exposer les métriques de performance via une API."""
     
     def __init__(self):
-        self.enabled = getattr(settings, 'GRAPHQL_PERFORMANCE_PROFILING', settings.DEBUG)
-        self.profiles = {}
+        self.aggregator = get_performance_aggregator()
     
-    def start_profiling(self, operation_name: str):
-        """Démarre le profilage d'une opération."""
-        if not self.enabled:
-            return
-        
-        self.profiles[operation_name] = {
-            'start_time': time.time(),
-            'memory_start': self._get_memory_usage(),
-            'db_queries_start': self._get_db_query_count(),
-        }
+    def get_performance_stats(self) -> Dict[str, Any]:
+        """Retourne les statistiques de performance."""
+        return self.aggregator.get_aggregated_stats()
     
-    def end_profiling(self, operation_name: str) -> Dict[str, Any]:
-        """Termine le profilage et retourne les résultats."""
-        if not self.enabled or operation_name not in self.profiles:
-            return {}
-        
-        profile = self.profiles[operation_name]
-        end_time = time.time()
-        
-        result = {
-            'execution_time': end_time - profile['start_time'],
-            'memory_usage': self._get_memory_usage() - profile['memory_start'],
-            'db_queries': self._get_db_query_count() - profile['db_queries_start'],
-        }
-        
-        del self.profiles[operation_name]
-        return result
+    def get_recent_alerts(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Retourne les alertes récentes."""
+        alerts = list(self.aggregator.alerts_history)[-limit:]
+        return [
+            {
+                'type': alert.alert_type,
+                'severity': alert.severity,
+                'message': alert.message,
+                'timestamp': alert.timestamp.isoformat(),
+                'query_name': alert.request_metrics.query_name,
+                'execution_time': alert.request_metrics.execution_time,
+                'threshold_value': alert.threshold_value,
+                'actual_value': alert.actual_value
+            }
+            for alert in alerts
+        ]
     
-    def _get_memory_usage(self) -> int:
-        """Retourne l'utilisation mémoire actuelle."""
-        try:
-            import psutil
-            import os
-            process = psutil.Process(os.getpid())
-            return process.memory_info().rss
-        except ImportError:
-            return 0
+    def get_slow_queries(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """Retourne les requêtes les plus lentes."""
+        slow_queries = [
+            m for m in self.aggregator.metrics_history 
+            if m.execution_time and m.is_slow_query
+        ]
+        
+        # Trier par temps d'exécution décroissant
+        slow_queries.sort(key=lambda m: m.execution_time, reverse=True)
+        
+        return [
+            {
+                'query_name': m.query_name,
+                'execution_time': m.execution_time,
+                'timestamp': datetime.fromtimestamp(m.start_time).isoformat(),
+                'user_id': m.user_id,
+                'query_complexity': m.query_complexity,
+                'database_queries': m.database_queries,
+                'cache_hits': m.cache_hits,
+                'cache_misses': m.cache_misses
+            }
+            for m in slow_queries[:limit]
+        ]
+
+
+# Fonction utilitaire pour configurer le middleware
+def setup_performance_monitoring():
+    """Configure le monitoring des performances."""
+    # Vérifier que le middleware est configuré
+    middleware_classes = getattr(settings, 'MIDDLEWARE', [])
+    middleware_name = 'django_graphql_auto.middleware.performance.GraphQLPerformanceMiddleware'
     
-    def _get_db_query_count(self) -> int:
-        """Retourne le nombre de requêtes DB exécutées."""
-        try:
-            from django.db import connection
-            return len(connection.queries)
-        except:
-            return 0
-
-
-class SchemaIntrospector:
-    """Introspecteur de schéma pour le débogage."""
+    if middleware_name not in middleware_classes:
+        logger.warning(
+            f"GraphQLPerformanceMiddleware not found in MIDDLEWARE settings. "
+            f"Add '{middleware_name}' to MIDDLEWARE to enable performance monitoring."
+        )
     
-    @staticmethod
-    def get_schema_info(schema) -> Dict[str, Any]:
-        """
-        Retourne des informations détaillées sur le schéma GraphQL.
-        
-        Args:
-            schema: Schéma GraphQL
-            
-        Returns:
-            Dict contenant les informations du schéma
-        """
-        info = {
-            'types': {},
-            'queries': [],
-            'mutations': [],
-            'subscriptions': [],
-            'directives': [],
-        }
-        
-        if not schema or not hasattr(schema, 'type_map'):
-            return info
-        
-        # Types
-        for type_name, type_obj in schema.type_map.items():
-            if not type_name.startswith('__'):
-                info['types'][type_name] = {
-                    'kind': str(type_obj),
-                    'description': getattr(type_obj, 'description', None),
-                }
-                
-                if hasattr(type_obj, 'fields'):
-                    info['types'][type_name]['fields'] = list(type_obj.fields.keys())
-        
-        # Opérations racine
-        if hasattr(schema, 'query_type') and schema.query_type:
-            info['queries'] = list(schema.query_type.fields.keys())
-        
-        if hasattr(schema, 'mutation_type') and schema.mutation_type:
-            info['mutations'] = list(schema.mutation_type.fields.keys())
-        
-        if hasattr(schema, 'subscription_type') and schema.subscription_type:
-            info['subscriptions'] = list(schema.subscription_type.fields.keys())
-        
-        return info
+    # Configurer les seuils par défaut si non définis
+    if not hasattr(settings, 'GRAPHQL_SLOW_QUERY_THRESHOLD'):
+        settings.GRAPHQL_SLOW_QUERY_THRESHOLD = 1.0
+    
+    if not hasattr(settings, 'GRAPHQL_COMPLEXITY_THRESHOLD'):
+        settings.GRAPHQL_COMPLEXITY_THRESHOLD = 100
+    
+    if not hasattr(settings, 'GRAPHQL_MEMORY_THRESHOLD'):
+        settings.GRAPHQL_MEMORY_THRESHOLD = 100.0
+    
+    logger.info("GraphQL performance monitoring configured")
 
 
-# Instances globales
-debug_middleware = GraphQLDebugMiddleware()
-performance_profiler = PerformanceProfiler()
-
-
-def debug_resolver(resolver_func):
+# Décorateur pour surveiller des fonctions spécifiques
+def monitor_performance(query_name: Optional[str] = None):
     """
-    Décorateur pour ajouter des informations de débogage aux résolveurs.
+    Décorateur pour surveiller les performances d'une fonction.
     
     Args:
-        resolver_func: Fonction de résolution à décorer
-        
-    Returns:
-        Fonction décorée avec débogage
+        query_name: Nom de la requête (optionnel)
     """
-    @wraps(resolver_func)
-    def wrapper(root, info, **kwargs):
-        if not getattr(settings, 'GRAPHQL_DEBUG', settings.DEBUG):
-            return resolver_func(root, info, **kwargs)
-        
-        field_name = info.field_name
-        start_time = time.time()
-        
-        try:
-            result = resolver_func(root, info, **kwargs)
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            aggregator = get_performance_aggregator()
             
-            # Log du succès
-            execution_time = time.time() - start_time
-            logger.debug(
-                f"Resolver '{field_name}' executed successfully in {execution_time:.3f}s",
-                extra={
-                    'field_name': field_name,
-                    'execution_time': execution_time,
-                    'args': kwargs,
-                }
+            # Créer les métriques
+            metrics = RequestMetrics(
+                request_id=f"func_{int(time.time() * 1000)}_{id(func)}",
+                query_name=query_name or func.__name__,
+                start_time=start_time
             )
             
-            return result
-            
-        except Exception as e:
-            # Log de l'erreur avec contexte
-            execution_time = time.time() - start_time
-            logger.error(
-                f"Resolver '{field_name}' failed after {execution_time:.3f}s: {str(e)}",
-                extra={
-                    'field_name': field_name,
-                    'execution_time': execution_time,
-                    'args': kwargs,
-                    'error': str(e),
-                },
-                exc_info=True
-            )
-            
-            raise
-    
-    return wrapper
-
-
-class DebugQuery(graphene.ObjectType):
-    """Requêtes de débogage pour GraphQL."""
-    
-    schema_info = graphene.Field(
-        graphene.JSONString,
-        description="Informations sur le schéma GraphQL"
-    )
-    
-    query_analysis = graphene.Field(
-        graphene.JSONString,
-        query=graphene.String(required=True),
-        description="Analyse d'une requête GraphQL"
-    )
-    
-    def resolve_schema_info(self, info):
-        """Retourne les informations du schéma."""
-        if not getattr(settings, 'GRAPHQL_DEBUG', settings.DEBUG):
-            raise GraphQLAutoError(
-                "Les informations de débogage ne sont disponibles qu'en mode debug",
-                code=ErrorCode.FEATURE_DISABLED
-            )
+            try:
+                result = func(*args, **kwargs)
+                return result
+            except Exception as e:
+                metrics.errors.append(str(e))
+                raise
+            finally:
+                # Finaliser les métriques
+                end_time = time.time()
+                metrics.end_time = end_time
+                metrics.execution_time = end_time - start_time
+                
+                # Ajouter à l'agrégateur
+                aggregator.add_metrics(metrics)
         
-        return SchemaIntrospector.get_schema_info(info.schema)
-    
-    def resolve_query_analysis(self, info, query: str):
-        """Analyse une requête GraphQL."""
-        if not getattr(settings, 'GRAPHQL_DEBUG', settings.DEBUG):
-            raise GraphQLAutoError(
-                "L'analyse de requête n'est disponible qu'en mode debug",
-                code=ErrorCode.FEATURE_DISABLED
-            )
-        
-        try:
-            from graphql import parse
-            query_ast = parse(query)
-            return QueryAnalyzer.analyze_query(query_ast)
-        except Exception as e:
-            raise GraphQLAutoError(
-                f"Erreur lors de l'analyse de la requête: {str(e)}",
-                code=ErrorCode.VALIDATION_ERROR,
-                original_error=e
-            )
+        return wrapper
+    return decorator

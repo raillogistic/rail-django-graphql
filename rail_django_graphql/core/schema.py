@@ -52,7 +52,13 @@ class SchemaBuilder:
                 cls._instances[schema_name] = instance
             return cls._instances[schema_name]
 
-    def __init__(self, settings: Optional[Any] = None, schema_name: str = "default", raw_settings: Optional[dict] = None, registry=None):
+    def __init__(
+        self,
+        settings: Optional[Any] = None,
+        schema_name: str = "default",
+        raw_settings: Optional[dict] = None,
+        registry=None,
+    ):
         """
         Initialize the SchemaBuilder.
 
@@ -86,7 +92,7 @@ class SchemaBuilder:
                 else:
                     # Use default settings if empty
                     self.settings = SchemaSettings()
-                    
+
                 # If no raw_settings provided, use the settings_dict
                 if not self._raw_settings:
                     self._raw_settings = settings_dict or {}
@@ -151,18 +157,18 @@ class SchemaBuilder:
     def _get_schema_setting(self, key: str, default: Any = None) -> Any:
         """
         Extract a setting from the settings object or raw settings.
-        
+
         Args:
             key: Setting key to extract
             default: Default value if key is not found
-            
+
         Returns:
             Setting value or default
         """
         # First try to get from the settings object
         if hasattr(self.settings, key):
             return getattr(self.settings, key)
-        
+
         # Fallback to raw settings for backward compatibility
         return self._raw_settings.get(key, default)
 
@@ -247,11 +253,15 @@ class SchemaBuilder:
             try:
                 registry_models = self.registry.get_models_for_schema(self.schema_name)
                 if registry_models:
-                    logger.debug(f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}")
+                    logger.debug(
+                        f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}"
+                    )
                     return registry_models
             except Exception as e:
-                logger.warning(f"Failed to get models from registry for schema '{self.schema_name}': {e}")
-        
+                logger.warning(
+                    f"Failed to get models from registry for schema '{self.schema_name}': {e}"
+                )
+
         # Fallback to default model discovery
         models = []
         excluded_apps = self._get_schema_setting("excluded_apps", [])
@@ -456,7 +466,7 @@ class SchemaBuilder:
 
                 # Combine all mutations
                 all_mutations = {**self._mutation_fields, **security_mutations}
-
+                print("xxxxxxxxxxxxxxxxxxxxx")
                 if all_mutations:
                     logger.info(
                         f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"
@@ -746,6 +756,7 @@ def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
         SchemaBuilder: Schema builder instance
     """
     from .registry import schema_registry
+
     return SchemaBuilder(schema_name=schema_name, registry=schema_registry)
 
 

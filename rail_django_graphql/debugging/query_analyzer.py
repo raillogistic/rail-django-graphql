@@ -83,6 +83,9 @@ class ComplexityVisitor(Visitor):
     
     def __init__(self, field_complexity_map: Dict[str, int] = None,
                  max_depth: int = 15, introspection_cost: int = 1):
+        # Initialize parent Visitor class to set up enter_leave_map
+        super().__init__()
+        
         self.field_complexity_map = field_complexity_map or {}
         self.max_depth = max_depth
         self.introspection_cost = introspection_cost
@@ -451,6 +454,9 @@ class QueryAnalyzer:
         
         class DeprecatedFieldVisitor(Visitor):
             def __init__(self, deprecated_fields: Set[str]):
+                # Initialize parent Visitor class to set up enter_leave_map
+                super().__init__()
+                
                 self.deprecated_fields = deprecated_fields
                 self.issues = []
             

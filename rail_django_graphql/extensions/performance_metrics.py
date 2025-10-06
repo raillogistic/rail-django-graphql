@@ -124,6 +124,9 @@ class ComplexityVisitor(Visitor):
     """Visiteur pour calculer la complexité des requêtes GraphQL."""
     
     def __init__(self, complexity_weights: Dict[str, int]):
+        # Initialize parent Visitor class to set up enter_leave_map
+        super().__init__()
+        
         self.complexity_weights = complexity_weights
         self.current_depth = 0
         self.max_depth = 0
