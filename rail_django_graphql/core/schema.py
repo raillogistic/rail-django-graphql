@@ -52,19 +52,25 @@ class SchemaBuilder:
                 cls._instances[schema_name] = instance
             return cls._instances[schema_name]
 
-    def __init__(self, settings: Optional[Any] = None, schema_name: str = "default"):
+    def __init__(self, settings: Optional[Any] = None, schema_name: str = "default", raw_settings: Optional[dict] = None, registry=None):
         """
         Initialize the SchemaBuilder.
 
         Args:
             settings: Schema settings instance or None for defaults
             schema_name: Name of the schema (for multi-schema support)
+            raw_settings: Raw settings dictionary containing SCHEMA_SETTINGS
+            registry: Schema registry instance for model discovery
         """
         # Avoid re-initialization
         if hasattr(self, "_initialized") and self._initialized:
             return
 
         self.schema_name = schema_name
+        self.registry = registry
+
+        # Store the raw settings dictionary for SCHEMA_SETTINGS extraction
+        self._raw_settings = raw_settings or {}
 
         # Load settings using the new configuration system
         if settings is None:
@@ -80,6 +86,10 @@ class SchemaBuilder:
                 else:
                     # Use default settings if empty
                     self.settings = SchemaSettings()
+                    
+                # If no raw_settings provided, use the settings_dict
+                if not self._raw_settings:
+                    self._raw_settings = settings_dict or {}
             except ImportError:
                 # Fallback to legacy settings
                 from .settings import SchemaSettings
@@ -87,6 +97,9 @@ class SchemaBuilder:
                 self.settings = SchemaSettings()
         else:
             self.settings = settings
+            # If raw_settings is provided, use it; otherwise, initialize empty
+            if not self._raw_settings:
+                self._raw_settings = {}
 
         # Initialize generators with lazy imports to avoid circular dependencies
         self._type_generator = None
@@ -135,12 +148,30 @@ class SchemaBuilder:
             )
         return self._mutation_generator
 
+    def _get_schema_setting(self, key: str, default: Any = None) -> Any:
+        """
+        Extract a setting from the settings object or raw settings.
+        
+        Args:
+            key: Setting key to extract
+            default: Default value if key is not found
+            
+        Returns:
+            Setting value or default
+        """
+        # First try to get from the settings object
+        if hasattr(self.settings, key):
+            return getattr(self.settings, key)
+        
+        # Fallback to raw settings for backward compatibility
+        return self._raw_settings.get(key, default)
+
     def _connect_signals(self) -> None:
         """
         Connects Django signals for automatic schema rebuilding.
         """
         post_migrate.connect(self._handle_post_migrate)
-        if getattr(self.settings, "auto_refresh_on_model_change", True):
+        if self._get_schema_setting("auto_refresh_on_model_change", True):
             post_save.connect(self._handle_model_change)
             post_delete.connect(self._handle_model_change)
 
@@ -177,39 +208,67 @@ class SchemaBuilder:
         app_label = model._meta.app_label
         model_name = model.__name__
 
-        # Check app exclusions
-        if app_label in getattr(self.settings, "excluded_apps", []):
+        # Check app exclusions from SCHEMA_SETTINGS
+        excluded_apps = self._get_schema_setting("excluded_apps", [])
+
+        if app_label in excluded_apps:
+            logger.debug(
+                f"Excluding model {model_name} from app {app_label} (app excluded)"
+            )
             return False
 
-        # Check model exclusions
-        if model_name in self.settings.excluded_models:
+        # Check model exclusions from SCHEMA_SETTINGS
+        excluded_models = self._get_schema_setting("excluded_models", [])
+
+        # Check model name exclusions
+        if model_name in excluded_models:
+            logger.debug(f"Excluding model {model_name} (model name excluded)")
             return False
 
         # Check app.model exclusions
-        if f"{app_label}.{model_name}" in self.settings.excluded_models:
+        full_model_name = f"{app_label}.{model_name}"
+        if full_model_name in excluded_models:
+            logger.debug(
+                f"Excluding model {full_model_name} (full model name excluded)"
+            )
             return False
 
         return True
 
     def _discover_models(self) -> List[Type[models.Model]]:
         """
-        Discovers all valid Django models for schema generation.
+        Discovers all Django models that should be included in the schema.
 
         Returns:
             List[Type[models.Model]]: List of valid Django models
         """
-        discovered_models = []
+        # If registry is available and schema is registered, use registry's model discovery
+        if self.registry and self.schema_name != "default":
+            try:
+                registry_models = self.registry.get_models_for_schema(self.schema_name)
+                if registry_models:
+                    logger.debug(f"Using registry model discovery for schema '{self.schema_name}': {[m.__name__ for m in registry_models]}")
+                    return registry_models
+            except Exception as e:
+                logger.warning(f"Failed to get models from registry for schema '{self.schema_name}': {e}")
+        
+        # Fallback to default model discovery
+        models = []
+        excluded_apps = self._get_schema_setting("excluded_apps", [])
 
         for app_config in apps.get_app_configs():
-            print("xxxxxxxxxxxxxxxxx", app_config.name, self.settings)
-            if app_config.name in self.settings.excluded_apps:
+            # Skip excluded apps at the app level for efficiency
+            if app_config.label in excluded_apps:
+                logger.debug(
+                    f"Skipping entire app {app_config.label} (excluded in SCHEMA_SETTINGS)"
+                )
                 continue
 
             for model in app_config.get_models():
                 if self._is_valid_model(model):
-                    discovered_models.append(model)
+                    models.append(model)
 
-        return discovered_models
+        return models
 
     def _generate_query_fields(self, models: List[Type[models.Model]]) -> None:
         """
@@ -445,6 +504,7 @@ class SchemaBuilder:
 
                 # Note: Graphene Schema doesn't support middleware parameter directly
                 # Middleware should be applied at the GraphQL execution level
+
                 self._schema = graphene.Schema(
                     query=query_type,
                     mutation=mutation_type,
@@ -664,6 +724,15 @@ class SchemaBuilder:
         """
         return self._mutation_fields.copy()
 
+    def get_settings(self) -> Any:
+        """
+        Returns the schema settings for this schema.
+
+        Returns:
+            Any: Schema settings instance
+        """
+        return self.settings
+
 
 # Global schema management functions
 def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
@@ -676,7 +745,8 @@ def get_schema_builder(schema_name: str = "default") -> SchemaBuilder:
     Returns:
         SchemaBuilder: Schema builder instance
     """
-    return SchemaBuilder(schema_name=schema_name)
+    from .registry import schema_registry
+    return SchemaBuilder(schema_name=schema_name, registry=schema_registry)
 
 
 def get_schema(schema_name: str = "default") -> graphene.Schema:

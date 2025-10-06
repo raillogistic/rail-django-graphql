@@ -28,8 +28,8 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # Schema Settings (Aligned with SchemaSettings dataclass)
     # ========================================
     "SCHEMA_SETTINGS": {
-        # Apps to exclude from schema generation
-        "excluded_apps": [],
+        # Apps to exclude from schema generation (globally excluded: admin, contenttypes, sessions)
+        "excluded_apps": ["admin", "contenttypes", "sessions", "auth"],
         # Models to exclude from schema generation
         "excluded_models": [],
         # Enable schema introspection
