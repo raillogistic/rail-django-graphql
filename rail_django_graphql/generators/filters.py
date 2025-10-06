@@ -17,7 +17,7 @@ try:
 except Exception:
     DjangoFilterConnectionField = None
 import django_filters
-from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter
+from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter, ModelChoiceFilter, ModelMultipleChoiceFilter
 import logging
 
 from .introspector import ModelIntrospector
@@ -129,6 +129,10 @@ class AdvancedFilterGenerator:
             # Generate reverse relationship count filters
             reverse_count_filters = self._generate_reverse_relationship_count_filters(model)
             filters.update(reverse_count_filters)
+            
+            # Generate reverse relationship field filters
+            reverse_field_filters = self._generate_reverse_relationship_field_filters(model)
+            filters.update(reverse_field_filters)
             
             # Generate property filters
             property_filters = self._generate_property_filters(model)
@@ -1367,5 +1371,297 @@ class AdvancedFilterGenerator:
             f'{property_name}': BooleanFilter(
                 method=self._create_property_filter_method(property_name, 'exact'),
                 help_text=f'Filter by {property_name} property boolean value'
+            ),
+        }
+
+    def _generate_reverse_relationship_field_filters(self, model) -> Dict[str, django_filters.Filter]:
+        """
+        Generate filters for actual fields of reverse-related models.
+        
+        This method creates filters that allow querying based on fields of models
+        that have a foreign key pointing to the current model.
+        
+        Args:
+            model: The Django model to generate reverse filters for
+        
+        Returns:
+            Dict[str, django_filters.Filter]: Dictionary of reverse field filters
+        """
+        filters = {}
+        
+        # Get all reverse relationships for this model
+        reverse_relations = []
+        
+        # Use the modern Django approach to get reverse relationships
+        if hasattr(model._meta, 'related_objects'):
+            for rel in model._meta.related_objects:
+                # Include both OneToMany and OneToOne reverse relationships
+                from django.db.models.fields.reverse_related import OneToOneRel, ManyToOneRel
+                if isinstance(rel, (OneToOneRel, ManyToOneRel)):
+                    reverse_relations.append(rel)
+        
+        # Also check for forward OneToOne relationships that create reverse access
+        for field in model._meta.get_fields():
+            if field.is_relation and field.one_to_one and not field.many_to_one:
+                # This is a forward OneToOne field, but we want to handle it as a reverse relation
+                # for the purpose of generating filters on the related model's fields
+                reverse_relations.append(field)
+        
+        for relation in reverse_relations:
+            if hasattr(relation, 'related_model'):
+                related_model = relation.related_model
+                # Handle different types of relations for accessor name
+                if hasattr(relation, 'get_accessor_name'):
+                    relation_name = relation.get_accessor_name()
+                elif hasattr(relation, 'name'):
+                    relation_name = relation.name
+                else:
+                    continue  # Skip if we can't determine the relation name
+                
+                # Skip if this model is excluded (for now, we'll include all models)
+                # TODO: Implement model exclusion logic if needed
+                # if self._is_model_excluded(related_model):
+                #     continue
+                
+                # Generate filters for fields of the related model
+                filters.update(
+                    self._generate_reverse_nested_field_filters(
+                        relation_name, 
+                        related_model, 
+                        depth=0
+                    )
+                )
+        
+        return filters
+
+    def _generate_reverse_nested_field_filters(
+        self, 
+        relation_name: str, 
+        related_model, 
+        depth: int = 0, 
+        max_depth: int = 2
+    ) -> Dict[str, django_filters.Filter]:
+        """
+        Generate nested filters for reverse relationship fields.
+        
+        Args:
+            relation_name: Name of the reverse relationship
+            related_model: The related Django model
+            depth: Current nesting depth
+            max_depth: Maximum allowed nesting depth
+            
+        Returns:
+            Dict[str, django_filters.Filter]: Dictionary of nested reverse field filters
+        """
+        filters = {}
+        
+        if depth >= max_depth:
+            return filters
+        
+        # Get all fields from the related model
+        for field in related_model._meta.get_fields():
+            if field.is_relation:
+                # Handle foreign key and one-to-one relationships
+                if hasattr(field, 'related_model') and (field.many_to_one or field.one_to_one):
+                    field_name = f"{relation_name}__{field.name}"
+                    filters.update(self._generate_reverse_foreign_key_filters(field_name, field))
+                    
+                    # Recursive nesting for deeper relationships
+                    if depth < max_depth - 1:
+                        nested_filters = self._generate_reverse_nested_field_filters(
+                            field_name, 
+                            field.related_model, 
+                            depth + 1, 
+                            max_depth
+                        )
+                        filters.update(nested_filters)
+                        
+                # Handle many-to-many relationships
+                elif field.many_to_many:
+                    field_name = f"{relation_name}__{field.name}"
+                    filters.update(self._generate_reverse_many_to_many_filters(field_name, field))
+            else:
+                # Handle regular fields
+                field_name = f"{relation_name}__{field.name}"
+                
+                if isinstance(field, (models.CharField, models.TextField)):
+                    filters.update(self._generate_reverse_text_filters(field_name, field))
+                elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                    filters.update(self._generate_reverse_numeric_filters(field_name, field))
+                elif isinstance(field, (models.DateField, models.DateTimeField)):
+                    filters.update(self._generate_reverse_date_filters(field_name, field))
+                elif isinstance(field, models.BooleanField):
+                    filters.update(self._generate_reverse_boolean_filters(field_name, field))
+                elif isinstance(field, models.EmailField):
+                    filters.update(self._generate_reverse_text_filters(field_name, field))
+                elif isinstance(field, models.URLField):
+                    filters.update(self._generate_reverse_text_filters(field_name, field))
+        
+        return filters
+
+    def _generate_reverse_text_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate text-based filters for reverse relationship text fields."""
+        return {
+            f'{field_name}': CharFilter(
+                field_name=field_name,
+                help_text=f'Filter by {field_name} with exact text matching'
+            ),
+            f'{field_name}__contains': CharFilter(
+                field_name=f'{field_name}__contains',
+                help_text=f'Filter by {field_name} containing the specified text (case-sensitive)'
+            ),
+            f'{field_name}__icontains': CharFilter(
+                field_name=f'{field_name}__icontains',
+                help_text=f'Filter by {field_name} containing the specified text (case-insensitive)'
+            ),
+            f'{field_name}__startswith': CharFilter(
+                field_name=f'{field_name}__startswith',
+                help_text=f'Filter by {field_name} starting with the specified text'
+            ),
+            f'{field_name}__endswith': CharFilter(
+                field_name=f'{field_name}__endswith',
+                help_text=f'Filter by {field_name} ending with the specified text'
+            ),
+            f'{field_name}__exact': CharFilter(
+                field_name=f'{field_name}__exact',
+                help_text=f'Filter by {field_name} with exact match'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} is null'
+            ),
+        }
+
+    def _generate_reverse_numeric_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate numeric filters for reverse relationship numeric fields."""
+        return {
+            f'{field_name}': NumberFilter(
+                field_name=field_name,
+                help_text=f'Filter by {field_name} with exact numeric matching'
+            ),
+            f'{field_name}__in': type(f'{field_name.title()}InFilter', (django_filters.BaseInFilter, NumberFilter), {})(
+                field_name=field_name,
+                help_text=f'Filter by multiple {field_name} values'
+            ),
+            f'{field_name}__gt': NumberFilter(
+                field_name=f'{field_name}__gt',
+                help_text=f'Filter by {field_name} greater than the specified value'
+            ),
+            f'{field_name}__gte': NumberFilter(
+                field_name=f'{field_name}__gte',
+                help_text=f'Filter by {field_name} greater than or equal to the specified value'
+            ),
+            f'{field_name}__lt': NumberFilter(
+                field_name=f'{field_name}__lt',
+                help_text=f'Filter by {field_name} less than the specified value'
+            ),
+            f'{field_name}__lte': NumberFilter(
+                field_name=f'{field_name}__lte',
+                help_text=f'Filter by {field_name} less than or equal to the specified value'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} is null'
+            ),
+        }
+
+    def _generate_reverse_date_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate date filters for reverse relationship date fields."""
+        filters = {
+            f'{field_name}': DateFilter(
+                field_name=field_name,
+                help_text=f'Filter by {field_name} with exact date matching'
+            ),
+            f'{field_name}__gt': DateFilter(
+                field_name=f'{field_name}__gt',
+                help_text=f'Filter by {field_name} after the specified date'
+            ),
+            f'{field_name}__gte': DateFilter(
+                field_name=f'{field_name}__gte',
+                help_text=f'Filter by {field_name} on or after the specified date'
+            ),
+            f'{field_name}__lt': DateFilter(
+                field_name=f'{field_name}__lt',
+                help_text=f'Filter by {field_name} before the specified date'
+            ),
+            f'{field_name}__lte': DateFilter(
+                field_name=f'{field_name}__lte',
+                help_text=f'Filter by {field_name} on or before the specified date'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} is null'
+            ),
+        }
+        
+        # Add datetime-specific filters if it's a DateTimeField
+        if isinstance(field, models.DateTimeField):
+            filters.update({
+                f'{field_name}__year': NumberFilter(
+                    field_name=f'{field_name}__year',
+                    help_text=f'Filter by {field_name} year'
+                ),
+                f'{field_name}__month': NumberFilter(
+                    field_name=f'{field_name}__month',
+                    help_text=f'Filter by {field_name} month'
+                ),
+                f'{field_name}__day': NumberFilter(
+                    field_name=f'{field_name}__day',
+                    help_text=f'Filter by {field_name} day'
+                ),
+            })
+        
+        return filters
+
+    def _generate_reverse_boolean_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate boolean filters for reverse relationship boolean fields."""
+        return {
+            f'{field_name}': BooleanFilter(
+                field_name=field_name,
+                help_text=f'Filter by {field_name} boolean value'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} is null'
+            ),
+        }
+
+    def _generate_reverse_foreign_key_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate filters for reverse relationship foreign key fields."""
+        return {
+            f'{field_name}': ModelChoiceFilter(
+                field_name=field_name,
+                queryset=field.related_model.objects.all(),
+                help_text=f'Filter by {field_name} foreign key'
+            ),
+            f'{field_name}__in': ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=field.related_model.objects.all(),
+                to_field_name='pk',
+                help_text=f'Filter by multiple {field_name} foreign key IDs'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} is null'
+            ),
+        }
+
+    def _generate_reverse_many_to_many_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+        """Generate filters for reverse relationship many-to-many fields."""
+        return {
+            f'{field_name}': ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=field.related_model.objects.all(),
+                help_text=f'Filter by {field_name} many-to-many relationship'
+            ),
+            f'{field_name}__in': ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=field.related_model.objects.all(),
+                to_field_name='pk',
+                help_text=f'Filter by multiple {field_name} many-to-many IDs'
+            ),
+            f'{field_name}__isnull': BooleanFilter(
+                field_name=f'{field_name}__isnull',
+                help_text=f'Filter by whether {field_name} has any related objects'
             ),
         }

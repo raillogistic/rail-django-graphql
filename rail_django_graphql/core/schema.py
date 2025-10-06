@@ -437,7 +437,7 @@ class SchemaBuilder:
                 logger.info(
                     f"Checking mutation fields for schema '{self.schema_name}': {len(self._mutation_fields)} mutations found"
                 )
-
+                #
                 # Add security-related mutations
                 security_mutations = {}
                 try:
@@ -448,17 +448,21 @@ class SchemaBuilder:
                         RegisterMutation,
                     )
 
-                    security_mutations.update(
-                        {
-                            "login": LoginMutation.Field(),
-                            "register": RegisterMutation.Field(),
-                            "refresh_token": RefreshTokenMutation.Field(),
-                            "logout": LogoutMutation.Field(),
-                        }
-                    )
-                    logger.info(
-                        f"Security mutations integrated into schema '{self.schema_name}'"
-                    )
+                    print("xxxxxxxxxxxxxxxxx", self.settings)
+                    if not self._get_schema_setting(
+                        "DISABLE_SECURITY_MUTATIONS", False
+                    ):
+                        security_mutations.update(
+                            {
+                                "login": LoginMutation.Field(),
+                                "register": RegisterMutation.Field(),
+                                "refresh_token": RefreshTokenMutation.Field(),
+                                "logout": LogoutMutation.Field(),
+                            }
+                        )
+                        logger.info(
+                            f"Security mutations integrated into schema '{self.schema_name}'"
+                        )
                 except ImportError as e:
                     logger.warning(
                         f"Could not import security mutations for schema '{self.schema_name}': {e}"
@@ -466,7 +470,7 @@ class SchemaBuilder:
 
                 # Combine all mutations
                 all_mutations = {**self._mutation_fields, **security_mutations}
-                print("xxxxxxxxxxxxxxxxxxxxx")
+
                 if all_mutations:
                     logger.info(
                         f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"

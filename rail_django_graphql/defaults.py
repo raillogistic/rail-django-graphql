@@ -19,6 +19,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "DEFAULT_SCHEMA": "main",
     "ENABLE_GRAPHIQL": True,
     "GRAPHIQL_TEMPLATE": "graphene/graphiql.html",
+    "DISABLE_SECURITY_MUTATIONS": True,
     "SCHEMA_ENDPOINT": "/graphql/",
     "AUTHENTICATION_REQUIRED": False,
     "PERMISSION_CLASSES": [],
