@@ -323,6 +323,9 @@ class SchemaSettings:
     # Enable auto-camelcase for GraphQL schema
     auto_camelcase: bool = False
 
+    # Disable security mutations (e.g., login, logout)
+    disable_security_mutations: bool = False
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
         """
@@ -340,12 +343,10 @@ class SchemaSettings:
             SchemaSettings: Configured settings instance
         """
         # Get settings from all sources
-        defaults = _get_library_defaults().get("core_schema_settings", {})
-        global_settings = _get_global_settings(schema_name).get(
-            "core_schema_settings", {}
-        )
+        defaults = _get_library_defaults().get("schema_settings", {})
+        global_settings = _get_global_settings(schema_name).get("schema_settings", {})
         schema_settings = _get_schema_registry_settings(schema_name).get(
-            "core_schema_settings", {}
+            "schema_settings", {}
         )
 
         # Also check for direct schema-level settings (backward compatibility)

@@ -453,9 +453,12 @@ class SchemaBuilder:
                         RegisterMutation,
                     )
 
-                    disable_security = get_setting(
-                        "disable_security_mutations", False, self.schema_name
-                    )
+                    disable_security = self.settings.disable_security_mutations
+                    # get_setting(
+                    # "disable_security_mutations", False, self.schema_name
+                    # )
+
+                    print("xxxxxxxxxxxxxx", disable_security)
                     if not disable_security:
                         security_mutations.update(
                             {

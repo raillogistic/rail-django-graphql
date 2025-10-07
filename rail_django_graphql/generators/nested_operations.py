@@ -13,19 +13,52 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 
+from ..core.settings import MutationGeneratorSettings
+from ..core.security import get_authz_manager, get_input_validator
+from ..core.error_handling import get_error_handler
+from ..core.performance import get_query_optimizer
+
 
 class NestedOperationHandler:
     """
     Handles complex nested operations for GraphQL mutations including
     nested creates, updates, and cascade operations with proper validation.
+    
+    This class supports:
+    - Hierarchical settings configuration
+    - Security and authorization integration
+    - Input validation and error handling
+    - Performance optimization
+    - Circular reference detection
+    - Transaction management
     """
 
-    def __init__(self, mutation_settings=None):
+    def __init__(self, mutation_settings=None, schema_name: str = "default"):
+        """
+        Initialize the NestedOperationHandler.
+
+        Args:
+            mutation_settings: Mutation generator settings or None for defaults
+            schema_name: Name of the schema for multi-schema support
+        """
         self._processed_objects: Set[str] = set()
         self._validation_errors: List[str] = []
-        self.mutation_settings = mutation_settings or {}
+        self.schema_name = schema_name
+        
+        # Use hierarchical settings if no explicit settings provided
+        if mutation_settings is None:
+            self.mutation_settings = MutationGeneratorSettings.from_schema(schema_name)
+        else:
+            self.mutation_settings = mutation_settings
+            
+        # Initialize security and performance components
+        self.authorization_manager = get_authz_manager(schema_name)
+        self.input_validator = get_input_validator(schema_name)
+        self.error_handler = get_error_handler(schema_name)
+        self.query_optimizer = get_query_optimizer(schema_name)
+        
         self.circular_reference_tracker = set()
-        self.max_depth = 10  # Prevent infinite recursion
+        self.max_depth = getattr(self.mutation_settings, 'max_nested_depth', 10)  # Prevent infinite recursion
 
     def _should_use_nested_operations(self, model, field_name):
         """

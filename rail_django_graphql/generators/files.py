@@ -18,6 +18,9 @@ from django.db import models
 from django.template.loader import render_to_string
 
 from ..core.settings import SchemaSettings
+from ..core.performance import get_query_optimizer
+from ..core.security import get_authz_manager
+from ..core.error_handling import get_error_handler
 from .introspector import ModelIntrospector
 from .types import TypeGenerator
 from .queries import QueryGenerator
@@ -29,13 +32,80 @@ class FileGenerator:
     """
     Generates and manages GraphQL schema files for Django apps and models.
     Handles file creation, updates, and versioning.
+    
+    This class supports:
+    - Multi-schema file generation
+    - Code formatting and validation
+    - Performance optimization integration
+    - Security and authorization integration
+    - Error handling integration
     """
 
-    def __init__(self, settings: Optional[SchemaSettings] = None):
-        self.settings = settings or SchemaSettings()
-        self.type_generator = TypeGenerator()
-        self.query_generator = QueryGenerator(self.type_generator)
-        self.mutation_generator = MutationGenerator(self.type_generator)
+    def __init__(self, settings: Optional[SchemaSettings] = None, schema_name: str = "default"):
+        """
+        Initialize the FileGenerator.
+
+        Args:
+            settings: Schema settings or None for defaults
+            schema_name: Name of the schema for multi-schema support
+        """
+        self.schema_name = schema_name
+        
+        # Use hierarchical settings if no explicit settings provided
+        if settings is None:
+            self.settings = SchemaSettings.from_schema(schema_name)
+        else:
+            self.settings = settings
+            
+        # Initialize components with schema-specific settings
+        self.type_generator = TypeGenerator(schema_name=schema_name)
+        self.query_generator = QueryGenerator(self.type_generator, schema_name=schema_name)
+        self.mutation_generator = MutationGenerator(self.type_generator, schema_name=schema_name)
+        
+        # Initialize performance and security components
+        self.query_optimizer = get_query_optimizer(schema_name)
+        self.authorization_manager = get_authz_manager(schema_name)
+        self.error_handler = get_error_handler(schema_name)
+
+    def _should_include_model(self, model: Type[models.Model]) -> bool:
+        """
+        Check if a model should be included based on settings.
+        
+        Args:
+            model: Django model to check
+            
+        Returns:
+            bool: True if model should be included
+        """
+        # Check excluded models
+        if hasattr(self.settings, 'excluded_models') and self.settings.excluded_models:
+            if model.__name__ in self.settings.excluded_models:
+                return False
+                
+        # Check excluded apps
+        if hasattr(self.settings, 'excluded_apps') and self.settings.excluded_apps:
+            if model._meta.app_label in self.settings.excluded_apps:
+                return False
+                
+        return True
+
+    def _should_enable_filtering(self) -> bool:
+        """
+        Check if filtering should be enabled based on settings.
+        
+        Returns:
+            bool: True if filtering should be enabled
+        """
+        return getattr(self.settings, 'enable_filtering', True)
+
+    def _should_enable_ordering(self) -> bool:
+        """
+        Check if ordering should be enabled based on settings.
+        
+        Returns:
+            bool: True if ordering should be enabled
+        """
+        return getattr(self.settings, 'enable_ordering', True)
 
     def _ensure_directory(self, directory: Union[str, Path]) -> None:
         """

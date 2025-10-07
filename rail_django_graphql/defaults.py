@@ -19,7 +19,6 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "default_schema": "main",
     "enable_graphiql": True,
     "graphiql_template": "graphene/graphiql.html",
-    "disable_security_mutations": True,
     "schema_endpoint": "/graphql/",
     "authentication_required": False,
     "permission_classes": [],
@@ -35,6 +34,8 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     #     "enable_pagination": True
     # }
     "schema_settings": {
+        # Disable security mutations (e.g., login, logout)
+        "disable_security_mutations": False,
         # Apps to exclude from schema generation (globally excluded: admin, contenttypes, sessions)
         "excluded_apps": ["admin", "contenttypes", "sessions", "auth"],
         # Models to exclude from schema generation

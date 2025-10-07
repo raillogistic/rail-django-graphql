@@ -20,6 +20,8 @@ except Exception:
 
 from ..conf import get_query_generator_settings
 from ..core.settings import QueryGeneratorSettings
+from ..core.performance import get_query_optimizer, get_query_cache
+from ..core.security import get_authz_manager
 from ..extensions.optimization import (
     QueryOptimizationConfig,
     get_optimizer,
@@ -70,6 +72,8 @@ class QueryGenerator:
     - Advanced filtering with nested field support
     - Performance optimization and monitoring
     - Multi-schema query generation
+    - Security and authorization integration
+    - Query caching and complexity analysis
     """
 
     def __init__(
@@ -91,9 +95,14 @@ class QueryGenerator:
 
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            self.settings = get_query_generator_settings(schema_name)
+            self.settings = QueryGeneratorSettings.from_schema(schema_name)
         else:
             self.settings = settings
+
+        # Initialize performance and security components
+        self.query_optimizer = get_query_optimizer(schema_name)
+        self.query_cache = get_query_cache(schema_name)
+        self.authorization_manager = get_authz_manager(schema_name)
 
         self._query_registry: Dict[Type[models.Model], Dict[str, Any]] = {}
         self._filter_generator = AdvancedFilterGenerator()

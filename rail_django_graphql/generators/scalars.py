@@ -14,7 +14,7 @@ from uuid import UUID
 
 import graphene
 from django.db import models
-from graphene.scalars import Scalar
+from graphene import Scalar
 
 
 class JSONScalar(Scalar):

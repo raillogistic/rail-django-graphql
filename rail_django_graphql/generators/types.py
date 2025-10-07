@@ -26,6 +26,8 @@ from datetime import date
 
 from ..conf import get_mutation_generator_settings, get_type_generator_settings
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
+from ..core.scalars import get_enabled_scalars, get_custom_scalar
+from ..core.performance import get_query_optimizer
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
 
@@ -42,6 +44,8 @@ class TypeGenerator:
     - Relationship handling with depth limits
     - Input type generation for mutations
     - Filter type generation for queries
+    - Custom scalar types integration
+    - Performance optimization
     """
 
     # Mapping of Django field types to GraphQL scalar types
@@ -100,14 +104,23 @@ class TypeGenerator:
 
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            self.settings = get_type_generator_settings(schema_name)
+            self.settings = TypeGeneratorSettings.from_schema(schema_name)
         else:
             self.settings = settings
 
         if mutation_settings is None:
-            self.mutation_settings = get_mutation_generator_settings(schema_name)
+            self.mutation_settings = MutationGeneratorSettings.from_schema(schema_name)
         else:
             self.mutation_settings = mutation_settings
+
+        # Initialize performance optimizer
+        self.query_optimizer = get_query_optimizer(schema_name)
+        
+        # Get enabled custom scalars for this schema
+        self.custom_scalars = get_enabled_scalars(schema_name)
+        
+        # Update field type map with custom scalars
+        self._update_field_type_map()
 
         # Type registries for caching generated types
         self._type_registry: Dict[Type[models.Model], Type[DjangoObjectType]] = {}
@@ -119,6 +132,44 @@ class TypeGenerator:
         self._interface_registry: Dict[
             Type[models.Model], Type[graphene.Interface]
         ] = {}
+
+    def _update_field_type_map(self) -> None:
+        """Update field type map with custom scalars based on settings."""
+        # Apply custom field mappings from settings
+        if hasattr(self.settings, 'custom_field_mappings') and self.settings.custom_field_mappings:
+            for django_field, graphql_type in self.settings.custom_field_mappings.items():
+                if isinstance(graphql_type, str):
+                    # Try to get custom scalar
+                    custom_scalar = get_custom_scalar(graphql_type)
+                    if custom_scalar:
+                        self.FIELD_TYPE_MAP[django_field] = custom_scalar
+                else:
+                    self.FIELD_TYPE_MAP[django_field] = graphql_type
+        
+        # Apply custom scalars based on field types
+        if 'Email' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.EmailField] = self.custom_scalars['Email']
+        
+        if 'URL' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.URLField] = self.custom_scalars['URL']
+        
+        if 'UUID' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.UUIDField] = self.custom_scalars['UUID']
+        
+        if 'DateTime' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DateTimeField] = self.custom_scalars['DateTime']
+        
+        if 'Date' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DateField] = self.custom_scalars['Date']
+        
+        if 'Time' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.TimeField] = self.custom_scalars['Time']
+        
+        if 'JSON' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.JSONField] = self.custom_scalars['JSON']
+        
+        if 'Decimal' in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars['Decimal']
 
     def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
         """Get excluded fields for a specific model."""
@@ -151,7 +202,6 @@ class TypeGenerator:
             excluded.update(self.settings.excluded_fields.get(model_name, []))
         elif isinstance(self.settings.excluded_fields, list):
             excluded.update(self.settings.excluded_fields)
-        print("qqqqqqqqq", excluded)
         return list(excluded)
 
     def _get_included_fields(self, model: Type[models.Model]) -> Optional[List[str]]:

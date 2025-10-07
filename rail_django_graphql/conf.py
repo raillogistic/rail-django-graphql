@@ -9,45 +9,8 @@ from typing import Any, Dict, Optional
 
 from django.conf import settings
 
-# Library default settings
-LIBRARY_DEFAULTS = {
-    "disable_security_mutations": True,
-    "enable_graphiql": True,
-    "enable_introspection": True,
-    "max_query_depth": 10,
-    "max_query_complexity": 1000,
-    "enable_query_batching": False,
-    "enable_subscriptions": False,
-    "subscription_path": "/graphql/subscriptions/",
-    "enable_file_uploads": True,
-    "max_file_size": 10 * 1024 * 1024,  # 10MB
-    "allowed_file_types": ["image/jpeg", "image/png", "image/gif", "application/pdf"],
-    "enable_cors": True,
-    "cors_allow_all_origins": False,
-    "cors_allowed_origins": [],
-    "enable_csrf_protection": True,
-    "enable_rate_limiting": False,
-    "rate_limit_per_minute": 60,
-    "enable_query_logging": False,
-    "log_level": "INFO",
-    "enable_performance_monitoring": False,
-    "enable_error_reporting": True,
-    "enable_schema_validation": True,
-    "auto_camelcase": True,
-    "enable_relay": False,
-    "enable_dataloader": True,
-    "dataloader_batch_size": 100,
-    "enable_query_caching": False,
-    "cache_timeout": 300,  # 5 minutes
-    "enable_field_suggestions": True,
-    "enable_query_whitelist": False,
-    "whitelisted_queries": [],
-    "enable_persisted_queries": False,
-    "enable_apollo_tracing": False,
-    "enable_opentracing": False,
-    "enable_prometheus_metrics": False,
-    "metrics_path": "/metrics/",
-}
+# Import comprehensive library defaults from defaults.py
+from .defaults import LIBRARY_DEFAULTS
 
 
 class SettingsProxy:

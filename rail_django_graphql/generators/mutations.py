@@ -32,6 +32,9 @@ class MutationError(graphene.ObjectType):
 
 from ..conf import get_mutation_generator_settings
 from ..core.settings import MutationGeneratorSettings
+from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
+from ..core.error_handling import get_error_handler
+from ..core.performance import get_query_optimizer
 from .introspector import MethodInfo, ModelIntrospector
 from .nested_operations import NestedOperationHandler
 from .types import TypeGenerator
@@ -41,6 +44,14 @@ class MutationGenerator:
     """
     Creates GraphQL mutations for Django models, supporting CRUD operations
     and custom method-based mutations.
+    
+    This class supports:
+    - CRUD operations (Create, Read, Update, Delete)
+    - Bulk operations for multiple records
+    - Nested operations for related models
+    - Security and authorization integration
+    - Input validation and error handling
+    - Performance optimization
     """
 
     def __init__(
@@ -59,11 +70,19 @@ class MutationGenerator:
         """
         self.type_generator = type_generator
         self.schema_name = schema_name
+        
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
-            self.settings = get_mutation_generator_settings(schema_name)
+            self.settings = MutationGeneratorSettings.from_schema(schema_name)
         else:
             self.settings = settings
+
+        # Initialize security and performance components
+        self.authentication_manager = get_auth_manager(schema_name)
+        self.authorization_manager = get_authz_manager(schema_name)
+        self.input_validator = get_input_validator(schema_name)
+        self.error_handler = get_error_handler(schema_name)
+        self.query_optimizer = get_query_optimizer(schema_name)
 
         # Pass mutation settings to type generator for nested relations configuration
         self.type_generator.mutation_settings = self.settings
