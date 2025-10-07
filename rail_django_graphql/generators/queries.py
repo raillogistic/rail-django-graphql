@@ -88,7 +88,7 @@ class QueryGenerator:
         """
         self.type_generator = type_generator
         self.schema_name = schema_name
-        
+
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
             self.settings = get_query_generator_settings(schema_name)

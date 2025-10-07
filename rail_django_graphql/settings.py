@@ -194,7 +194,7 @@ RAIL_DJANGO_GRAPHQL = {
     # ========================================
     # CONFIGURATION GÉNÉRALE DU SCHÉMA
     # ========================================
-    "SCHEMA_SETTINGS": {
+    "schema_settings": {
         # Répertoire de sortie pour les schémas générés
         "schema_output_dir": "generated_schema/",
         # Génération automatique du schéma GraphQL
@@ -233,7 +233,7 @@ RAIL_DJANGO_GRAPHQL = {
     # ========================================
     # CONFIGURATION DES REQUÊTES
     # ========================================
-    "QUERY_SETTINGS": {
+    "query_settings": {
         # Utiliser les connexions Relay pour la pagination
         "use_relay": False,
         # Activer la génération de filtres pour les requêtes
@@ -257,7 +257,7 @@ RAIL_DJANGO_GRAPHQL = {
     # ========================================
     # CONFIGURATION DES MUTATIONS
     # ========================================
-    "MUTATION_SETTINGS": {
+    "mutation_settings": {
         # Activer la génération de mutations de création
         "generate_create": True,
         "enable_create": True,
@@ -305,7 +305,7 @@ RAIL_DJANGO_GRAPHQL = {
             "Post": {
                 "category": True,  # Activer les opérations imbriquées pour category
                 "tags": {
-                    "enable_create": True,
+                    "enable_create": False,
                     "enable_update": False,
                 },
             },

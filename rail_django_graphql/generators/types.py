@@ -151,7 +151,7 @@ class TypeGenerator:
             excluded.update(self.settings.excluded_fields.get(model_name, []))
         elif isinstance(self.settings.excluded_fields, list):
             excluded.update(self.settings.excluded_fields)
-
+        print("qqqqqqqqq", excluded)
         return list(excluded)
 
     def _get_included_fields(self, model: Type[models.Model]) -> Optional[List[str]]:

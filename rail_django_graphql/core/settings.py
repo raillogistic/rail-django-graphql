@@ -2,14 +2,80 @@
 Settings module for Django GraphQL Auto-Generation.
 
 This module defines the configuration classes used to customize the behavior
-of the GraphQL schema generation process.
+of the GraphQL schema generation process with hierarchical settings loading.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
+from django.conf import settings as django_settings
 from django.db.models import Field
+
+
+def _merge_settings_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge multiple settings dictionaries with later ones taking precedence.
+
+    Args:
+        *dicts: Variable number of dictionaries to merge
+
+    Returns:
+        Dict[str, Any]: Merged dictionary
+    """
+    result = {}
+    for d in dicts:
+        if d:
+            result.update(d)
+    return result
+
+
+def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
+    """
+    Get settings from schema registry for a specific schema.
+
+    Args:
+        schema_name: Name of the schema
+
+    Returns:
+        Dict[str, Any]: Schema registry settings
+    """
+    try:
+        from .registry import schema_registry
+
+        schema_info = schema_registry.get_schema(schema_name)
+        return schema_info.settings if schema_info else {}
+    except (ImportError, AttributeError):
+        return {}
+
+
+def _get_global_settings(schema_name: str) -> Dict[str, Any]:
+    """
+    Get global settings from Django settings for a specific schema.
+
+    Args:
+        schema_name: Name of the schema
+
+    Returns:
+        Dict[str, Any]: Global settings for the schema
+    """
+    rail_settings = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
+    return rail_settings.get(schema_name, {})
+
+
+def _get_library_defaults() -> Dict[str, Any]:
+    """
+    Get library default settings.
+
+    Returns:
+        Dict[str, Any]: Library default settings
+    """
+    try:
+        from ..defaults import LIBRARY_DEFAULTS
+
+        return LIBRARY_DEFAULTS.copy()
+    except ImportError:
+        return {}
 
 
 @dataclass
@@ -42,6 +108,44 @@ class TypeGeneratorSettings:
     # Enable field descriptions
     generate_descriptions: bool = True
 
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "TypeGeneratorSettings":
+        """
+        Create TypeGeneratorSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            TypeGeneratorSettings: Configured settings instance
+        """
+        # Get settings from all sources
+        defaults = _get_library_defaults().get("type_generation_settings", {})
+        global_settings = _get_global_settings(schema_name).get(
+            "type_generation_settings", {}
+        )
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "type_generation_settings", {}
+        )
+
+        # Merge settings with proper priority
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings
+        )
+
+        # Filter to only include valid fields for this dataclass
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+
+        return cls(**filtered_settings)
+
 
 @dataclass
 class QueryGeneratorSettings:
@@ -73,6 +177,42 @@ class QueryGeneratorSettings:
 
     # Additional fields to use for lookups (e.g., slug, uuid)
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)
+
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "QueryGeneratorSettings":
+        """
+        Create QueryGeneratorSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            QueryGeneratorSettings: Configured settings instance
+        """
+        # Get settings from all sources
+        defaults = _get_library_defaults().get("query_settings", {})
+        global_settings = _get_global_settings(schema_name).get("query_settings", {})
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "query_settings", {}
+        )
+
+        # Merge settings with proper priority
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings
+        )
+
+        # Filter to only include valid fields for this dataclass
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+
+        return cls(**filtered_settings)
 
 
 @dataclass
@@ -121,6 +261,42 @@ class MutationGeneratorSettings:
     # NEW: Per-field configuration for nested relations (model.field -> bool)
     nested_field_config: Dict[str, Dict[str, bool]] = field(default_factory=dict)
 
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "MutationGeneratorSettings":
+        """
+        Create MutationGeneratorSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            MutationGeneratorSettings: Configured settings instance
+        """
+        # Get settings from all sources
+        defaults = _get_library_defaults().get("mutation_settings", {})
+        global_settings = _get_global_settings(schema_name).get("mutation_settings", {})
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "mutation_settings", {}
+        )
+
+        # Merge settings with proper priority
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings
+        )
+
+        # Filter to only include valid fields for this dataclass
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+
+        return cls(**filtered_settings)
+
 
 @dataclass
 class SchemaSettings:
@@ -146,6 +322,52 @@ class SchemaSettings:
 
     # Enable auto-camelcase for GraphQL schema
     auto_camelcase: bool = False
+
+    @classmethod
+    def from_schema(cls, schema_name: str) -> "SchemaSettings":
+        """
+        Create SchemaSettings with hierarchical loading.
+
+        Priority order:
+        1. Schema registry settings
+        2. Global Django settings
+        3. Library defaults
+
+        Args:
+            schema_name: Name of the schema
+
+        Returns:
+            SchemaSettings: Configured settings instance
+        """
+        # Get settings from all sources
+        defaults = _get_library_defaults().get("core_schema_settings", {})
+        global_settings = _get_global_settings(schema_name).get(
+            "core_schema_settings", {}
+        )
+        schema_settings = _get_schema_registry_settings(schema_name).get(
+            "core_schema_settings", {}
+        )
+
+        # Also check for direct schema-level settings (backward compatibility)
+        schema_registry_settings = _get_schema_registry_settings(schema_name)
+        direct_settings = {
+            k: v
+            for k, v in schema_registry_settings.items()
+            if k in cls.__dataclass_fields__
+        }
+
+        # Merge settings with proper priority
+        merged_settings = _merge_settings_dicts(
+            defaults, global_settings, schema_settings, direct_settings
+        )
+
+        # Filter to only include valid fields for this dataclass
+        valid_fields = set(cls.__dataclass_fields__.keys())
+        filtered_settings = {
+            k: v for k, v in merged_settings.items() if k in valid_fields
+        }
+
+        return cls(**filtered_settings)
 
 
 class GraphQLAutoConfig:

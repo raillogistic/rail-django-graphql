@@ -9,22 +9,22 @@ Ce module teste:
 - L'optimisation des performances de génération
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase
-from django.db import models
-from django.contrib.auth.models import User
 from typing import Dict, List, Optional, Type
+from unittest.mock import MagicMock, Mock, patch
 
 import graphene
-from graphene import ObjectType, String, Int, Boolean, DateTime, List as GrapheneList
+import pytest
+from django.contrib.auth.models import User
+from django.db import models
+from django.test import TestCase
+from graphene import Boolean, DateTime, Int, ObjectType, String
+from graphene import List as GrapheneList
 from graphene_django import DjangoObjectType
-
+from rail_django_graphql.generators.introspector import FieldInfo, ModelIntrospector
 from rail_django_graphql.generators.types import (
     TypeGenerator,
 )
-from rail_django_graphql.generators.introspector import ModelIntrospector, FieldInfo
-from test_app.models import Category, Tag, Post
+from test_app.models import Category, Post, Tag
 
 
 class TestTypeGenerator(TestCase):
@@ -45,6 +45,7 @@ class TestTypeGenerator(TestCase):
 
         # Test initialisation avec configuration
         from rail_django_graphql.core.settings import TypeGeneratorSettings
+
         settings_mock = TypeGeneratorSettings()
         generator_with_config = TypeGenerator(settings=settings_mock)
         self.assertIsNotNone(generator_with_config)
@@ -84,7 +85,9 @@ class TestTypeGenerator(TestCase):
     def test_field_type_conversion(self):
         """Test la conversion des types de champs Django vers GraphQL."""
         # Skip this test as get_graphql_type_for_field function doesn't exist
-        self.skipTest("get_graphql_type_for_field function not found in current implementation")
+        self.skipTest(
+            "get_graphql_type_for_field function not found in current implementation"
+        )
 
     def test_generate_type_with_relationships(self):
         """Test la génération de types avec des relations."""
@@ -125,8 +128,6 @@ class TestTypeGenerator(TestCase):
         for model, generated_type in generated_types.items():
             self.assertIsNotNone(generated_type)
             self.assertEqual(generated_type._meta.model, model)
-
-
 
     def test_nullable_fields_handling(self):
         """Test la gestion des champs nullable."""
@@ -207,8 +208,6 @@ class TestTypeGenerator(TestCase):
         # Vérifier le champ ManyToMany
         self.assertIn("tags", fields)
 
-
-
     def test_type_registry(self):
         """Test le registre des types générés."""
         # Générer plusieurs types
@@ -220,12 +219,6 @@ class TestTypeGenerator(TestCase):
         self.assertIsNotNone(category_type)
         self.assertIsNotNone(post_type)
         self.assertIsNotNone(tag_type)
-
-
-
-
-
-
 
 
 @pytest.mark.unit
@@ -292,8 +285,6 @@ class TestAdvancedTypeGeneration(TestCase):
     def setUp(self):
         """Configuration des tests."""
         self.type_generator = TypeGenerator()
-
-
 
     def test_field_description_generation(self):
         """Test la génération des descriptions de champs."""

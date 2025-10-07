@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # Import the new configuration system
 try:
     from ..defaults import LIBRARY_DEFAULTS, get_merged_settings
+
     NEW_CONFIG_AVAILABLE = True
 except ImportError:
     # Fallback for development
@@ -57,15 +58,17 @@ class ConfigLoader:
             Dictionary containing merged rail_django_graphql configuration
         """
         user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
-        
+
         # Get environment from Django settings or default to 'development'
-        environment = getattr(settings, 'ENVIRONMENT', 'development')
-        
+        environment = getattr(settings, "ENVIRONMENT", "development")
+
         # Merge with defaults using the new hierarchical structure
         return get_merged_settings(user_settings, environment=environment)
 
     @staticmethod
-    def get_schema_specific_settings(schema_name: str, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_schema_specific_settings(
+        schema_name: str, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get schema-specific settings for a given schema.
 
@@ -77,10 +80,12 @@ class ConfigLoader:
             Dictionary containing schema-specific settings
         """
         if environment is None:
-            environment = getattr(settings, 'ENVIRONMENT', 'development')
-            
+            environment = getattr(settings, "ENVIRONMENT", "development")
+
         user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
-        return get_merged_settings(user_settings, schema_name=schema_name, environment=environment)
+        return get_merged_settings(
+            user_settings, schema_name=schema_name, environment=environment
+        )
 
     @staticmethod
     def get_global_settings(environment: Optional[str] = None) -> Dict[str, Any]:
@@ -94,13 +99,15 @@ class ConfigLoader:
             Dictionary containing global settings
         """
         if environment is None:
-            environment = getattr(settings, 'ENVIRONMENT', 'development')
-            
+            environment = getattr(settings, "ENVIRONMENT", "development")
+
         user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
         return get_merged_settings(user_settings, environment=environment)
 
     @staticmethod
-    def get_core_schema_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_core_schema_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get core schema settings.
 
@@ -111,11 +118,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing core schema settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
-        return config.get("CORE_SCHEMA_SETTINGS", {})
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
+        return config.get("CORE_schema_settings", {})
 
     @staticmethod
-    def get_query_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_query_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get query settings.
 
@@ -126,11 +139,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing query settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
-        return config.get("QUERY_SETTINGS", {})
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
+        return config.get("query_settings", {})
 
     @staticmethod
-    def get_mutation_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_mutation_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get mutation settings.
 
@@ -141,11 +160,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing mutation settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
-        return config.get("MUTATION_SETTINGS", {})
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
+        return config.get("mutation_settings", {})
 
     @staticmethod
-    def get_type_generation_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_type_generation_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get type generation settings.
 
@@ -156,11 +181,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing type generation settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
-        return config.get("TYPE_GENERATION_SETTINGS", {})
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
+        return config.get("type_generation_settings", {})
 
     @staticmethod
-    def get_performance_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_performance_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get performance settings.
 
@@ -171,11 +202,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing performance settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("PERFORMANCE_SETTINGS", {})
 
     @staticmethod
-    def get_security_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_security_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get security settings.
 
@@ -186,11 +223,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing security settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("SECURITY_SETTINGS", {})
 
     @staticmethod
-    def get_error_handling_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_error_handling_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get error handling settings.
 
@@ -201,11 +244,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing error handling settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("ERROR_HANDLING_SETTINGS", {})
 
     @staticmethod
-    def get_caching_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_caching_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get caching settings.
 
@@ -216,11 +265,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing caching settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("CACHING_SETTINGS", {})
 
     @staticmethod
-    def get_file_upload_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_file_upload_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get file upload settings.
 
@@ -231,11 +286,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing file upload settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("FILE_UPLOAD_SETTINGS", {})
 
     @staticmethod
-    def get_monitoring_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_monitoring_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get monitoring settings.
 
@@ -246,11 +307,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing monitoring settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("MONITORING_SETTINGS", {})
 
     @staticmethod
-    def get_development_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_development_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get development settings.
 
@@ -261,11 +328,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing development settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("DEVELOPMENT_SETTINGS", {})
 
     @staticmethod
-    def get_schema_registry_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_schema_registry_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get schema registry settings.
 
@@ -276,11 +349,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing schema registry settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("SCHEMA_REGISTRY_SETTINGS", {})
 
     @staticmethod
-    def get_middleware_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_middleware_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get middleware settings.
 
@@ -291,11 +370,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing middleware settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("MIDDLEWARE_SETTINGS", {})
 
     @staticmethod
-    def get_extension_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_extension_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get extension settings.
 
@@ -306,11 +391,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing extension settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("EXTENSION_SETTINGS", {})
 
     @staticmethod
-    def get_internationalization_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_internationalization_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get internationalization settings.
 
@@ -321,11 +412,17 @@ class ConfigLoader:
         Returns:
             Dictionary containing internationalization settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("INTERNATIONALIZATION_SETTINGS", {})
 
     @staticmethod
-    def get_testing_settings(schema_name: Optional[str] = None, environment: Optional[str] = None) -> Dict[str, Any]:
+    def get_testing_settings(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get testing settings.
 
@@ -336,14 +433,18 @@ class ConfigLoader:
         Returns:
             Dictionary containing testing settings
         """
-        config = ConfigLoader.get_schema_specific_settings(schema_name, environment) if schema_name else ConfigLoader.get_global_settings(environment)
+        config = (
+            ConfigLoader.get_schema_specific_settings(schema_name, environment)
+            if schema_name
+            else ConfigLoader.get_global_settings(environment)
+        )
         return config.get("TESTING_SETTINGS", {})
 
     @staticmethod
     def validate_configuration(
-        config: Optional[Dict[str, Any]] = None, 
+        config: Optional[Dict[str, Any]] = None,
         schema_name: Optional[str] = None,
-        environment: Optional[str] = None
+        environment: Optional[str] = None,
     ) -> bool:
         """
         Validate configuration settings using the new validation system.
@@ -359,12 +460,15 @@ class ConfigLoader:
         try:
             if config is None:
                 if schema_name:
-                    config = ConfigLoader.get_schema_specific_settings(schema_name, environment)
+                    config = ConfigLoader.get_schema_specific_settings(
+                        schema_name, environment
+                    )
                 else:
                     config = ConfigLoader.get_rail_django_graphql_settings()
 
             # Use the new validation system from defaults.py
             from ..defaults import validate_settings
+
             validate_settings(config)
             return True
         except Exception as e:
@@ -372,7 +476,9 @@ class ConfigLoader:
             return False
 
     @staticmethod
-    def debug_configuration(schema_name: Optional[str] = None, environment: Optional[str] = None) -> None:
+    def debug_configuration(
+        schema_name: Optional[str] = None, environment: Optional[str] = None
+    ) -> None:
         """
         Print debug information about the current configuration.
 
@@ -387,19 +493,31 @@ class ConfigLoader:
             config = ConfigLoader.get_rail_django_graphql_settings()
             print("=== Global rail_django_graphql Configuration Debug ===")
 
-        print(f"Environment: {environment or getattr(settings, 'ENVIRONMENT', 'development')}")
+        print(
+            f"Environment: {environment or getattr(settings, 'ENVIRONMENT', 'development')}"
+        )
         print(f"Full config keys: {list(config.keys())}")
 
         # Debug all new settings sections
         sections = [
-            "CORE_SCHEMA_SETTINGS", "QUERY_SETTINGS", "MUTATION_SETTINGS", 
-            "TYPE_GENERATION_SETTINGS", "PERFORMANCE_SETTINGS", "SECURITY_SETTINGS",
-            "ERROR_HANDLING_SETTINGS", "CACHING_SETTINGS", "FILE_UPLOAD_SETTINGS",
-            "MONITORING_SETTINGS", "DEVELOPMENT_SETTINGS", "SCHEMA_REGISTRY_SETTINGS",
-            "MIDDLEWARE_SETTINGS", "EXTENSION_SETTINGS", "INTERNATIONALIZATION_SETTINGS",
-            "TESTING_SETTINGS"
+            "CORE_schema_settings",
+            "query_settings",
+            "mutation_settings",
+            "type_generation_settings",
+            "PERFORMANCE_SETTINGS",
+            "SECURITY_SETTINGS",
+            "ERROR_HANDLING_SETTINGS",
+            "CACHING_SETTINGS",
+            "FILE_UPLOAD_SETTINGS",
+            "MONITORING_SETTINGS",
+            "DEVELOPMENT_SETTINGS",
+            "SCHEMA_REGISTRY_SETTINGS",
+            "MIDDLEWARE_SETTINGS",
+            "EXTENSION_SETTINGS",
+            "INTERNATIONALIZATION_SETTINGS",
+            "TESTING_SETTINGS",
         ]
-        
+
         for section in sections:
             if section in config:
                 print(f"{section}: {len(config[section])} settings")
@@ -422,7 +540,9 @@ def get_rail_django_graphql_settings_legacy() -> Dict[str, Any]:
 
 
 # Helper functions for loading specific settings types
-def load_mutation_settings_from_config(config: Dict[str, Any]) -> "MutationGeneratorSettings":
+def load_mutation_settings_from_config(
+    config: Dict[str, Any],
+) -> "MutationGeneratorSettings":
     """
     Load MutationGeneratorSettings from configuration dictionary.
 
@@ -435,6 +555,7 @@ def load_mutation_settings_from_config(config: Dict[str, Any]) -> "MutationGener
     # Import here to avoid circular imports
     try:
         from .settings import MutationGeneratorSettings
+
         return MutationGeneratorSettings.from_dict(config)
     except ImportError:
         logger.warning("MutationGeneratorSettings not available")
@@ -454,6 +575,7 @@ def load_type_settings_from_config(config: Dict[str, Any]) -> "TypeGeneratorSett
     # Import here to avoid circular imports
     try:
         from .settings import TypeGeneratorSettings
+
         return TypeGeneratorSettings.from_dict(config)
     except ImportError:
         logger.warning("TypeGeneratorSettings not available")
@@ -473,6 +595,7 @@ def load_schema_settings_from_config(config: Dict[str, Any]) -> "SchemaSettings"
     # Import here to avoid circular imports
     try:
         from .settings import SchemaSettings
+
         return SchemaSettings.from_dict(config)
     except ImportError:
         logger.warning("SchemaSettings not available")
@@ -500,25 +623,30 @@ def debug_configuration_legacy() -> None:
     config = get_rail_django_graphql_settings_legacy()
     print("=== Legacy rail_django_graphql Configuration Debug ===")
     print(f"Full legacy config: {config}")
-    
+
     # Debug legacy sections
-    legacy_sections = ["MUTATION_SETTINGS", "TYPE_SETTINGS", "SCHEMA_SETTINGS"]
+    legacy_sections = ["mutation_settings", "TYPE_SETTINGS", "schema_settings"]
     for section in legacy_sections:
         if section in config:
             print(f"{section} found: {config[section]}")
         else:
             print(f"{section} not found in legacy configuration")
-    
+
     print("=== End Legacy Configuration Debug ===")
 
 
 # Additional helper functions for the new configuration structure
-def get_setting_value(key: str, default: Any = None, schema_name: Optional[str] = None, environment: Optional[str] = None) -> Any:
+def get_setting_value(
+    key: str,
+    default: Any = None,
+    schema_name: Optional[str] = None,
+    environment: Optional[str] = None,
+) -> Any:
     """
     Get a specific setting value with hierarchical lookup.
 
     Args:
-        key: Setting key (supports dot notation like 'MUTATION_SETTINGS.enable_create')
+        key: Setting key (supports dot notation like 'mutation_settings.enable_create')
         default: Default value if setting not found
         schema_name: Optional schema name for schema-specific settings
         environment: Environment name
@@ -531,7 +659,7 @@ def get_setting_value(key: str, default: Any = None, schema_name: Optional[str] 
             config = ConfigLoader.get_schema_specific_settings(schema_name, environment)
         else:
             config = ConfigLoader.get_rail_django_graphql_settings()
-        
+
         # Support dot notation for nested dict
         if "." in key:
             keys = key.split(".")

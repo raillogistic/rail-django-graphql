@@ -45,7 +45,7 @@ GRAPHENE = {
 
 # Rail Django GraphQL Settings
 RAIL_DJANGO_GRAPHQL = {
-    'SCHEMA_SETTINGS': {
+    'schema_settings': {
         'auto_generate_schema': True,
         'enable_introspection': True,
     },
@@ -102,31 +102,33 @@ class Comment(models.Model):
 # 3. GraphQL Schema Creation
 import graphene
 from rail_django_graphql import (
-    TypeGenerator,
-    QueryGenerator,
     MutationGenerator,
-    SchemaBuilder
+    QueryGenerator,
+    SchemaBuilder,
+    TypeGenerator,
 )
 
 # Assuming we have the models imported
 # from blog.models import Category, Post, Comment
 # from django.contrib.auth.models import User
 
+
 def create_basic_schema():
     """
     Create a basic GraphQL schema using rail-django-graphql
     """
-    
+
     # Generate GraphQL types automatically from Django models
     # UserType = TypeGenerator.from_model(User)
     # CategoryType = TypeGenerator.from_model(Category)
     # PostType = TypeGenerator.from_model(Post)
     # CommentType = TypeGenerator.from_model(Comment)
-    
+
     class Query(graphene.ObjectType):
         """
         GraphQL Query root with auto-generated queries
         """
+
         # Auto-generated list and detail queries
         # users = QueryGenerator.list_field(User)
         # user = QueryGenerator.detail_field(User)
@@ -136,46 +138,48 @@ def create_basic_schema():
         # post = QueryGenerator.detail_field(Post)
         # comments = QueryGenerator.list_field(Comment)
         # comment = QueryGenerator.detail_field(Comment)
-        
+
         # Custom queries
         # published_posts = graphene.List(PostType)
         # my_posts = graphene.List(PostType)
-        
+
         # def resolve_published_posts(self, info):
         #     return Post.objects.filter(est_publie=True)
-        
+
         # def resolve_my_posts(self, info):
         #     if info.context.user.is_authenticated:
         #         return Post.objects.filter(auteur_article=info.context.user)
         #     return Post.objects.none()
         pass
-    
+
     class Mutation(graphene.ObjectType):
         """
         GraphQL Mutation root with auto-generated mutations
         """
+
         # Auto-generated CRUD mutations
         # create_category = MutationGenerator.create_mutation(Category)
         # update_category = MutationGenerator.update_mutation(Category)
         # delete_category = MutationGenerator.delete_mutation(Category)
-        
+
         # create_post = MutationGenerator.create_mutation(Post)
         # update_post = MutationGenerator.update_mutation(Post)
         # delete_post = MutationGenerator.delete_mutation(Post)
-        
+
         # create_comment = MutationGenerator.create_mutation(Comment)
         # update_comment = MutationGenerator.update_mutation(Comment)
         # delete_comment = MutationGenerator.delete_mutation(Comment)
         pass
-    
+
     # Build the complete schema
     schema = SchemaBuilder.build(
         query=Query,
         mutation=Mutation,
-        auto_discover=True  # Automatically discover and include all models
+        auto_discover=True,  # Automatically discover and include all models
     )
-    
+
     return schema
+
 
 # 4. URL Configuration
 URL_CONFIGURATION = """

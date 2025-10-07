@@ -61,6 +61,7 @@ make html
 
 # Example Django Project Setup with GitHub Version
 import os
+
 import django
 from django.conf import settings
 
@@ -68,91 +69,91 @@ from django.conf import settings
 if not settings.configured:
     settings.configure(
         DEBUG=True,
-        SECRET_KEY='development-key-not-for-production',
+        SECRET_KEY="development-key-not-for-production",
         DATABASES={
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': ':memory:',
+            "default": {
+                "ENGINE": "django.db.backends.sqlite3",
+                "NAME": ":memory:",
             }
         },
         INSTALLED_APPS=[
-            'django.contrib.auth',
-            'django.contrib.contenttypes',
-            'django.contrib.sessions',
-            'django.contrib.messages',
-            'django.contrib.staticfiles',
-            'graphene_django',
-            'rail_django_graphql',
-            'myapp',  # Your app
+            "django.contrib.auth",
+            "django.contrib.contenttypes",
+            "django.contrib.sessions",
+            "django.contrib.messages",
+            "django.contrib.staticfiles",
+            "graphene_django",
+            "rail_django_graphql",
+            "myapp",  # Your app
         ],
         MIDDLEWARE=[
-            'django.middleware.security.SecurityMiddleware',
-            'django.contrib.sessions.middleware.SessionMiddleware',
-            'django.middleware.common.CommonMiddleware',
-            'django.middleware.csrf.CsrfViewMiddleware',
-            'django.contrib.auth.middleware.AuthenticationMiddleware',
-            'django.contrib.messages.middleware.MessageMiddleware',
-            'django.middleware.clickjacking.XFrameOptionsMiddleware',
+            "django.middleware.security.SecurityMiddleware",
+            "django.contrib.sessions.middleware.SessionMiddleware",
+            "django.middleware.common.CommonMiddleware",
+            "django.middleware.csrf.CsrfViewMiddleware",
+            "django.contrib.auth.middleware.AuthenticationMiddleware",
+            "django.contrib.messages.middleware.MessageMiddleware",
+            "django.middleware.clickjacking.XFrameOptionsMiddleware",
         ],
-        ROOT_URLCONF='myproject.urls',
+        ROOT_URLCONF="myproject.urls",
         TEMPLATES=[
             {
-                'BACKEND': 'django.template.backends.django.DjangoTemplates',
-                'DIRS': [],
-                'APP_DIRS': True,
-                'OPTIONS': {
-                    'context_processors': [
-                        'django.template.context_processors.debug',
-                        'django.template.context_processors.request',
-                        'django.contrib.auth.context_processors.auth',
-                        'django.contrib.messages.context_processors.messages',
+                "BACKEND": "django.template.backends.django.DjangoTemplates",
+                "DIRS": [],
+                "APP_DIRS": True,
+                "OPTIONS": {
+                    "context_processors": [
+                        "django.template.context_processors.debug",
+                        "django.template.context_processors.request",
+                        "django.contrib.auth.context_processors.auth",
+                        "django.contrib.messages.context_processors.messages",
                     ],
                 },
             },
         ],
         # Rail Django GraphQL Configuration
         RAIL_DJANGO_GRAPHQL={
-            'SCHEMA_SETTINGS': {
-                'auto_generate_schema': True,
-                'enable_introspection': True,  # Enable for development
+            "schema_settings": {
+                "auto_generate_schema": True,
+                "enable_introspection": True,  # Enable for development
             },
-            'SECURITY': {
-                'max_query_depth': 10,
+            "SECURITY": {
+                "max_query_depth": 10,
             },
-            'PERFORMANCE': {
-                'enable_query_optimization': True,
-                'enable_dataloader': True,
+            "PERFORMANCE": {
+                "enable_query_optimization": True,
+                "enable_dataloader": True,
             },
-            'DEVELOPMENT': {
-                'enable_debugging': True,      # Enable for development
+            "DEVELOPMENT": {
+                "enable_debugging": True,  # Enable for development
             },
         },
         GRAPHENE={
-            'SCHEMA': 'myproject.schema.schema',
-            'MIDDLEWARE': [
-                'rail_django_graphql.middleware.AuthenticationMiddleware',
-                'rail_django_graphql.middleware.DebuggingMiddleware',
+            "SCHEMA": "myproject.schema.schema",
+            "MIDDLEWARE": [
+                "rail_django_graphql.middleware.AuthenticationMiddleware",
+                "rail_django_graphql.middleware.DebuggingMiddleware",
             ],
         },
         USE_TZ=True,
         LOGGING={
-            'version': 1,
-            'disable_existing_loggers': False,
-            'handlers': {
-                'console': {
-                    'class': 'logging.StreamHandler',
+            "version": 1,
+            "disable_existing_loggers": False,
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
                 },
             },
-            'loggers': {
-                'rail_django_graphql': {
-                    'handlers': ['console'],
-                    'level': 'DEBUG',
-                    'propagate': True,
+            "loggers": {
+                "rail_django_graphql": {
+                    "handlers": ["console"],
+                    "level": "DEBUG",
+                    "propagate": True,
                 },
-                'graphql': {
-                    'handlers': ['console'],
-                    'level': 'DEBUG',
-                    'propagate': True,
+                "graphql": {
+                    "handlers": ["console"],
+                    "level": "DEBUG",
+                    "propagate": True,
                 },
             },
         },
@@ -161,56 +162,62 @@ if not settings.configured:
 django.setup()
 
 # Example models for testing
-from django.db import models
 from django.contrib.auth.models import User
+from django.db import models
+
 
 class Category(models.Model):
     nom_categorie = models.CharField(max_length=100, verbose_name="Nom de la catégorie")
     description_categorie = models.TextField(blank=True, verbose_name="Description")
-    date_creation = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+    date_creation = models.DateTimeField(
+        auto_now_add=True, verbose_name="Date de création"
+    )
+
     class Meta:
         verbose_name = "Catégorie"
         verbose_name_plural = "Catégories"
-    
+
     def __str__(self):
         return self.nom_categorie
+
 
 class Post(models.Model):
     titre_article = models.CharField(max_length=200, verbose_name="Titre de l'article")
     contenu_article = models.TextField(verbose_name="Contenu de l'article")
     auteur_article = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        related_name='posts',
-        verbose_name="Auteur"
+        User, on_delete=models.CASCADE, related_name="posts", verbose_name="Auteur"
     )
     categorie_article = models.ForeignKey(
-        Category, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        related_name='posts',
-        verbose_name="Catégorie"
+        related_name="posts",
+        verbose_name="Catégorie",
     )
-    date_publication = models.DateTimeField(auto_now_add=True, verbose_name="Date de publication")
-    date_modification = models.DateTimeField(auto_now=True, verbose_name="Date de modification")
+    date_publication = models.DateTimeField(
+        auto_now_add=True, verbose_name="Date de publication"
+    )
+    date_modification = models.DateTimeField(
+        auto_now=True, verbose_name="Date de modification"
+    )
     est_publie = models.BooleanField(default=False, verbose_name="Est publié")
-    
+
     class Meta:
         verbose_name = "Article"
         verbose_name_plural = "Articles"
-        ordering = ['-date_publication']
-    
+        ordering = ["-date_publication"]
+
     def __str__(self):
         return self.titre_article
+
 
 # GitHub Development Workflow Example
 def github_development_workflow():
     """
     Example of a typical development workflow with GitHub.
     """
-    
+
     workflow_steps = """
     # GitHub Development Workflow
     
@@ -265,66 +272,67 @@ def github_development_workflow():
     git pull upstream main
     git branch -d feature/new-awesome-feature
     """
-    
+
     return workflow_steps
+
 
 # Testing with GitHub Version
 def test_github_installation():
     """
     Test the GitHub installation of rail-django-graphql.
     """
-    
+
     try:
         # Import the library
         import rail_django_graphql
-        print(f"✅ Successfully imported rail_django_graphql version {rail_django_graphql.__version__}")
-        
+
+        print(
+            f"✅ Successfully imported rail_django_graphql version {rail_django_graphql.__version__}"
+        )
+
         # Test basic functionality
-        from rail_django_graphql import TypeGenerator, QueryGenerator, MutationGenerator
-        
+        from rail_django_graphql import MutationGenerator, QueryGenerator, TypeGenerator
+
         # Generate types from models
         CategoryType = TypeGenerator.from_model(Category)
         PostType = TypeGenerator.from_model(Post)
-        
+
         print("✅ Successfully generated GraphQL types")
-        
+
         # Test query generation
         category_queries = QueryGenerator.from_model(Category)
         post_queries = QueryGenerator.from_model(Post)
-        
+
         print("✅ Successfully generated GraphQL queries")
-        
+
         # Test mutation generation
         category_mutations = MutationGenerator.from_model(Category)
         post_mutations = MutationGenerator.from_model(Post)
-        
+
         print("✅ Successfully generated GraphQL mutations")
-        
+
         # Test schema building
-        from rail_django_graphql import SchemaBuilder
         import graphene
-        
+        from rail_django_graphql import SchemaBuilder
+
         class Query(graphene.ObjectType):
-            categories = category_queries['list']
-            category = category_queries['detail']
-            posts = post_queries['list']
-            post = post_queries['detail']
-        
+            categories = category_queries["list"]
+            category = category_queries["detail"]
+            posts = post_queries["list"]
+            post = post_queries["detail"]
+
         class Mutation(graphene.ObjectType):
-            create_category = category_mutations['create']
-            update_category = category_mutations['update']
-            delete_category = category_mutations['delete']
-            create_post = post_mutations['create']
-            update_post = post_mutations['update']
-            delete_post = post_mutations['delete']
-        
-        schema = SchemaBuilder.build(
-            query=Query,
-            mutation=Mutation
-        )
-        
+            create_category = category_mutations["create"]
+            update_category = category_mutations["update"]
+            delete_category = category_mutations["delete"]
+            create_post = post_mutations["create"]
+            update_post = post_mutations["update"]
+            delete_post = post_mutations["delete"]
+
+        schema = SchemaBuilder.build(query=Query, mutation=Mutation)
+
         print("✅ Successfully built GraphQL schema")
-        
+
         # Test introspection
         introspection_query = """
         query IntrospectionQuery {
@@ -336,7 +344,7 @@ def test_github_installation():
             }
         }
         """
-        
+
         result = schema.execute(introspection_query)
         if not result.errors:
             print("✅ Schema introspection successful")
@@ -345,18 +353,21 @@ def test_github_installation():
             print("❌ Schema introspection failed")
             for error in result.errors:
                 print(f"   Error: {error}")
-        
+
         return True
-        
+
     except ImportError as e:
         print(f"❌ Failed to import rail_django_graphql: {e}")
         print("   Make sure you have installed it from GitHub:")
-        print("   pip install git+https://github.com/raillogistic/rail-django-graphql.git")
+        print(
+            "   pip install git+https://github.com/raillogistic/rail-django-graphql.git"
+        )
         return False
-        
+
     except Exception as e:
         print(f"❌ Error testing GitHub installation: {e}")
         return False
+
 
 # Contributing Guidelines Example
 CONTRIBUTING_EXAMPLE = """
@@ -460,23 +471,23 @@ Before submitting a PR, make sure:
 if __name__ == "__main__":
     print("Rail Django GraphQL - GitHub Installation Example")
     print("=" * 55)
-    
+
     print("\n📦 Installation Options:")
     print(GITHUB_INSTALLATION)
-    
+
     print("\n🛠️ Development Setup:")
     print(DEVELOPMENT_SETUP)
-    
+
     print("\n🔄 Development Workflow:")
     print(github_development_workflow())
-    
+
     print("\n🧪 Testing Installation:")
     success = test_github_installation()
-    
+
     if success:
         print("\n✅ All tests passed! GitHub installation is working correctly.")
     else:
         print("\n❌ Some tests failed. Please check the installation.")
-    
+
     print("\n📝 Contributing Guidelines:")
     print(CONTRIBUTING_EXAMPLE)

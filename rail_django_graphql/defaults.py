@@ -92,7 +92,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # }
     "mutation_settings": {
         # Enable create mutations
-        "generate_create": True,
+        "generate_create": False,
         # Enable update mutations
         "generate_update": True,
         # Enable delete mutations
@@ -100,7 +100,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         # Enable bulk mutations
         "generate_bulk": False,
         # Enable create mutations (alias for generate_create)
-        "enable_create": True,
+        "enable_create": False,
         # Enable update mutations (alias for generate_update)
         "enable_update": True,
         # Enable delete mutations (alias for generate_delete)
@@ -121,7 +121,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "nested_field_config": {},
     },
     # ========================================
-    # Type Generation Settings (DEPRECATED - Use TYPE_GENERATION_SETTINGS)
+    # Type Generation Settings (DEPRECATED - Use type_generation_settings)
     # ========================================
     # "TYPE_SETTINGS": {
     #     "ENABLE_AUTO_CAMEL_CASE": True,
@@ -1080,26 +1080,26 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
 SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "admin": {
         "AUTHENTICATION_REQUIRED": True,
-        "ENABLE_INTROSPECTION": False,
+        "enable_introspection": False,
         "ENABLE_GRAPHIQL": False,
         "PERMISSION_CLASSES": ["rail_django_graphql.permissions.IsAdminUser"],
     },
     "public": {
         "AUTHENTICATION_REQUIRED": False,
-        "ENABLE_INTROSPECTION": True,
+        "enable_introspection": True,
         "ENABLE_GRAPHIQL": True,
-        "QUERY_SETTINGS": {
+        "query_settings": {
             "default_page_size": 10,
         },
     },
     "api": {
         "AUTHENTICATION_REQUIRED": True,
-        "ENABLE_INTROSPECTION": False,
+        "enable_introspection": False,
         "ENABLE_GRAPHIQL": False,
     },
     "internal": {
         "AUTHENTICATION_REQUIRED": True,
-        "ENABLE_INTROSPECTION": False,
+        "enable_introspection": False,
     },
 }
 
@@ -1109,15 +1109,15 @@ SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
 ENVIRONMENT_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "development": {
         "ENABLE_GRAPHIQL": True,
-        "ENABLE_INTROSPECTION": True,
+        "enable_introspection": True,
     },
     "testing": {
         "ENABLE_GRAPHIQL": False,
-        "ENABLE_INTROSPECTION": True,
+        "enable_introspection": True,
     },
     "production": {
         "ENABLE_GRAPHIQL": False,
-        "ENABLE_INTROSPECTION": False,
+        "enable_introspection": False,
     },
 }
 
@@ -1249,14 +1249,14 @@ def validate_settings(settings: Dict[str, Any]) -> List[str]:
     errors = []
 
     # Validate required settings exist
-    required_settings = ["DEFAULT_SCHEMA", "SCHEMA_SETTINGS"]
+    required_settings = ["DEFAULT_SCHEMA", "schema_settings"]
     for setting in required_settings:
         if setting not in settings:
             errors.append(f"Required setting '{setting}' is missing")
 
     # Validate numeric ranges for dataclass-defined settings
-    if "QUERY_SETTINGS" in settings:
-        query_settings = settings["QUERY_SETTINGS"]
+    if "query_settings" in settings:
+        query_settings = settings["query_settings"]
 
         if (
             "default_page_size" in query_settings

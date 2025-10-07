@@ -9,25 +9,24 @@ Ce module teste:
 - Les performances des endpoints
 """
 
-import pytest
 import json
+from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, patch
-from django.test import TestCase, Client as DjangoClient
-from django.contrib.auth.models import User, Group, Permission
-from django.contrib.contenttypes.models import ContentType
-from django.test.utils import override_settings
-from django.urls import reverse
-from django.conf import settings
-from typing import Dict, List, Optional, Any
 
 import graphene
+import pytest
+from django.conf import settings
+from django.contrib.auth.models import Group, Permission, User
+from django.contrib.contenttypes.models import ContentType
+from django.test import Client as DjangoClient
+from django.test import TestCase
+from django.test.utils import override_settings
+from django.urls import reverse
 from graphene import Schema
 from graphene.test import Client
 from graphene_django.views import GraphQLView
-
 from rail_django_graphql.core.schema import SchemaBuilder
 from rail_django_graphql.middleware import GraphQLPerformanceMiddleware
-
 
 # Configuration de test pour les endpoints
 TEST_GRAPHQL_SETTINGS = {
@@ -38,7 +37,7 @@ TEST_GRAPHQL_SETTINGS = {
         ],
     },
     "RAIL_DJANGO_GRAPHQL": {
-        "SCHEMA_SETTINGS": {
+        "schema_settings": {
             "authentication_required": False,
             "permission_classes": [],
         },
@@ -665,7 +664,9 @@ class TestAPIEndpointsAdvanced:
 class TestQuery(graphene.ObjectType):
     hello = graphene.String(default_value="Hi!")
 
+
 class TestMutation(graphene.ObjectType):
     pass
+
 
 test_schema = Schema(query=TestQuery, mutation=TestMutation)

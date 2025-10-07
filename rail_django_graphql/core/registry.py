@@ -117,8 +117,24 @@ class SchemaRegistry:
                 auto_discover=modified_kwargs.get("auto_discover", auto_discover),
                 enabled=modified_kwargs.get("enabled", enabled),
             )
-
             self._schemas[name] = schema_info
+
+            # Configure schema settings in Django settings for hierarchical access
+            schema_settings = modified_kwargs.get("settings", settings) or {}
+            if schema_settings:
+                from ..conf import configure_schema_settings
+
+                # Flatten nested settings structure for configure_schema_settings
+                flattened_settings = {}
+                for key, value in schema_settings.items():
+                    if isinstance(value, dict):
+                        # If value is a dict, add its contents directly to flattened_settings
+                        flattened_settings.update(value)
+                    else:
+                        # If value is not a dict, add it as-is
+                        flattened_settings[key] = value
+                configure_schema_settings(name, **flattened_settings)
+
             logger.info(f"Registered schema: {name}")
 
             # Run post-registration hooks
@@ -250,7 +266,11 @@ class SchemaRegistry:
 
                     # Get all valid SchemaSettings fields
                     from .settings import SchemaSettings
-                    valid_schema_fields = {field.name for field in SchemaSettings.__dataclass_fields__.values()}
+
+                    valid_schema_fields = {
+                        field.name
+                        for field in SchemaSettings.__dataclass_fields__.values()
+                    }
 
                     # Promote top-level library flags to uppercase for SettingsProxy
                     for key, value in schema_info.settings.items():
@@ -261,13 +281,13 @@ class SchemaRegistry:
                         # Collect all valid SchemaSettings fields
                         elif key in valid_schema_fields:
                             schema_settings_overrides[key] = value
-                        # Handle nested SCHEMA_SETTINGS (legacy support)
-                        elif key == "SCHEMA_SETTINGS" and isinstance(value, dict):
+                        # Handle nested schema_settings (legacy support)
+                        elif key == "schema_settings" and isinstance(value, dict):
                             schema_settings_overrides.update(value)
 
                     # Attach schema-level overrides if any
                     if schema_settings_overrides:
-                        overrides["SCHEMA_SETTINGS"] = schema_settings_overrides
+                        overrides["schema_settings"] = schema_settings_overrides
 
                     if overrides:
                         # Register overrides for this schema so SettingsProxy can resolve them
@@ -276,15 +296,20 @@ class SchemaRegistry:
                 # Retrieve the resolved settings proxy for this schema
                 settings_proxy = get_schema_settings(name)
 
-                # Build a concrete SchemaSettings dataclass from nested SCHEMA_SETTINGS
-                schema_settings_dict = settings_proxy.get("SCHEMA_SETTINGS", {})
+                # Build a concrete SchemaSettings dataclass from nested schema_settings
+                schema_settings_dict = settings_proxy.get("schema_settings", {})
                 schema_settings = SchemaSettings(**(schema_settings_dict or {}))
 
-                # Create raw settings dictionary from the proxy with the actual SCHEMA_SETTINGS
-                raw_settings = {"SCHEMA_SETTINGS": schema_settings_dict}
+                # Create raw settings dictionary from the proxy with the actual schema_settings
+                raw_settings = {"schema_settings": schema_settings_dict}
 
                 # Create schema builder with a proper dataclass settings instance and raw settings
-                builder = SchemaBuilder(settings=schema_settings, schema_name=name, raw_settings=raw_settings, registry=self)
+                builder = SchemaBuilder(
+                    settings=schema_settings,
+                    schema_name=name,
+                    raw_settings=raw_settings,
+                    registry=self,
+                )
                 self._schema_builders[name] = builder
 
             except ImportError as e:
@@ -539,29 +564,35 @@ class SchemaRegistry:
         if schema_info.models:
             model_names = set()
             for model_spec in schema_info.models:
-                if '.' in model_spec:
+                if "." in model_spec:
                     # Full model path like "blog.Post"
-                    app_label, model_name = model_spec.split('.', 1)
+                    app_label, model_name = model_spec.split(".", 1)
                     model_names.add(model_name.lower())
                 else:
                     # Just model name like "Post"
                     model_names.add(model_spec.lower())
-            
-            models_list = [m for m in models_list if m._meta.model_name.lower() in model_names]
+
+            models_list = [
+                m for m in models_list if m._meta.model_name.lower() in model_names
+            ]
 
         # Exclude models if specified
         if schema_info.exclude_models:
             exclude_names = set()
             for model_spec in schema_info.exclude_models:
-                if '.' in model_spec:
+                if "." in model_spec:
                     # Full model path like "blog.Comment"
-                    app_label, model_name = model_spec.split('.', 1)
+                    app_label, model_name = model_spec.split(".", 1)
                     exclude_names.add(model_name.lower())
                 else:
                     # Just model name like "Comment"
                     exclude_names.add(model_spec.lower())
-            
-            models_list = [m for m in models_list if m._meta.model_name.lower() not in exclude_names]
+
+            models_list = [
+                m
+                for m in models_list
+                if m._meta.model_name.lower() not in exclude_names
+            ]
 
         return models_list
 

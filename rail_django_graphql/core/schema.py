@@ -65,17 +65,16 @@ class SchemaBuilder:
         Args:
             settings: Schema settings instance or None for defaults
             schema_name: Name of the schema (for multi-schema support)
-            raw_settings: Raw settings dictionary containing SCHEMA_SETTINGS
+            raw_settings: Raw settings dictionary containing schema_settings
             registry: Schema registry instance for model discovery
         """
         # Avoid re-initialization
         if hasattr(self, "_initialized") and self._initialized:
             return
-
         self.schema_name = schema_name
         self.registry = registry
 
-        # Store the raw settings dictionary for SCHEMA_SETTINGS extraction
+        # Store the raw settings dictionary for schema_settings extraction
         self._raw_settings = raw_settings or {}
 
         # Load settings using the new configuration system
@@ -147,10 +146,14 @@ class SchemaBuilder:
     def mutation_generator(self):
         """Lazy-loaded mutation generator."""
         if self._mutation_generator is None:
+            from ..conf import get_mutation_generator_settings
             from ..generators.mutations import MutationGenerator
 
+            mutation_settings = get_mutation_generator_settings(self.schema_name)
             self._mutation_generator = MutationGenerator(
-                self.type_generator, schema_name=self.schema_name
+                self.type_generator,
+                settings=mutation_settings,
+                schema_name=self.schema_name,
             )
         return self._mutation_generator
 
@@ -214,7 +217,7 @@ class SchemaBuilder:
         app_label = model._meta.app_label
         model_name = model.__name__
 
-        # Check app exclusions from SCHEMA_SETTINGS
+        # Check app exclusions from schema_settings
         excluded_apps = self._get_schema_setting("excluded_apps", [])
 
         if app_label in excluded_apps:
@@ -223,7 +226,7 @@ class SchemaBuilder:
             )
             return False
 
-        # Check model exclusions from SCHEMA_SETTINGS
+        # Check model exclusions from schema_settings
         excluded_models = self._get_schema_setting("excluded_models", [])
 
         # Check model name exclusions
@@ -270,7 +273,7 @@ class SchemaBuilder:
             # Skip excluded apps at the app level for efficiency
             if app_config.label in excluded_apps:
                 logger.debug(
-                    f"Skipping entire app {app_config.label} (excluded in SCHEMA_SETTINGS)"
+                    f"Skipping entire app {app_config.label} (excluded in schema_settings)"
                 )
                 continue
 
@@ -441,6 +444,8 @@ class SchemaBuilder:
                 # Add security-related mutations
                 security_mutations = {}
                 try:
+                    # Use hierarchical settings system to get disable_security_mutations
+                    from ..conf import get_setting
                     from ..extensions.auth import (
                         LoginMutation,
                         LogoutMutation,
@@ -448,8 +453,6 @@ class SchemaBuilder:
                         RegisterMutation,
                     )
 
-                    # Use hierarchical settings system to get disable_security_mutations
-                    from ..conf import get_setting
                     disable_security = get_setting(
                         "disable_security_mutations", False, self.schema_name
                     )
@@ -474,9 +477,9 @@ class SchemaBuilder:
                 all_mutations = {**self._mutation_fields, **security_mutations}
 
                 if all_mutations:
-                    logger.info(
-                        f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"
-                    )
+                    # logger.info(
+                    #     f"Creating Mutation type for schema '{self.schema_name}' with fields: {list(all_mutations.keys())}"
+                    # )
                     mutation_type = type(
                         "Mutation", (graphene.ObjectType,), all_mutations
                     )

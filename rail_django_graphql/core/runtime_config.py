@@ -5,18 +5,18 @@ This module provides functionality to update configuration at runtime
 without requiring server restarts.
 """
 
-import logging
 import json
+import logging
 import threading
-from typing import Dict, Any, Optional, Callable, List
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core.signals import request_started
 from django.dispatch import receiver
-from dataclasses import dataclass, field, asdict
-from pathlib import Path
-
 
 logger = logging.getLogger(__name__)
 
@@ -352,7 +352,7 @@ class RuntimeConfigManager:
                 errors = []
 
                 # Validation spécifique pour rail_django_graphql
-                if key == "MUTATION_SETTINGS" and isinstance(value, dict):
+                if key == "mutation_settings" and isinstance(value, dict):
                     if "nested_relations_config" in value:
                         nested_config = value["nested_relations_config"]
                         if not isinstance(nested_config, dict):
