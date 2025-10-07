@@ -448,10 +448,12 @@ class SchemaBuilder:
                         RegisterMutation,
                     )
 
-                    print("xxxxxxxxxxxxxxxxx", self.settings)
-                    if not self._get_schema_setting(
-                        "DISABLE_SECURITY_MUTATIONS", False
-                    ):
+                    # Use hierarchical settings system to get disable_security_mutations
+                    from ..conf import get_setting
+                    disable_security = get_setting(
+                        "disable_security_mutations", False, self.schema_name
+                    )
+                    if not disable_security:
                         security_mutations.update(
                             {
                                 "login": LoginMutation.Field(),

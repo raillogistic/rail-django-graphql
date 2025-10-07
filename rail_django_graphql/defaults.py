@@ -16,19 +16,25 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # ========================================
     # Core Schema Settings
     # ========================================
-    "DEFAULT_SCHEMA": "main",
-    "ENABLE_GRAPHIQL": True,
-    "GRAPHIQL_TEMPLATE": "graphene/graphiql.html",
-    "DISABLE_SECURITY_MUTATIONS": True,
-    "SCHEMA_ENDPOINT": "/graphql/",
-    "AUTHENTICATION_REQUIRED": False,
-    "PERMISSION_CLASSES": [],
-    "ENABLE_INTROSPECTION": True,
-    "ENABLE_PLAYGROUND": True,
+    "default_schema": "main",
+    "enable_graphiql": True,
+    "graphiql_template": "graphene/graphiql.html",
+    "disable_security_mutations": True,
+    "schema_endpoint": "/graphql/",
+    "authentication_required": False,
+    "permission_classes": [],
+    "enable_introspection": True,
+    "enable_playground": True,
     # ========================================
     # Schema Settings (Aligned with SchemaSettings dataclass)
     # ========================================
-    "SCHEMA_SETTINGS": {
+    # Usage example for schema_settings dict:
+    # {
+    #     "excluded_apps": ["admin", "contenttypes"],
+    #     "auto_camelcase": True,
+    #     "enable_pagination": True
+    # }
+    "schema_settings": {
         # Apps to exclude from schema generation (globally excluded: admin, contenttypes, sessions)
         "excluded_apps": ["admin", "contenttypes", "sessions", "auth"],
         # Models to exclude from schema generation
@@ -47,7 +53,13 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # ========================================
     # Query Settings (Aligned with QueryGeneratorSettings dataclass)
     # ========================================
-    "QUERY_SETTINGS": {
+    # Usage example for query_settings dict:
+    # {
+    #     "generate_filters": True,
+    #     "default_page_size": 20,
+    #     "additional_lookup_fields": {"User": ["username", "email"]}
+    # }
+    "query_settings": {
         # Enable filtering support
         "generate_filters": True,
         # Enable ordering support
@@ -72,7 +84,13 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # ========================================
     # Mutation Settings (Aligned with MutationGeneratorSettings dataclass)
     # ========================================
-    "MUTATION_SETTINGS": {
+    # Usage example for mutation_settings dict:
+    # {
+    #     "generate_create": True,
+    #     "bulk_batch_size": 50,
+    #     "nested_relations_config": {"User": {"posts": True}}
+    # }
+    "mutation_settings": {
         # Enable create mutations
         "generate_create": True,
         # Enable update mutations
@@ -121,7 +139,13 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     # ========================================
     # Type Generation Settings (Aligned with TypeGeneratorSettings dataclass)
     # ========================================
-    "TYPE_GENERATION_SETTINGS": {
+    # Usage example for type_generation_settings dict:
+    # {
+    #     "exclude_fields": {"User": ["password", "secret"]},
+    #     "custom_field_mappings": {"JSONField": "graphene.JSONString"},
+    #     "auto_camelcase": True
+    # }
+    "type_generation_settings": {
         # Fields to exclude from types, per model
         "exclude_fields": {},
         # Alias for exclude_fields
@@ -138,6 +162,530 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "auto_camelcase": False,
         # Enable field descriptions
         "generate_descriptions": True,
+    },
+    # ========================================
+    # Performance Settings
+    # ========================================
+    # Usage example for performance_settings dict:
+    # {
+    #     "enable_query_optimization": True,
+    #     "cache_timeout": 600,
+    #     "max_query_depth": 15
+    # }
+    "performance_settings": {
+        "enable_query_optimization": True,
+        "enable_select_related": True,
+        "enable_prefetch_related": True,
+        "enable_only_fields": True,
+        "enable_defer_fields": False,
+        "enable_query_caching": True,
+        "cache_timeout": 300,  # 5 minutes
+        "cache_key_prefix": "graphql_query",
+        "enable_dataloader": True,
+        "dataloader_batch_size": 100,
+        "max_query_depth": 10,
+        "max_query_complexity": 1000,
+        "enable_query_cost_analysis": False,
+        "query_timeout": 30,  # seconds
+    },
+    # ========================================
+    # Security Settings
+    # ========================================
+    # Usage example for security_settings dict:
+    # {
+    #     "enable_csrf_protection": True,
+    #     "allowed_hosts": ["example.com"],
+    #     "rate_limit_per_minute": 100
+    # }
+    "security_settings": {
+        "enable_csrf_protection": True,
+        "enable_cors": False,
+        "allowed_origins": [],
+        "allowed_hosts": [],
+        "enable_rate_limiting": False,
+        "rate_limit_per_minute": 60,
+        "rate_limit_per_hour": 1000,
+        "enable_query_whitelist": False,
+        "allowed_queries": [],
+        "enable_field_permissions": False,
+        "field_permissions": {},
+        "enable_introspection_auth": False,
+        "introspection_permissions": [],
+        "enable_query_logging": True,
+        "log_queries": True,
+        "log_mutations": True,
+        "log_errors": True,
+    },
+    # ========================================
+    # Custom Scalars Settings
+    # ========================================
+    # Usage example for custom_scalars dict:
+    # {
+    #     "DateTime": "graphene.DateTime",
+    #     "JSON": "graphene.JSONString",
+    #     "UUID": "graphene.String"
+    # }
+    "custom_scalars": {
+        "DateTime": "graphene.DateTime",
+        "Date": "graphene.Date",
+        "Time": "graphene.Time",
+        "JSON": "graphene.JSONString",
+        "UUID": "graphene.String",
+        "Decimal": "graphene.Decimal",
+        "Upload": "graphene_file_upload.scalars.Upload",
+    },
+    # ========================================
+    # Field Converters Settings
+    # ========================================
+    # Usage example for field_converters dict:
+    # {
+    #     "JSONField": "convert_json_field",
+    #     "ArrayField": "convert_array_field"
+    # }
+    "field_converters": {
+        "JSONField": "convert_json_field",
+        "ArrayField": "convert_array_field",
+        "HStoreField": "convert_hstore_field",
+        "UUIDField": "convert_uuid_field",
+        "FileField": "convert_file_field",
+        "ImageField": "convert_image_field",
+        "URLField": "convert_url_field",
+        "EmailField": "convert_email_field",
+        "SlugField": "convert_slug_field",
+    },
+    # ========================================
+    # Schema Hooks Settings
+    # ========================================
+    # Usage example for schema_hooks dict:
+    # {
+    #     "pre_schema_build": ["myapp.hooks.validate_schema"],
+    #     "post_schema_build": ["myapp.hooks.register_schema"]
+    # }
+    "schema_hooks": {
+        "pre_schema_build": [],
+        "post_schema_build": [],
+        "pre_query_execution": [],
+        "post_query_execution": [],
+        "pre_mutation_execution": [],
+        "post_mutation_execution": [],
+        "on_error": [],
+        "on_validation_error": [],
+    },
+    # ========================================
+    # Middleware Settings
+    # ========================================
+    # Usage example for middleware_settings dict:
+    # {
+    #     "authentication": ["myapp.middleware.AuthMiddleware"],
+    #     "logging": ["myapp.middleware.LoggingMiddleware"]
+    # }
+    "middleware_settings": {
+        "authentication": [],
+        "authorization": [],
+        "logging": [],
+        "caching": [],
+        "performance": [],
+        "security": [],
+        "custom": [],
+        "enable_default_middleware": True,
+        "middleware_order": [
+            "security",
+            "authentication",
+            "authorization",
+            "logging",
+            "caching",
+            "performance",
+            "custom",
+        ],
+    },
+    # ========================================
+    # Nested Operations Settings
+    # ========================================
+    # Usage example for nested_operations dict:
+    # {
+    #     "max_depth": 5,
+    #     "allowed_models": ["User", "Post"],
+    #     "field_config": {"User.posts": {"max_items": 10}}
+    # }
+    "nested_operations": {
+        "enable_nested_queries": True,
+        "enable_nested_mutations": True,
+        "max_depth": 3,
+        "max_items_per_level": 100,
+        "allowed_models": [],
+        "blocked_models": [],
+        "field_config": {},
+        "enable_nested_filtering": True,
+        "enable_nested_ordering": True,
+        "enable_batch_loading": True,
+    },
+    # ========================================
+    # Relationship Handling Settings
+    # ========================================
+    # Usage example for relationship_handling dict:
+    # {
+    #     "enable_reverse_relations": True,
+    #     "max_relation_depth": 5,
+    #     "relation_config": {"User.posts": {"paginate": True}}
+    # }
+    "relationship_handling": {
+        "enable_reverse_relations": True,
+        "enable_forward_relations": True,
+        "max_relation_depth": 3,
+        "enable_relation_filtering": True,
+        "enable_relation_ordering": True,
+        "enable_relation_pagination": True,
+        "relation_config": {},
+        "auto_optimize_queries": True,
+        "enable_select_related": True,
+        "enable_prefetch_related": True,
+    },
+    # ========================================
+    # Development Settings
+    # ========================================
+    # Usage example for development_settings dict:
+    # {
+    #     "enable_debug_mode": True,
+    #     "debug_sql_queries": True,
+    #     "enable_hot_reload": True
+    # }
+    "development_settings": {
+        "enable_debug_mode": False,
+        "debug_sql_queries": False,
+        "enable_hot_reload": False,
+        "enable_query_profiling": False,
+        "enable_memory_profiling": False,
+        "enable_performance_monitoring": False,
+        "log_level": "INFO",
+        "enable_graphiql_explorer": True,
+        "enable_schema_validation": True,
+        "enable_type_checking": True,
+    },
+    # ========================================
+    # Internationalization Settings
+    # ========================================
+    # Usage example for internationalization dict:
+    # {
+    #     "enable_i18n": True,
+    #     "default_language": "en",
+    #     "supported_languages": ["en", "fr", "es"]
+    # }
+    "internationalization": {
+        "enable_i18n": False,
+        "default_language": "en",
+        "supported_languages": ["en"],
+        "enable_field_translation": False,
+        "enable_error_translation": False,
+        "translation_fields": [],
+        "fallback_language": "en",
+        "enable_rtl_support": False,
+        "locale_path": "locale",
+        "translation_domain": "django",
+    },
+    # ========================================
+    # Error Handling Settings
+    # ========================================
+    # Usage example for error_handling dict:
+    # {
+    #     "enable_detailed_errors": True,
+    #     "error_formatters": {"ValidationError": "format_validation_error"},
+    #     "log_errors": True
+    # }
+    "error_handling": {
+        "enable_detailed_errors": False,
+        "enable_error_tracking": True,
+        "enable_error_reporting": False,
+        "error_formatters": {},
+        "custom_error_types": {},
+        "enable_field_errors": True,
+        "enable_mutation_errors": True,
+        "enable_validation_errors": True,
+        "log_errors": True,
+        "error_log_level": "ERROR",
+        "enable_sentry": False,
+        "sentry_dsn": None,
+    },
+    # ========================================
+    # Caching Settings
+    # ========================================
+    # Usage example for caching_settings dict:
+    # {
+    #     "enable_query_caching": True,
+    #     "cache_backend": "redis",
+    #     "cache_timeout": 300
+    # }
+    "caching_settings": {
+        "enable_query_caching": False,
+        "enable_schema_caching": True,
+        "enable_type_caching": True,
+        "cache_backend": "default",
+        "cache_timeout": 300,
+        "cache_key_prefix": "graphql",
+        "enable_per_user_caching": False,
+        "enable_conditional_caching": False,
+        "cache_headers": True,
+        "etag_support": False,
+        "vary_headers": ["Accept-Language", "Authorization"],
+    },
+    # ========================================
+    # File Upload Settings
+    # ========================================
+    # Usage example for file_upload_settings dict:
+    # {
+    #     "enable_file_uploads": True,
+    #     "max_file_size": 10485760,
+    #     "allowed_extensions": [".jpg", ".png", ".pdf"]
+    # }
+    "file_upload_settings": {
+        "enable_file_uploads": False,
+        "max_file_size": 10485760,  # 10MB
+        "max_files_per_request": 10,
+        "allowed_extensions": [
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".gif",
+            ".pdf",
+            ".doc",
+            ".docx",
+        ],
+        "allowed_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "application/pdf",
+            "application/msword",
+        ],
+        "upload_path": "uploads/",
+        "enable_virus_scanning": False,
+        "enable_image_processing": False,
+        "enable_thumbnail_generation": False,
+        "thumbnail_sizes": [(150, 150), (300, 300)],
+    },
+    # ========================================
+    # Monitoring Settings
+    # ========================================
+    # Usage example for monitoring_settings dict:
+    # {
+    #     "enable_metrics": True,
+    #     "metrics_backend": "prometheus",
+    #     "enable_tracing": True
+    # }
+    "monitoring_settings": {
+        "enable_metrics": False,
+        "enable_tracing": False,
+        "enable_logging": True,
+        "metrics_backend": "prometheus",
+        "tracing_backend": "jaeger",
+        "log_backend": "default",
+        "enable_health_checks": True,
+        "health_check_endpoint": "/health/",
+        "enable_performance_monitoring": False,
+        "enable_error_monitoring": True,
+        "monitoring_interval": 60,  # seconds
+    },
+    # ========================================
+    # Schema Registry Settings
+    # ========================================
+    # Usage example for schema_registry dict:
+    # {
+    #     "enable_registry": True,
+    #     "registry_backend": "database",
+    #     "enable_versioning": True
+    # }
+    "schema_registry": {
+        "enable_registry": False,
+        "registry_backend": "memory",
+        "enable_versioning": False,
+        "enable_schema_validation": True,
+        "enable_backward_compatibility": True,
+        "schema_storage_path": "schemas/",
+        "enable_schema_diffing": False,
+        "enable_schema_migration": False,
+        "auto_register_schemas": False,
+        "registry_cache_timeout": 3600,
+    },
+    # ========================================
+    # Extension Settings
+    # ========================================
+    # Usage example for extension_settings dict:
+    # {
+    #     "enabled_extensions": ["relay", "federation"],
+    #     "extension_config": {"relay": {"node_interface": True}}
+    # }
+    "extension_settings": {
+        "enabled_extensions": [],
+        "extension_config": {},
+        "enable_relay": False,
+        "enable_federation": False,
+        "enable_subscriptions": False,
+        "enable_apollo_tracing": False,
+        "enable_query_complexity": False,
+        "enable_query_depth": False,
+        "enable_persisted_queries": False,
+        "enable_automatic_persisted_queries": False,
+    },
+    # ========================================
+    # Testing Settings
+    # ========================================
+    # Usage example for testing_settings dict:
+    # {
+    #     "enable_test_mode": True,
+    #     "test_database": "test_db",
+    #     "enable_fixtures": True
+    # }
+    "testing_settings": {
+        "enable_test_mode": False,
+        "test_database": None,
+        "enable_fixtures": True,
+        "enable_factory_boy": False,
+        "enable_mock_data": False,
+        "test_data_path": "test_data/",
+        "enable_snapshot_testing": False,
+        "enable_performance_testing": False,
+        "enable_load_testing": False,
+        "test_coverage_threshold": 80,
+    },
+    # ========================================
+    # Filtering Settings
+    # ========================================
+    # Usage example for filtering_settings dict:
+    # {
+    #     "enable_filters": True,
+    #     "default_filter_operators": {"CharField": ["exact", "icontains"]},
+    #     "enable_logical_operators": True
+    # }
+    "filtering_settings": {
+        "enable_filters": True,
+        "default_filter_operators": {
+            "CharField": [
+                "exact",
+                "icontains",
+                "startswith",
+                "endswith",
+                "iexact",
+                "contains",
+                "istartswith",
+                "iendswith",
+                "regex",
+                "iregex",
+                "in",
+                "isnull",
+            ],
+            "TextField": [
+                "exact",
+                "icontains",
+                "startswith",
+                "endswith",
+                "iexact",
+                "contains",
+                "istartswith",
+                "iendswith",
+                "regex",
+                "iregex",
+                "in",
+                "isnull",
+            ],
+            "IntegerField": [
+                "exact",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "range",
+                "in",
+                "isnull",
+            ],
+            "FloatField": ["exact", "gt", "gte", "lt", "lte", "range", "in", "isnull"],
+            "DecimalField": [
+                "exact",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "range",
+                "in",
+                "isnull",
+            ],
+            "BooleanField": ["exact", "isnull"],
+            "DateTimeField": [
+                "exact",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "range",
+                "date",
+                "year",
+                "month",
+                "day",
+                "week",
+                "week_day",
+                "quarter",
+                "time",
+                "hour",
+                "minute",
+                "second",
+                "isnull",
+            ],
+            "DateField": [
+                "exact",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "range",
+                "year",
+                "month",
+                "day",
+                "week",
+                "week_day",
+                "quarter",
+                "isnull",
+            ],
+            "TimeField": [
+                "exact",
+                "gt",
+                "gte",
+                "lt",
+                "lte",
+                "range",
+                "hour",
+                "minute",
+                "second",
+                "isnull",
+            ],
+        },
+        "enable_logical_operators": True,
+        "enable_relationship_filters": True,
+        "max_filter_depth": 3,
+        "enable_custom_filters": True,
+        "custom_filters": {},
+        "enable_filter_caching": True,
+        "filter_cache_timeout": 300,
+        "filter_cache_key_prefix": "graphql_filter",
+    },
+    # ========================================
+    # Pagination Settings
+    # ========================================
+    # Usage example for pagination_settings dict:
+    # {
+    #     "pagination_size": 20,
+    #     "default_page_size": 20,
+    #     "max_page_size": 100
+    # }
+    "pagination_settings": {
+        "pagination_size": 20,
+        "default_page_size": 20,
+        "max_page_size": 100,
+        "use_relay_pagination": False,
+        "enable_cursor_pagination": True,
+        "enable_offset_pagination": True,
+        "enable_page_info": True,
+        "enable_total_count": True,
+        "cursor_field": "id",
+        "page_size_query_param": "page_size",
+        "page_query_param": "page",
     },
     # ========================================
     # Filtering Settings (DEPRECATED - Not defined in dataclasses)

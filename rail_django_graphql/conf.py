@@ -1,89 +1,125 @@
-"""Configuration management for Rail Django GraphQL.
+"""
+Configuration management for Rail Django GraphQL.
 
-This module provides a hierarchical settings system that allows for:
-1. Schema-specific settings
-2. Global Django settings
-3. Library defaults
-
-Settings are resolved in the following order:
-1. Schema-specific settings (highest priority)
-2. Global Django RAIL_DJANGO_GRAPHQL settings
-3. Library defaults (lowest priority)
+This module provides a settings proxy that handles hierarchical configuration
+resolution from schema-specific, Django global, and library default settings.
 """
 
-import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
-
+from typing import Any, Dict, Optional
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
 
-from .core.settings import QueryGeneratorSettings, MutationGeneratorSettings, TypeGeneratorSettings
-from .defaults import LIBRARY_DEFAULTS, get_merged_settings
 
-logger = logging.getLogger(__name__)
+# Library default settings
+LIBRARY_DEFAULTS = {
+    'disable_security_mutations': True,
+    'enable_graphiql': True,
+    'enable_introspection': True,
+    'max_query_depth': 10,
+    'max_query_complexity': 1000,
+    'enable_query_batching': False,
+    'enable_subscriptions': False,
+    'subscription_path': '/graphql/subscriptions/',
+    'enable_file_uploads': True,
+    'max_file_size': 10 * 1024 * 1024,  # 10MB
+    'allowed_file_types': ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'],
+    'enable_cors': True,
+    'cors_allow_all_origins': False,
+    'cors_allowed_origins': [],
+    'enable_csrf_protection': True,
+    'enable_rate_limiting': False,
+    'rate_limit_per_minute': 60,
+    'enable_query_logging': False,
+    'log_level': 'INFO',
+    'enable_performance_monitoring': False,
+    'enable_error_reporting': True,
+    'enable_schema_validation': True,
+    'auto_camelcase': True,
+    'enable_relay': False,
+    'enable_dataloader': True,
+    'dataloader_batch_size': 100,
+    'enable_query_caching': False,
+    'cache_timeout': 300,  # 5 minutes
+    'enable_field_suggestions': True,
+    'enable_query_whitelist': False,
+    'whitelisted_queries': [],
+    'enable_persisted_queries': False,
+    'enable_apollo_tracing': False,
+    'enable_opentracing': False,
+    'enable_prometheus_metrics': False,
+    'metrics_path': '/metrics/',
+}
 
 
 class SettingsProxy:
     """
-    A proxy for accessing Rail Django GraphQL settings with hierarchical resolution.
-
-    This class provides a unified interface for accessing settings from multiple sources:
-    - Schema-specific settings
-    - Global Django settings
-    - Library defaults
+    Proxy for accessing Rail Django GraphQL settings with hierarchical resolution.
+    
+    Settings are resolved in the following order:
+    1. Schema-specific settings (RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name])
+    2. Global Django settings (RAIL_DJANGO_GRAPHQL)
+    3. Library defaults (LIBRARY_DEFAULTS)
     """
-
+    
     def __init__(self, schema_name: Optional[str] = None):
         """
         Initialize the settings proxy.
-
+        
         Args:
-            schema_name: Optional schema name for schema-specific settings
+            schema_name: Name of the schema for schema-specific settings
         """
         self.schema_name = schema_name
-        self._cache = {}
-
+        self._cache: Dict[str, Any] = {}
+    
     def get(self, key: str, default: Any = None) -> Any:
         """
-        Get a setting value with hierarchical resolution.
-
+        Get a setting value with hierarchical resolution and caching.
+        
         Args:
-            key: Setting key (supports dot notation for nested keys)
-            default: Default value if key is not found
-
+            key: Setting key to retrieve
+            default: Default value if setting is not found
+            
         Returns:
-            Setting value
+            The setting value from the highest priority source
         """
+        # Create cache key
+        cache_key = f"{self.schema_name}:{key}" if self.schema_name else f"global:{key}"
+        
         # Check cache first
-        cache_key = f"{self.schema_name}:{key}" if self.schema_name else key
         if cache_key in self._cache:
             return self._cache[cache_key]
-
+        
         # Try schema-specific settings first
-        if self.schema_name:
-            schema_value = self._get_schema_setting(key)
-            if schema_value is not None:
-                self._cache[cache_key] = schema_value
-                return schema_value
-
-        # Try global Django settings
+        schema_value = self._get_schema_setting(key)
+        if schema_value is not None:
+            self._cache[cache_key] = schema_value
+            return schema_value
+        
+        # Try Django global settings
         django_value = self._get_django_setting(key)
         if django_value is not None:
             self._cache[cache_key] = django_value
             return django_value
-
+        
         # Try library defaults
         library_value = self._get_library_default(key)
         if library_value is not None:
             self._cache[cache_key] = library_value
             return library_value
-
-        # Return default if nothing found
+        
+        # Return provided default if nothing found
         self._cache[cache_key] = default
         return default
 
     def _get_schema_setting(self, key: str) -> Any:
-        """Get setting from schema-specific configuration."""
+        """
+        Get setting from schema-specific configuration.
+        
+        Args:
+            key: Setting key to retrieve
+            
+        Returns:
+            The setting value or None if not found
+        """
         if not self.schema_name:
             return None
 
@@ -91,520 +127,298 @@ class SettingsProxy:
         if self.schema_name not in schema_settings:
             return None
 
-        return self._get_nested_value(schema_settings[self.schema_name], key)
+        schema_config = schema_settings[self.schema_name]
+        return self._get_nested_value(schema_config, key)
 
     def _get_django_setting(self, key: str) -> Any:
-        """Get setting from global Django RAIL_DJANGO_GRAPHQL settings."""
+        """
+        Get setting from global Django RAIL_DJANGO_GRAPHQL settings.
+        
+        Args:
+            key: Setting key to retrieve
+            
+        Returns:
+            The setting value or None if not found
+        """
         django_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
         return self._get_nested_value(django_settings, key)
 
     def _get_library_default(self, key: str) -> Any:
-        """Get setting from library defaults."""
+        """
+        Get setting from library defaults.
+        
+        Args:
+            key: Setting key to retrieve
+            
+        Returns:
+            The setting value or None if not found
+        """
         return self._get_nested_value(LIBRARY_DEFAULTS, key)
 
     def _get_nested_value(self, data: Dict[str, Any], key: str) -> Any:
         """
-        Get a nested value using dot notation.
-
+        Get nested value from dictionary using dot notation.
+        
         Args:
             data: Dictionary to search in
-            key: Key with dot notation (e.g., 'QUERY_SETTINGS.MAX_DEPTH')
-
+            key: Key to retrieve (supports dot notation for nested access)
+            
         Returns:
-            Value if found, None otherwise
+            The value or None if not found
         """
         if not isinstance(data, dict):
             return None
-
-        keys = key.split(".")
+        
+        keys = key.split('.')
         current = data
-
+        
         for k in keys:
-            if isinstance(current, dict) and k in current:
-                current = current[k]
-            else:
+            if not isinstance(current, dict) or k not in current:
                 return None
-
+            current = current[k]
+        
         return current
 
-    def set(self, key: str, value: Any, schema_specific: bool = False) -> None:
+    def set(self, key: str, value: Any) -> None:
         """
-        Set a setting value.
-
+        Set a setting value (runtime only, not persistent).
+        
         Args:
-            key: Setting key
-            value: Setting value
-            schema_specific: Whether to set as schema-specific setting
+            key: Setting key to set
+            value: Value to set
         """
-        cache_key = f"{self.schema_name}:{key}" if self.schema_name else key
-        self._cache[cache_key] = value
-
-        if schema_specific and self.schema_name:
-            # Set schema-specific setting
-            if not hasattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS"):
-                settings.RAIL_DJANGO_GRAPHQL_SCHEMAS = {}
-
-            if self.schema_name not in settings.RAIL_DJANGO_GRAPHQL_SCHEMAS:
-                settings.RAIL_DJANGO_GRAPHQL_SCHEMAS[self.schema_name] = {}
-
-            self._set_nested_value(
-                settings.RAIL_DJANGO_GRAPHQL_SCHEMAS[self.schema_name], key, value
-            )
-        else:
-            # Set global setting
-            if not hasattr(settings, "RAIL_DJANGO_GRAPHQL"):
-                settings.RAIL_DJANGO_GRAPHQL = {}
-
-            self._set_nested_value(settings.RAIL_DJANGO_GRAPHQL, key, value)
+        # Clear cache for this key
+        cache_key = f"{self.schema_name}:{key}" if self.schema_name else f"global:{key}"
+        if cache_key in self._cache:
+            del self._cache[cache_key]
+        
+        # Set in Django settings (runtime only)
+        if not hasattr(settings, 'RAIL_DJANGO_GRAPHQL'):
+            settings.RAIL_DJANGO_GRAPHQL = {}
+        
+        self._set_nested_value(settings.RAIL_DJANGO_GRAPHQL, key, value)
 
     def _set_nested_value(self, data: Dict[str, Any], key: str, value: Any) -> None:
-        """Set a nested value using dot notation."""
-        keys = key.split(".")
+        """
+        Set nested value in dictionary using dot notation.
+        
+        Args:
+            data: Dictionary to set value in
+            key: Key to set (supports dot notation for nested access)
+            value: Value to set
+        """
+        keys = key.split('.')
         current = data
-
+        
+        # Navigate to the parent of the target key
         for k in keys[:-1]:
             if k not in current:
                 current[k] = {}
             current = current[k]
-
+        
+        # Set the final value
         current[keys[-1]] = value
 
     def clear_cache(self) -> None:
         """Clear the settings cache."""
         self._cache.clear()
 
-    def validate(self) -> Dict[str, str]:
+    def validate(self) -> Dict[str, Any]:
         """
         Validate current settings configuration.
-
+        
         Returns:
-            Dictionary of validation errors (empty if valid)
+            Dictionary with validation results
         """
-        errors = {}
-
-        # Validate required settings based on new structure
-        required_settings = [
-            "CORE_SCHEMA_SETTINGS.ENABLE_GRAPHIQL",
-            "CORE_SCHEMA_SETTINGS.ENABLE_INTROSPECTION",
-            "QUERY_SETTINGS.MAX_DEPTH",
-            "MUTATION_SETTINGS.ENABLE_MUTATIONS",
-        ]
-
-        for setting in required_settings:
+        validation_results = {
+            'valid': True,
+            'errors': [],
+            'warnings': []
+        }
+        
+        # Validate schema-specific settings if schema_name is provided
+        if self.schema_name:
+            schema_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS", {})
+            if self.schema_name not in schema_settings:
+                validation_results['warnings'].append(
+                    f"Schema '{self.schema_name}' not found in RAIL_DJANGO_GRAPHQL_SCHEMAS"
+                )
+        
+        # Validate critical settings
+        critical_settings = ['disable_security_mutations', 'max_query_depth', 'max_query_complexity']
+        for setting in critical_settings:
             value = self.get(setting)
             if value is None:
-                errors[setting] = f"Required setting '{setting}' is not configured"
-
-        # Validate data types based on new structure
-        type_validations = {
-            "QUERY_SETTINGS.MAX_DEPTH": int,
-            "QUERY_SETTINGS.MAX_COMPLEXITY": int,
-            "CORE_SCHEMA_SETTINGS.ENABLE_GRAPHIQL": bool,
-            "CORE_SCHEMA_SETTINGS.ENABLE_INTROSPECTION": bool,
-            "MUTATION_SETTINGS.ENABLE_MUTATIONS": bool,
-            "PERFORMANCE_SETTINGS.ENABLE_QUERY_TIMEOUT": bool,
-            "PERFORMANCE_SETTINGS.QUERY_TIMEOUT_SECONDS": int,
-            "SECURITY_SETTINGS.ENABLE_RATE_LIMITING": bool,
-            "SECURITY_SETTINGS.RATE_LIMIT_PER_MINUTE": int,
-            "ERROR_SETTINGS.ENABLE_DETAILED_ERRORS": bool,
-            "FILE_UPLOAD_SETTINGS.ENABLE_FILE_UPLOADS": bool,
-            "FILE_UPLOAD_SETTINGS.MAX_FILE_SIZE": int,
-            "MONITORING_SETTINGS.ENABLE_METRICS": bool,
-            "DEVELOPMENT_SETTINGS.ENABLE_DEBUG_MODE": bool,
-            "MIDDLEWARE_SETTINGS.ENABLE_PERFORMANCE_MIDDLEWARE": bool,
-            "I18N_SETTINGS.ENABLE_I18N": bool,
-            "TESTING_SETTINGS.ENABLE_TEST_MODE": bool,
-        }
-
-        for setting, expected_type in type_validations.items():
-            value = self.get(setting)
-            if value is not None and not isinstance(value, expected_type):
-                errors[setting] = (
-                    f"Setting '{setting}' must be of type {expected_type.__name__}"
-                )
-
-        # Validate list settings
-        list_validations = {
-            "TYPE_GENERATION_SETTINGS.EXCLUDED_MODELS": list,
-            "TYPE_GENERATION_SETTINGS.INCLUDED_MODELS": list,
-            "SECURITY_SETTINGS.QUERY_WHITELIST": list,
-            "SECURITY_SETTINGS.QUERY_BLACKLIST": list,
-            "SECURITY_SETTINGS.IP_WHITELIST": list,
-            "SECURITY_SETTINGS.CORS_ALLOWED_ORIGINS": list,
-            "FILE_UPLOAD_SETTINGS.ALLOWED_EXTENSIONS": list,
-            "I18N_SETTINGS.SUPPORTED_LANGUAGES": list,
-        }
-
-        for setting, expected_type in list_validations.items():
-            value = self.get(setting)
-            if value is not None and not isinstance(value, expected_type):
-                errors[setting] = (
-                    f"Setting '{setting}' must be of type {expected_type.__name__}"
-                )
-
-        # Validate specific value constraints
-        max_depth = self.get("QUERY_SETTINGS.MAX_DEPTH")
-        if max_depth is not None and (max_depth < 1 or max_depth > 50):
-            errors["QUERY_SETTINGS.MAX_DEPTH"] = "MAX_DEPTH must be between 1 and 50"
-
-        max_complexity = self.get("QUERY_SETTINGS.MAX_COMPLEXITY")
-        if max_complexity is not None and max_complexity < 1:
-            errors["QUERY_SETTINGS.MAX_COMPLEXITY"] = (
-                "MAX_COMPLEXITY must be greater than 0"
-            )
-
-        rate_limit = self.get("SECURITY_SETTINGS.RATE_LIMIT_PER_MINUTE")
-        if rate_limit is not None and rate_limit < 1:
-            errors["SECURITY_SETTINGS.RATE_LIMIT_PER_MINUTE"] = (
-                "RATE_LIMIT_PER_MINUTE must be greater than 0"
-            )
-
-        return errors
-
-
-class SchemaSettingsManager:
-    """
-    Manager for schema-specific settings.
-
-    This class provides methods to manage settings for multiple GraphQL schemas.
-    """
-
-    def __init__(self):
-        """Initialize the schema settings manager."""
-        self._schema_proxies = {}
-
-    def get_schema_proxy(self, schema_name: str) -> SettingsProxy:
-        """
-        Get a settings proxy for a specific schema.
-
-        Args:
-            schema_name: Name of the schema
-
-        Returns:
-            SettingsProxy instance for the schema
-        """
-        if schema_name not in self._schema_proxies:
-            self._schema_proxies[schema_name] = SettingsProxy(schema_name)
-
-        return self._schema_proxies[schema_name]
-
-    def get_all_schemas(self) -> Dict[str, SettingsProxy]:
-        """
-        Get all registered schema proxies.
-
-        Returns:
-            Dictionary of schema name to SettingsProxy
-        """
-        return self._schema_proxies.copy()
-
-    def register_schema(self, schema_name: str, settings_dict: Dict[str, Any]) -> None:
-        """
-        Register a new schema with its settings.
-
-        Args:
-            schema_name: Name of the schema
-            settings_dict: Schema-specific settings
-        """
-        # Ensure Django settings structure exists
-        if not hasattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS"):
-            settings.RAIL_DJANGO_GRAPHQL_SCHEMAS = {}
-
-        settings.RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name] = settings_dict
-
-        # Create or update proxy
-        self._schema_proxies[schema_name] = SettingsProxy(schema_name)
-
-    def unregister_schema(self, schema_name: str) -> None:
-        """
-        Unregister a schema and its settings.
-
-        Args:
-            schema_name: Name of the schema to unregister
-        """
-        # Remove from Django settings
-        if hasattr(settings, "RAIL_DJANGO_GRAPHQL_SCHEMAS"):
-            settings.RAIL_DJANGO_GRAPHQL_SCHEMAS.pop(schema_name, None)
-
-        # Remove proxy
-        self._schema_proxies.pop(schema_name, None)
-
-    def validate_all_schemas(self) -> Dict[str, Dict[str, str]]:
-        """
-        Validate settings for all registered schemas.
-
-        Returns:
-            Dictionary of schema name to validation errors
-        """
-        validation_results = {}
-
-        for schema_name, proxy in self._schema_proxies.items():
-            errors = proxy.validate()
-            if errors:
-                validation_results[schema_name] = errors
-
+                validation_results['errors'].append(f"Critical setting '{setting}' is None")
+                validation_results['valid'] = False
+        
         return validation_results
 
-    def get_merged_schema_settings(
-        self, schema_name: str, environment: str = "development"
-    ) -> Dict[str, Any]:
-        """
-        Get merged settings for a specific schema and environment.
 
-        Args:
-            schema_name: Name of the schema
-            environment: Environment name (development, testing, production)
-
-        Returns:
-            Merged settings dictionary
-        """
-        return get_merged_settings(schema_name, environment)
-
-
-# Global instances
+# Global settings proxy instance (no schema-specific settings)
 settings_proxy = SettingsProxy()
-schema_manager = SchemaSettingsManager()
 
 
-def get_setting(
-    key: str, default: Any = None, schema_name: Optional[str] = None
-) -> Any:
+def get_settings_proxy(schema_name: Optional[str] = None) -> SettingsProxy:
     """
-    Get a setting value with hierarchical resolution.
-
-    Args:
-        key: Setting key (supports dot notation)
-        default: Default value if key is not found
-        schema_name: Optional schema name for schema-specific settings
-
-    Returns:
-        Setting value
-    """
-    if schema_name:
-        proxy = schema_manager.get_schema_proxy(schema_name)
-        return proxy.get(key, default)
-    else:
-        return settings_proxy.get(key, default)
-
-
-def set_setting(key: str, value: Any, schema_name: Optional[str] = None) -> None:
-    """
-    Set a setting value.
-
-    Args:
-        key: Setting key
-        value: Setting value
-        schema_name: Optional schema name for schema-specific settings
-    """
-    if schema_name:
-        proxy = schema_manager.get_schema_proxy(schema_name)
-        proxy.set(key, value, schema_specific=True)
-    else:
-        settings_proxy.set(key, value)
-
-
-def validate_settings(schema_name: Optional[str] = None) -> Dict[str, str]:
-    """
-    Validate settings configuration.
-
-    Args:
-        schema_name: Optional schema name to validate specific schema
-
-    Returns:
-        Dictionary of validation errors
-    """
-    if schema_name:
-        proxy = schema_manager.get_schema_proxy(schema_name)
-        return proxy.validate()
-    else:
-        return settings_proxy.validate()
-
-
-def clear_settings_cache() -> None:
-    """Clear all settings caches."""
-    settings_proxy.clear_cache()
-    for proxy in schema_manager.get_all_schemas().values():
-        proxy.clear_cache()
-
-
-def get_core_schema_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get core schema settings."""
-    return get_setting("SCHEMA_SETTINGS", {}, schema_name)
-
-
-def get_query_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get query settings."""
-    return get_setting("QUERY_SETTINGS", {}, schema_name)
-
-
-def get_query_generator_settings(schema_name: Optional[str] = None) -> QueryGeneratorSettings:
-    """
-    Get query generator settings as QueryGeneratorSettings dataclass instance.
+    Get a settings proxy instance for the specified schema.
     
     Args:
-        schema_name: Optional schema name for schema-specific settings
+        schema_name: Name of the schema for schema-specific settings
         
     Returns:
-        QueryGeneratorSettings: Configured query generator settings
+        SettingsProxy instance
     """
-    settings_dict = get_setting("QUERY_SETTINGS", {}, schema_name)
+    return SettingsProxy(schema_name)
+
+
+def get_setting(key: str, default: Any = None, schema_name: Optional[str] = None) -> Any:
+    """
+    Get a setting value using the hierarchical settings system.
     
-    # Create QueryGeneratorSettings instance from dictionary
-    # Filter only the fields that exist in the dataclass
+    Args:
+        key: Setting key to retrieve
+        default: Default value if setting is not found
+        schema_name: Name of the schema for schema-specific settings
+        
+    Returns:
+        The setting value from the highest priority source
+    """
+    proxy = get_settings_proxy(schema_name)
+    return proxy.get(key, default)
+
+
+def configure_schema_settings(schema_name: str, **overrides: Any) -> None:
+    """
+    Configure schema-specific settings overrides.
+    
+    Args:
+        schema_name: Name of the schema to configure
+        **overrides: Setting key-value pairs to override for this schema
+    """
+    from django.conf import settings
+    
+    # Ensure RAIL_DJANGO_GRAPHQL_SCHEMAS exists
+    if not hasattr(settings, 'RAIL_DJANGO_GRAPHQL_SCHEMAS'):
+        settings.RAIL_DJANGO_GRAPHQL_SCHEMAS = {}
+    
+    # Initialize schema settings if not exists
+    if schema_name not in settings.RAIL_DJANGO_GRAPHQL_SCHEMAS:
+        settings.RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name] = {}
+    
+    # Apply overrides
+    settings.RAIL_DJANGO_GRAPHQL_SCHEMAS[schema_name].update(overrides)
+
+
+def get_settings_for_schema(schema_name: str) -> SettingsProxy:
+    """
+    Get a settings proxy instance for the specified schema.
+    
+    Args:
+        schema_name: Name of the schema to get settings for
+        
+    Returns:
+        SettingsProxy instance configured for the schema
+    """
+    return get_settings_proxy(schema_name)
+
+
+def get_schema_settings(schema_name: str) -> SettingsProxy:
+    """
+    Get settings for a specific schema.
+    
+    Args:
+        schema_name: Name of the schema to get settings for
+        
+    Returns:
+        SettingsProxy instance configured for the schema
+    """
+    return get_settings_for_schema(schema_name)
+
+
+def get_query_generator_settings(schema_name: Optional[str] = None):
+    """
+    Get query generator settings for the specified schema.
+    
+    Args:
+        schema_name: Name of the schema for schema-specific settings
+        
+    Returns:
+        QueryGeneratorSettings instance
+    """
+    from .core.settings import QueryGeneratorSettings
+    
+    proxy = get_settings_proxy(schema_name)
+    
+    # Get query settings from hierarchical configuration
+    query_settings = proxy.get('QUERY_SETTINGS', {})
+    
+    # Filter settings to match QueryGeneratorSettings dataclass fields
     valid_fields = {
-        field.name for field in QueryGeneratorSettings.__dataclass_fields__.values()
+        'generate_filters', 'generate_ordering', 'generate_pagination',
+        'enable_pagination', 'enable_ordering', 'use_relay',
+        'default_page_size', 'max_page_size', 'additional_lookup_fields'
     }
     
-    filtered_settings = {
-        key: value for key, value in settings_dict.items() 
-        if key in valid_fields
-    }
+    filtered_settings = {k: v for k, v in query_settings.items() if k in valid_fields}
     
     return QueryGeneratorSettings(**filtered_settings)
 
 
-def get_mutation_generator_settings(schema_name: Optional[str] = None) -> MutationGeneratorSettings:
+def get_type_generator_settings(schema_name: Optional[str] = None):
     """
-    Get mutation generator settings as MutationGeneratorSettings dataclass instance.
+    Get type generator settings for the specified schema.
     
     Args:
-        schema_name: Optional schema name for schema-specific settings
+        schema_name: Name of the schema for schema-specific settings
         
     Returns:
-        MutationGeneratorSettings: Configured mutation generator settings
+        TypeGeneratorSettings instance
     """
-    settings_dict = get_setting("MUTATION_SETTINGS", {}, schema_name)
+    from .core.settings import TypeGeneratorSettings
     
-    # Create MutationGeneratorSettings instance from dictionary
-    # Filter only the fields that exist in the dataclass
+    proxy = get_settings_proxy(schema_name)
+    
+    # Get type generation settings from hierarchical configuration
+    type_settings = proxy.get('TYPE_GENERATION_SETTINGS', {})
+    
+    # Filter settings to match TypeGeneratorSettings dataclass fields
     valid_fields = {
-        field.name for field in MutationGeneratorSettings.__dataclass_fields__.values()
+        'exclude_fields', 'excluded_fields', 'include_fields',
+        'custom_field_mappings', 'generate_filters', 'enable_filtering',
+        'auto_camelcase', 'generate_descriptions'
     }
     
-    filtered_settings = {
-        key: value for key, value in settings_dict.items() 
-        if key in valid_fields
-    }
-    
-    return MutationGeneratorSettings(**filtered_settings)
-
-
-def get_type_generator_settings(schema_name: Optional[str] = None) -> TypeGeneratorSettings:
-    """
-    Get type generator settings as TypeGeneratorSettings dataclass instance.
-    
-    Args:
-        schema_name: Optional schema name for schema-specific settings
-        
-    Returns:
-        TypeGeneratorSettings: Configured type generator settings
-    """
-    settings_dict = get_setting("TYPE_GENERATION_SETTINGS", {}, schema_name)
-    
-    # Create TypeGeneratorSettings instance from dictionary
-    # Filter only the fields that exist in the dataclass
-    valid_fields = {
-        field.name for field in TypeGeneratorSettings.__dataclass_fields__.values()
-    }
-    
-    filtered_settings = {
-        key: value for key, value in settings_dict.items() 
-        if key in valid_fields
-    }
+    filtered_settings = {k: v for k, v in type_settings.items() if k in valid_fields}
     
     return TypeGeneratorSettings(**filtered_settings)
 
 
-def get_mutation_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get mutation settings."""
-    return get_setting("MUTATION_SETTINGS", {}, schema_name)
-
-
-def get_type_generation_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get type generation settings."""
-    return get_setting("TYPE_GENERATION_SETTINGS", {}, schema_name)
-
-
-def get_performance_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get performance settings."""
-    return get_setting("PERFORMANCE_SETTINGS", {}, schema_name)
-
-
-def get_security_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get security settings."""
-    return get_setting("SECURITY_SETTINGS", {}, schema_name)
-
-
-def get_error_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get error handling settings."""
-    return get_setting("ERROR_SETTINGS", {}, schema_name)
-
-
-def get_caching_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get caching settings."""
-    return get_setting("CACHING_SETTINGS", {}, schema_name)
-
-
-def get_file_upload_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get file upload settings."""
-    return get_setting("FILE_UPLOAD_SETTINGS", {}, schema_name)
-
-
-def get_monitoring_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get monitoring settings."""
-    return get_setting("MONITORING_SETTINGS", {}, schema_name)
-
-
-def get_development_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get development settings."""
-    return get_setting("DEVELOPMENT_SETTINGS", {}, schema_name)
-
-
-def get_middleware_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get middleware settings."""
-    return get_setting("MIDDLEWARE_SETTINGS", {}, schema_name)
-
-
-def get_i18n_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get internationalization settings."""
-    return get_setting("I18N_SETTINGS", {}, schema_name)
-
-
-def get_testing_settings(schema_name: Optional[str] = None) -> Dict[str, Any]:
-    """Get testing settings."""
-    return get_setting("TESTING_SETTINGS", {}, schema_name)
-
-
-# Backward compatibility aliases
-settings = settings_proxy
-
-
-def get_settings_for_schema(schema_name: str) -> SettingsProxy:
-    """Get settings proxy for a specific schema (backward compatibility)."""
-    return schema_manager.get_schema_proxy(schema_name)
-
-
-def get_schema_settings(schema_name: str) -> SettingsProxy:
-    """Get settings for a specific schema (backward compatibility)."""
-    return get_settings_for_schema(schema_name)
-
-
-def configure_schema_settings(schema_name: str, **overrides) -> None:
-    """Configure settings for a specific schema (backward compatibility)."""
-    schema_manager.register_schema(schema_name, overrides)
-
-
-def validate_configuration() -> None:
-    """Validate the current library configuration (backward compatibility)."""
-    errors = validate_settings()
-    if errors:
-        error_msg = "; ".join([f"{k}: {v}" for k, v in errors.items()])
-        raise ImproperlyConfigured(f"Configuration validation failed: {error_msg}")
-    logger.info("Library configuration validation passed")
-
-
-# Auto-validate configuration on import (in development)
-if getattr(settings, "DEBUG", False):
-    try:
-        validate_configuration()
-    except Exception as e:
-        logger.warning(f"Configuration validation warning: {e}")
+def get_mutation_generator_settings(schema_name: Optional[str] = None):
+    """
+    Get mutation generator settings for the specified schema.
+    
+    Args:
+        schema_name: Name of the schema for schema-specific settings
+        
+    Returns:
+        MutationGeneratorSettings instance
+    """
+    from .core.settings import MutationGeneratorSettings
+    
+    proxy = get_settings_proxy(schema_name)
+    
+    # Get mutation settings from hierarchical configuration
+    mutation_settings = proxy.get('MUTATION_SETTINGS', {})
+    
+    # Filter settings to match MutationGeneratorSettings dataclass fields
+    valid_fields = {
+        'generate_create', 'generate_update', 'generate_delete', 'generate_bulk',
+        'enable_create', 'enable_update', 'enable_delete', 'enable_bulk_operations',
+        'enable_method_mutations', 'bulk_batch_size', 'required_update_fields',
+        'enable_nested_relations', 'nested_relations_config', 'nested_field_config'
+    }
+    
+    filtered_settings = {k: v for k, v in mutation_settings.items() if k in valid_fields}
+    
+    return MutationGeneratorSettings(**filtered_settings)

@@ -22,6 +22,7 @@ from graphene_django.utils import DJANGO_FILTER_INSTALLED
 
 if DJANGO_FILTER_INSTALLED:
     from django_filters import CharFilter
+from datetime import date
 
 from ..conf import get_mutation_generator_settings, get_type_generator_settings
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
@@ -77,6 +78,7 @@ class TypeGenerator:
         bool: graphene.Boolean,
         list: graphene.List,
         dict: graphene.JSONString,
+        date: graphene.Date,
         # Add more mappings as needed
     }
 

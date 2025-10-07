@@ -15,7 +15,8 @@ from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, asdict
 from enum import Enum
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+from django.apps import apps
 from django.http import HttpRequest
 from django.conf import settings
 from django.core.cache import cache
@@ -92,37 +93,12 @@ class AuditEvent:
         return data
 
 
-class AuditEventModel(models.Model):
-    """
-    Modèle Django pour stocker les événements d'audit en base de données.
-    """
-    event_type = models.CharField(max_length=50, db_index=True)
-    severity = models.CharField(max_length=20, db_index=True)
-    user_id = models.IntegerField(null=True, blank=True, db_index=True)
-    username = models.CharField(max_length=150, null=True, blank=True, db_index=True)
-    client_ip = models.GenericIPAddressField(db_index=True)
-    user_agent = models.TextField()
-    timestamp = models.DateTimeField(default=django_timezone.now, db_index=True)
-    request_path = models.CharField(max_length=500)
-    request_method = models.CharField(max_length=10)
-    additional_data = models.JSONField(null=True, blank=True)
-    session_id = models.CharField(max_length=100, null=True, blank=True)
-    success = models.BooleanField(default=True, db_index=True)
-    error_message = models.TextField(null=True, blank=True)
-    
-    class Meta:
-        app_label = 'rail_django_graphql'
-        db_table = 'audit_events'
-        ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['event_type', 'timestamp']),
-            models.Index(fields=['client_ip', 'timestamp']),
-            models.Index(fields=['user_id', 'timestamp']),
-            models.Index(fields=['success', 'timestamp']),
-        ]
-    
-    def __str__(self):
-        return f"{self.event_type} - {self.username or 'Anonymous'} - {self.timestamp}"
+# Remove the model definition - it's now in apps.core.models
+# Use lazy import to defer model access until Django apps are ready
+def get_audit_event_model():
+    """Lazy import for AuditEventModel to avoid AppRegistryNotReady errors."""
+    from apps.core.models import AuditEventModel
+    return AuditEventModel
 
 
 class AuditLogger:
@@ -174,7 +150,7 @@ class AuditLogger:
         except Exception as e:
             logger.error(f"Erreur lors de l'enregistrement de l'événement d'audit: {e}")
     
-    def log_login_attempt(self, request: HttpRequest, user: Optional[User], 
+    def log_login_attempt(self, request: HttpRequest, user: Optional["AbstractUser"], 
                          success: bool, error_message: Optional[str] = None) -> None:
         """
         Enregistre une tentative de connexion.
@@ -205,7 +181,7 @@ class AuditLogger:
         
         self.log_event(event)
     
-    def log_logout(self, request: HttpRequest, user: User) -> None:
+    def log_logout(self, request: HttpRequest, user: "AbstractUser") -> None:
         """
         Enregistre une déconnexion.
         
@@ -228,7 +204,7 @@ class AuditLogger:
         
         self.log_event(event)
     
-    def log_token_event(self, request: HttpRequest, user: Optional[User], 
+    def log_token_event(self, request: HttpRequest, user: Optional["AbstractUser"], 
                        event_type: AuditEventType, success: bool = True,
                        error_message: Optional[str] = None) -> None:
         """
@@ -260,7 +236,7 @@ class AuditLogger:
         self.log_event(event)
     
     def log_suspicious_activity(self, request: HttpRequest, activity_type: str,
-                              details: Dict[str, Any], user: Optional[User] = None) -> None:
+                              details: Dict[str, Any], user: Optional["AbstractUser"] = None) -> None:
         """
         Enregistre une activité suspecte.
         
@@ -327,7 +303,7 @@ class AuditLogger:
             from django.utils import timezone
             since = timezone.now() - timezone.timedelta(hours=hours)
             
-            events = AuditEventModel.objects.filter(timestamp__gte=since)
+            events = get_audit_event_model().objects.filter(timestamp__gte=since)
             
             report = {
                 'period_hours': hours,
@@ -374,7 +350,7 @@ class AuditLogger:
             event: Événement à enregistrer
         """
         try:
-            AuditEventModel.objects.create(
+            get_audit_event_model().objects.create(
                 event_type=event.event_type.value,
                 severity=event.severity.value,
                 user_id=event.user_id,
@@ -520,7 +496,7 @@ class AuditLogger:
 audit_logger = AuditLogger()
 
 
-def log_authentication_event(request: HttpRequest, user: Optional[User], 
+def log_authentication_event(request: HttpRequest, user: Optional["AbstractUser"], 
                            event_type: str, success: bool = True,
                            error_message: Optional[str] = None) -> None:
     """

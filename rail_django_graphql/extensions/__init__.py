@@ -26,7 +26,6 @@ from .audit import (
     AuditEventType,
     AuditSeverity,
     AuditEvent,
-    AuditEventModel,
     AuditLogger,
     audit_logger,
     log_authentication_event,
@@ -34,9 +33,6 @@ from .audit import (
 )
 
 from .mfa import (
-    MFADevice,
-    MFABackupCode,
-    TrustedDevice,
     MFAManager,
     mfa_manager,
     MFADeviceType,
@@ -65,16 +61,12 @@ __all__ = [
     'AuditEventType',
     'AuditSeverity',
     'AuditEvent',
-    'AuditEventModel',
     'AuditLogger',
     'audit_logger',
     'log_authentication_event',
     'get_security_dashboard_data',
     
     # MFA module
-    'MFADevice',
-    'MFABackupCode',
-    'TrustedDevice',
     'MFAManager',
     'mfa_manager',
     'MFADeviceType',

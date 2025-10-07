@@ -19,6 +19,7 @@ except Exception:
 import django_filters
 from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter, ModelChoiceFilter, ModelMultipleChoiceFilter
 import logging
+from datetime import date
 
 from .introspector import ModelIntrospector
 
@@ -502,6 +503,21 @@ class AdvancedFilterGenerator:
                 return property_value in filter_value
             elif lookup_expr == 'isnull':
                 return (property_value is None) == filter_value
+            elif lookup_expr == 'year':
+                # Handle date year filtering
+                if hasattr(property_value, 'year'):
+                    return property_value.year == filter_value
+                return False
+            elif lookup_expr == 'month':
+                # Handle date month filtering
+                if hasattr(property_value, 'month'):
+                    return property_value.month == filter_value
+                return False
+            elif lookup_expr == 'day':
+                # Handle date day filtering
+                if hasattr(property_value, 'day'):
+                    return property_value.day == filter_value
+                return False
             else:
                 # Default to exact match for unknown lookup expressions
                 return property_value == filter_value
@@ -1302,9 +1318,12 @@ class AdvancedFilterGenerator:
             filters.update(self._generate_property_numeric_filters(property_name))
         elif return_type == bool or return_type == 'bool':
             filters.update(self._generate_property_boolean_filters(property_name))
+        elif return_type == date or return_type == 'date' or str(return_type) == "<class 'datetime.date'>":
+            filters.update(self._generate_property_date_filters(property_name))
         elif return_type == list or return_type == 'list':
             # For list properties, provide basic text filtering
             filters.update(self._generate_property_text_filters(property_name))
+        
         else:
             # Default to text filtering for unknown types
             filters.update(self._generate_property_text_filters(property_name))
@@ -1371,6 +1390,47 @@ class AdvancedFilterGenerator:
             f'{property_name}': BooleanFilter(
                 method=self._create_property_filter_method(property_name, 'exact'),
                 help_text=f'Filter by {property_name} property boolean value'
+            ),
+        }
+
+    def _generate_property_date_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+        """Generate date-specific filters for properties: exact, gt, gte, lt, lte, year, month, day."""
+        return {
+            f'{property_name}': DateFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property with exact date matching'
+            ),
+            f'{property_name}__exact': DateFilter(
+                method=self._create_property_filter_method(property_name, 'exact'),
+                help_text=f'Filter by {property_name} property with exact date match'
+            ),
+            f'{property_name}__gt': DateFilter(
+                method=self._create_property_filter_method(property_name, 'gt'),
+                help_text=f'Filter by {property_name} property after the specified date'
+            ),
+            f'{property_name}__gte': DateFilter(
+                method=self._create_property_filter_method(property_name, 'gte'),
+                help_text=f'Filter by {property_name} property on or after the specified date'
+            ),
+            f'{property_name}__lt': DateFilter(
+                method=self._create_property_filter_method(property_name, 'lt'),
+                help_text=f'Filter by {property_name} property before the specified date'
+            ),
+            f'{property_name}__lte': DateFilter(
+                method=self._create_property_filter_method(property_name, 'lte'),
+                help_text=f'Filter by {property_name} property on or before the specified date'
+            ),
+            f'{property_name}__year': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'year'),
+                help_text=f'Filter by {property_name} property year'
+            ),
+            f'{property_name}__month': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'month'),
+                help_text=f'Filter by {property_name} property month'
+            ),
+            f'{property_name}__day': NumberFilter(
+                method=self._create_property_filter_method(property_name, 'day'),
+                help_text=f'Filter by {property_name} property day'
             ),
         }
 

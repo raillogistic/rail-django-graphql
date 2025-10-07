@@ -6,15 +6,23 @@ including field-level, object-level, and operation-level permissions.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Type, Union, Callable
+from typing import Any, Dict, List, Optional, Type, Union, Callable, TYPE_CHECKING
 from functools import wraps
 from enum import Enum
 
 import graphene
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
+from django.apps import apps
+from graphene_django import DjangoObjectType
+from django.conf import settings
+from django.core.cache import cache
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.db import models
+
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +57,7 @@ class PermissionResult:
 class BasePermissionChecker:
     """Classe de base pour les vérificateurs de permissions."""
     
-    def check_permission(self, user: User, obj: Any = None, **kwargs) -> PermissionResult:
+    def check_permission(self, user: "AbstractUser", obj: Any = None, **kwargs) -> PermissionResult:
         """
         Vérifie les permissions pour un utilisateur.
         
@@ -71,7 +79,7 @@ class DjangoPermissionChecker(BasePermissionChecker):
         self.permission_codename = permission_codename
         self.model_class = model_class
     
-    def check_permission(self, user: User, obj: Any = None, **kwargs) -> PermissionResult:
+    def check_permission(self, user: "AbstractUser", obj: Any = None, **kwargs) -> PermissionResult:
         """Vérifie les permissions Django standard."""
         if not user or not user.is_authenticated:
             return PermissionResult(False, "Utilisateur non authentifié")
@@ -99,7 +107,7 @@ class OwnershipPermissionChecker(BasePermissionChecker):
     def __init__(self, owner_field: str = "owner"):
         self.owner_field = owner_field
     
-    def check_permission(self, user: User, obj: Any = None, **kwargs) -> PermissionResult:
+    def check_permission(self, user: "AbstractUser", obj: Any = None, **kwargs) -> PermissionResult:
         """Vérifie si l'utilisateur est propriétaire de l'objet."""
         if not user or not user.is_authenticated:
             return PermissionResult(False, "Utilisateur non authentifié")
@@ -121,11 +129,11 @@ class OwnershipPermissionChecker(BasePermissionChecker):
 class CustomPermissionChecker(BasePermissionChecker):
     """Vérificateur personnalisé basé sur une fonction."""
     
-    def __init__(self, check_function: Callable[[User, Any], bool], description: str = ""):
+    def __init__(self, check_function: Callable[["AbstractUser", Any], bool], description: str = ""):
         self.check_function = check_function
         self.description = description
     
-    def check_permission(self, user: User, obj: Any = None, **kwargs) -> PermissionResult:
+    def check_permission(self, user: "AbstractUser", obj: Any = None, **kwargs) -> PermissionResult:
         """Utilise une fonction personnalisée pour vérifier les permissions."""
         try:
             allowed = self.check_function(user, obj)
@@ -199,7 +207,7 @@ class PermissionManager:
         self._operation_permissions[model_name][op_key].append(checker)
         logger.info(f"Permission d'opération enregistrée: {model_name}.{op_key}")
     
-    def check_field_permission(self, user: User, model_name: str, field_name: str,
+    def check_field_permission(self, user: "AbstractUser", model_name: str, field_name: str,
                              obj: Any = None) -> PermissionResult:
         """
         Vérifie les permissions pour un champ spécifique.
@@ -225,7 +233,7 @@ class PermissionManager:
         
         return PermissionResult(True, "Toutes les vérifications de champ réussies")
     
-    def check_object_permission(self, user: User, model_name: str, 
+    def check_object_permission(self, user: "AbstractUser", model_name: str, 
                               obj: Any = None) -> PermissionResult:
         """
         Vérifie les permissions pour un objet.
@@ -250,7 +258,7 @@ class PermissionManager:
         
         return PermissionResult(True, "Toutes les vérifications d'objet réussies")
     
-    def check_operation_permission(self, user: User, model_name: str, 
+    def check_operation_permission(self, user: "AbstractUser", model_name: str, 
                                  operation: OperationType, obj: Any = None) -> PermissionResult:
         """
         Vérifie les permissions pour une opération.
@@ -340,7 +348,7 @@ class PermissionFilterMixin:
     """Mixin pour filtrer les objets selon les permissions."""
     
     @classmethod
-    def filter_queryset_by_permissions(cls, queryset, user: User, operation: OperationType):
+    def filter_queryset_by_permissions(cls, queryset, user: "AbstractUser", operation: OperationType):
         """
         Filtre un queryset selon les permissions de l'utilisateur.
         

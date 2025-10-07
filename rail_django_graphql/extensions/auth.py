@@ -8,34 +8,52 @@ for login, register, token refresh, and user management.
 import jwt
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, TYPE_CHECKING
 
 import graphene
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from django.utils import timezone
 from graphene_django import DjangoObjectType
 
+if TYPE_CHECKING:
+    from django.contrib.auth.models import AbstractUser
+
 logger = logging.getLogger(__name__)
 
 
-class UserType(DjangoObjectType):
-    """GraphQL type for Django User model."""
+def get_user_type():
+    """Factory function to create UserType with proper model reference."""
     
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'email', 'first_name', 'last_name', 
-                 'is_active', 'date_joined', 'last_login')
+    class UserType(DjangoObjectType):
+        """GraphQL type for Django User model."""
+        
+        class Meta:
+            model = get_user_model()
+            fields = ('id', 'username', 'email', 'first_name', 'last_name', 
+                     'is_active', 'date_joined', 'last_login')
+    
+    return UserType
+
+
+# Create a lazy reference that will be resolved when needed
+_user_type = None
+
+def UserType():
+    """Lazy UserType that resolves the model when Django apps are ready."""
+    global _user_type
+    if _user_type is None:
+        _user_type = get_user_type()
+    return _user_type
 
 
 class AuthPayload(graphene.ObjectType):
     """Payload returned by authentication mutations."""
     
     ok = graphene.Boolean(required=True, description="Indique si l'opération a réussi")
-    user = graphene.Field(UserType, description="Utilisateur authentifié")
+    user = graphene.Field(lambda: UserType(), description="Utilisateur authentifié")
     token = graphene.String(description="Token JWT d'authentification")
     refresh_token = graphene.String(description="Token de rafraîchissement")
     expires_at = graphene.DateTime(description="Date d'expiration du token")
@@ -61,7 +79,7 @@ class JWTManager:
         return getattr(settings, 'JWT_REFRESH_EXPIRATION_DELTA', 604800)  # 7 jours par défaut
     
     @classmethod
-    def generate_token(cls, user: User) -> Dict[str, Any]:
+    def generate_token(cls, user: "AbstractUser") -> Dict[str, Any]:
         """
         Génère un token JWT pour l'utilisateur.
         
@@ -368,7 +386,7 @@ class LogoutMutation(graphene.Mutation):
 class MeQuery(graphene.ObjectType):
     """Query pour récupérer les informations de l'utilisateur connecté."""
     
-    me = graphene.Field(UserType, description="Informations de l'utilisateur connecté")
+    me = graphene.Field(lambda: UserType(), description="Informations de l'utilisateur connecté")
     
     def resolve_me(self, info):
         """
@@ -392,7 +410,7 @@ class AuthMutations(graphene.ObjectType):
     logout = LogoutMutation.Field(description="Déconnexion utilisateur")
 
 
-def get_user_from_token(token: str) -> Optional[User]:
+def get_user_from_token(token: str) -> Optional["AbstractUser"]:
     """
     Récupère un utilisateur à partir d'un token JWT.
     
@@ -412,7 +430,7 @@ def get_user_from_token(token: str) -> Optional[User]:
         return None
 
 
-def authenticate_request(info) -> Optional[User]:
+def authenticate_request(info) -> Optional["AbstractUser"]:
     """
     Authentifie une requête GraphQL à partir du token dans les headers.
     
