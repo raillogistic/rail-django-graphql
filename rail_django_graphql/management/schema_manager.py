@@ -19,7 +19,7 @@ from collections import defaultdict
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from graphql import GraphQLSchema, build_schema, validate_schema
+from graphql import GraphQLSchema, build_ast_schema, validate
 
 from ..validation import SchemaValidator, ValidationResult
 from ..introspection import SchemaIntrospector, SchemaComparison
@@ -188,7 +188,7 @@ class SchemaManager:
             # Convert string schema to GraphQLSchema if needed
             if isinstance(schema, str):
                 try:
-                    schema = build_schema(schema)
+                    schema = build_ast_schema(schema)
                 except Exception as e:
                     raise ValueError(f"Invalid GraphQL SDL: {e}")
             
@@ -359,7 +359,7 @@ class SchemaManager:
                 
                 if schema is not None:
                     if isinstance(schema, str):
-                        schema = build_schema(schema)
+                        schema = build_ast_schema(schema)
                     
                     # Validate new schema
                     if not force:
@@ -646,7 +646,7 @@ class SchemaManager:
         
         # Check schema validity
         try:
-            validation_errors = validate_schema(schema)
+            validation_errors = validate(schema, [])
             if validation_errors:
                 issues.extend([str(error) for error in validation_errors])
                 health.status = 'critical'

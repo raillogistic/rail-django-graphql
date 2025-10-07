@@ -18,7 +18,7 @@ from collections import defaultdict
 
 from django.conf import settings
 from django.db import transaction
-from graphql import GraphQLSchema, build_schema, print_schema
+from graphql import GraphQLSchema, build_ast_schema, print_schema
 
 from ..introspection import SchemaComparator, SchemaComparison, ChangeType, BreakingChangeLevel
 from ..validation import SchemaValidator

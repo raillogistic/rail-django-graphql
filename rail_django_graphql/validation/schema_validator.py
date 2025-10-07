@@ -11,7 +11,7 @@ from typing import Dict, Any, List, Optional, Set
 from dataclasses import dataclass
 from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
-from graphql import GraphQLSchema, validate_schema, build_schema
+from graphql import GraphQLSchema, validate, build_ast_schema
 from graphql.error import GraphQLError
 
 from .error_handlers import (
@@ -176,7 +176,7 @@ class SchemaValidator:
         """Validate GraphQL schema structure."""
         try:
             # Validate schema using GraphQL's built-in validation
-            validation_errors = validate_schema(graphql_schema)
+            validation_errors = validate(graphql_schema, [])
             
             if validation_errors:
                 for error in validation_errors:

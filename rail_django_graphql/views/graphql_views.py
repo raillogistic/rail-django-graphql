@@ -160,6 +160,8 @@ class MultiSchemaGraphQLView(GraphQLView):
             True if authentication is satisfied, False otherwise
         """
         schema_settings = getattr(schema_info, "settings", {}) or {}
+        print("qqqqqqqqqqqqqqq", schema_settings)
+        # print("qqqqqqqqq", schema_settings)
         auth_required = schema_settings.get("authentication_required", False)
 
         if not auth_required:
@@ -190,9 +192,42 @@ class MultiSchemaGraphQLView(GraphQLView):
         Returns:
             True if token is valid, False otherwise
         """
-        # This is a placeholder for custom token validation
-        # Implement your authentication logic here
-        return True
+        try:
+            # Extract token from header
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+            elif auth_header.startswith("Token "):
+                token = auth_header.split(" ")[1]
+            else:
+                return False
+            
+            # Validate JWT token using JWTManager
+            from ..extensions.auth import JWTManager
+            payload = JWTManager.verify_token(token)
+            
+            if not payload:
+                return False
+                
+            # Check if user exists and is active
+            user_id = payload.get('user_id')
+            if not user_id:
+                return False
+                
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            
+            try:
+                user = User.objects.get(id=user_id)
+                return user.is_active
+            except User.DoesNotExist:
+                return False
+                
+        except Exception as e:
+            # Log the error for debugging but don't expose details
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Token validation failed: {str(e)}")
+            return False
 
     def _schema_not_found_response(self, schema_name: str) -> JsonResponse:
         """Return a 404 response for unknown schemas."""
@@ -235,7 +270,7 @@ class MultiSchemaGraphQLView(GraphQLView):
                 "errors": [
                     {
                         "message": "Authentication required for this schema",
-                        "extensions": {"code": "AUTHENTICATION_REQUIRED"},
+                        "extensions": {"code": "authentication_required"},
                     }
                 ]
             },

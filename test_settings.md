@@ -18,7 +18,7 @@ Use this checklist to verify all settings are correctly applied via the settings
   - [ ] `settings.SCHEMA_SETTINGS['auto_camelcase'] is False`
 
 ## Authentication and Security
-- [ ] Confirm `settings.AUTHENTICATION_REQUIRED is False`
+- [ ] Confirm `settings.authentication_required is False`
 - [ ] Confirm `settings.PERMISSION_CLASSES == []`
 - [ ] Confirm `settings.ENABLE_INTROSPECTION is True`
 - [ ] Confirm `settings.ENABLE_PLAYGROUND is True`
@@ -184,7 +184,7 @@ Use this checklist to verify all settings are correctly applied via the settings
 ## Configuration Validation
 - [ ] Run `validate_configuration()` from `rail_django_graphql.conf` (should pass)
 - [ ] Confirm required settings present: `DEFAULT_SCHEMA`, `ENABLE_GRAPHIQL`
-- [ ] Verify types: `ENABLE_GRAPHIQL` (bool), `AUTHENTICATION_REQUIRED` (bool), `ENABLE_CACHING` (bool), `CACHE_TIMEOUT` (int), `DEFAULT_SCHEMA` (str), `SCHEMA_ENDPOINT` (str)
+- [ ] Verify types: `ENABLE_GRAPHIQL` (bool), `authentication_required` (bool), `ENABLE_CACHING` (bool), `CACHE_TIMEOUT` (int), `DEFAULT_SCHEMA` (str), `SCHEMA_ENDPOINT` (str)
 - [ ] Run `ConfigLoader.validate_configuration()` (should return `True`)
 
 ## Overrides

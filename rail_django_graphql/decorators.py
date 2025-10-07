@@ -3,10 +3,11 @@ Decorators for enhancing Django model methods with GraphQL mutation capabilities
 and schema registration.
 """
 
-from functools import wraps
-from typing import Any, Callable, Optional, Type, List, Dict
-import graphene
 import logging
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Type
+
+import graphene
 
 logger = logging.getLogger(__name__)
 
@@ -14,16 +15,16 @@ logger = logging.getLogger(__name__)
 def mutation(
     input_type: Optional[Type[graphene.InputObjectType]] = None,
     output_type: Optional[Type[graphene.ObjectType]] = None,
-    description: Optional[str] = None
+    description: Optional[str] = None,
 ):
     """
     Decorator to mark a model method as a GraphQL mutation.
-    
+
     Args:
         input_type: Custom input type for the mutation
-        output_type: Custom output type for the mutation  
+        output_type: Custom output type for the mutation
         description: Description for the mutation
-        
+
     Example:
         @mutation(description="Activate user account")
         def activate_account(self, reason: str = "Manual activation"):
@@ -32,34 +33,36 @@ def mutation(
             self.save()
             return True
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
-        
+
         # Mark the function as a mutation
         wrapper._is_mutation = True
         wrapper._mutation_input_type = input_type
         wrapper._mutation_output_type = output_type
         wrapper._mutation_description = description or func.__doc__
-        
+
         return wrapper
+
     return decorator
 
 
 def business_logic(
     category: str = "general",
     requires_permission: Optional[str] = None,
-    atomic: bool = True
+    atomic: bool = True,
 ):
     """
     Decorator to mark a method as custom business logic that should be exposed as a mutation.
-    
+
     Args:
         category: Category of business logic (e.g., "workflow", "approval", "processing")
         requires_permission: Permission required to execute this mutation
         atomic: Whether to wrap execution in a database transaction
-        
+
     Example:
         @business_logic(category="approval", requires_permission="can_approve_posts")
         def approve_post(self, approved_by: str, notes: str = ""):
@@ -70,35 +73,38 @@ def business_logic(
             self.save()
             return {"status": "approved", "message": "Post approved successfully"}
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
-        
+
         # Mark as both mutation and business logic
         wrapper._is_mutation = True
         wrapper._is_business_logic = True
         wrapper._business_logic_category = category
         wrapper._requires_permission = requires_permission
         wrapper._atomic = atomic
-        
+
         return wrapper
+
     return decorator
 
 
 def private_method(func: Callable) -> Callable:
     """
     Decorator to mark a method as private (should not be exposed as a mutation).
-    
+
     Example:
         @private_method
         def _internal_calculation(self):
             return self.value * 2
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
-    
+
     wrapper._private = True
     return wrapper
 
@@ -106,10 +112,10 @@ def private_method(func: Callable) -> Callable:
 def custom_mutation_name(name: str):
     """
     Decorator to specify a custom name for the generated mutation.
-    
+
     Args:
         name: Custom name for the mutation
-        
+
     Example:
         @custom_mutation_name("publishArticle")
         def publish(self):
@@ -117,13 +123,15 @@ def custom_mutation_name(name: str):
             self.published_at = timezone.now()
             self.save()
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
-        
+
         wrapper._custom_mutation_name = name
         return wrapper
+
     return decorator
 
 
@@ -135,14 +143,14 @@ def register_schema(
     models: Optional[List[str]] = None,
     settings: Optional[Dict[str, Any]] = None,
     auto_discovery: bool = True,
-    enabled: bool = True
+    enabled: bool = True,
 ):
     """
     Decorator for registering GraphQL schemas with the central schema registry.
-    
+
     This decorator can be applied to schema classes or schema factory functions
     to automatically register them with the schema registry system.
-    
+
     Args:
         name: Schema name (defaults to class/function name)
         description: Schema description for documentation
@@ -152,7 +160,7 @@ def register_schema(
         settings: Schema-specific configuration settings
         auto_discovery: Whether to enable automatic model discovery
         enabled: Whether the schema is enabled by default
-        
+
     Example:
         @register_schema(
             name="blog_schema",
@@ -164,7 +172,7 @@ def register_schema(
         class BlogSchema(graphene.Schema):
             query = BlogQuery
             mutation = BlogMutation
-            
+
         @register_schema(
             name="api_v1",
             description="Main API schema",
@@ -173,31 +181,34 @@ def register_schema(
         def create_api_schema():
             return graphene.Schema(query=APIQuery, mutation=APIMutation)
     """
+
     def decorator(schema_class_or_function: Callable) -> Callable:
         # Determine schema name
-        schema_name = name or getattr(schema_class_or_function, '__name__', 'unnamed_schema')
-        
+        schema_name = name or getattr(
+            schema_class_or_function, "__name__", "unnamed_schema"
+        )
+
         # Prepare registration data
         registration_data = {
-            'name': schema_name,
-            'description': description,
-            'version': version,
-            'apps': apps or [],
-            'models': models or [],
-            'settings': settings or {},
-            'auto_discovery': auto_discovery,
-            'enabled': enabled
+            "name": schema_name,
+            "description": description,
+            "version": version,
+            "apps": apps or [],
+            "models": models or [],
+            "settings": settings or {},
+            "auto_discovery": auto_discovery,
+            "enabled": enabled,
         }
-        
+
         # Handle both class and function decoration
         if isinstance(schema_class_or_function, type):
             # Class decoration - register the class directly
             # Store registration metadata on the class
             schema_class_or_function._schema_registration = registration_data
-            
+
             # Perform registration
             _register_schema_with_registry(schema_class_or_function, registration_data)
-            
+
             return schema_class_or_function
         else:
             # Function decoration - register the function result
@@ -205,22 +216,24 @@ def register_schema(
             def wrapper(*args, **kwargs):
                 schema_instance = schema_class_or_function(*args, **kwargs)
                 return schema_instance
-            
+
             # Store registration metadata on the function
             wrapper._schema_registration = registration_data
-            
+
             # Perform registration with function
             _register_schema_with_registry(schema_class_or_function, registration_data)
-            
+
             return wrapper
-    
+
     return decorator
 
 
-def _register_schema_with_registry(schema_class_or_function: Callable, registration_data: Dict[str, Any]):
+def _register_schema_with_registry(
+    schema_class_or_function: Callable, registration_data: Dict[str, Any]
+):
     """
     Internal function to handle the actual schema registration with the registry.
-    
+
     Args:
         schema_class_or_function: The schema class or factory function
         registration_data: Dictionary containing registration metadata
@@ -228,19 +241,21 @@ def _register_schema_with_registry(schema_class_or_function: Callable, registrat
     try:
         # Import registry here to avoid circular imports
         from .core.registry import schema_registry
-        
+
         # Register the schema
         schema_registry.register_schema(
-            name=registration_data['name'],
-            description=registration_data['description'],
-            apps=registration_data['apps'],
-            models=registration_data['models'],
-            settings=registration_data['settings'],
-            enabled=registration_data['enabled']
+            name=registration_data["name"],
+            description=registration_data["description"],
+            apps=registration_data["apps"],
+            models=registration_data["models"],
+            settings=registration_data["settings"],
+            enabled=registration_data["enabled"],
         )
-        
-        logger.info(f"Successfully registered schema '{registration_data['name']}' via decorator")
-        
+
+        logger.info(
+            f"Successfully registered schema '{registration_data['name']}' via decorator"
+        )
+
     except ImportError as e:
         logger.warning(
             f"Could not register schema '{registration_data['name']}' - "

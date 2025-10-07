@@ -20,7 +20,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     "enable_graphiql": True,
     "graphiql_template": "graphene/graphiql.html",
     "schema_endpoint": "/graphql/",
-    "authentication_required": False,
+    "authentication_required": True,
     "permission_classes": [],
     "enable_introspection": True,
     "enable_playground": True,
@@ -1080,13 +1080,13 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
 # ========================================
 SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
     "admin": {
-        "AUTHENTICATION_REQUIRED": True,
+        "authentication_required": True,
         "enable_introspection": False,
         "ENABLE_GRAPHIQL": False,
         "PERMISSION_CLASSES": ["rail_django_graphql.permissions.IsAdminUser"],
     },
     "public": {
-        "AUTHENTICATION_REQUIRED": False,
+        "authentication_required": False,
         "enable_introspection": True,
         "ENABLE_GRAPHIQL": True,
         "query_settings": {
@@ -1094,12 +1094,12 @@ SCHEMA_DEFAULTS: Dict[str, Dict[str, Any]] = {
         },
     },
     "api": {
-        "AUTHENTICATION_REQUIRED": True,
+        "authentication_required": True,
         "enable_introspection": False,
         "ENABLE_GRAPHIQL": False,
     },
     "internal": {
-        "AUTHENTICATION_REQUIRED": True,
+        "authentication_required": True,
         "enable_introspection": False,
     },
 }

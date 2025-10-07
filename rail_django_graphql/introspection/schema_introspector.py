@@ -19,8 +19,8 @@ from graphql import (
     GraphQLInputObjectType,
     GraphQLField,
     GraphQLArgument,
-    is_non_null_type,
-    is_list_type,
+    GraphQLNonNull,
+    GraphQLList,
     get_named_type
 )
 from graphql.execution import execute
@@ -334,8 +334,8 @@ class SchemaIntrospector:
     def _analyze_field(self, field_obj: GraphQLField, field_name: str) -> FieldInfo:
         """Analyze a GraphQL field."""
         field_type = field_obj.type
-        is_nullable = not is_non_null_type(field_type)
-        is_list = is_list_type(field_type) or (is_non_null_type(field_type) and is_list_type(field_type.of_type))
+        is_nullable = not isinstance(field_type, GraphQLNonNull)
+        is_list = isinstance(field_type, GraphQLList) or (isinstance(field_type, GraphQLNonNull) and isinstance(field_type.of_type, GraphQLList))
         
         # Get the named type
         named_type = get_named_type(field_type)

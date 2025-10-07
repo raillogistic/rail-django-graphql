@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# User model will be retrieved dynamically when needed
+
 
 def get_user_type():
     """Factory function to create UserType with proper model reference."""
@@ -154,6 +156,7 @@ class JWTManager:
             return None
         
         try:
+            User = get_user_model()
             user = User.objects.get(id=payload['user_id'])
             return cls.generate_token(user)
         except User.DoesNotExist:
@@ -251,6 +254,9 @@ class RegisterMutation(graphene.Mutation):
             AuthPayload avec le token et les informations utilisateur
         """
         try:
+            # Get the User model dynamically
+            User = get_user_model()
+            
             # Validation des données
             errors = []
             
@@ -331,6 +337,7 @@ class RefreshTokenMutation(graphene.Mutation):
             
             # Récupération de l'utilisateur pour le retourner
             payload = JWTManager.verify_token(token_data['token'])
+            User = get_user_model()
             user = User.objects.get(id=payload['user_id'])
             
             return AuthPayload(
@@ -425,6 +432,7 @@ def get_user_from_token(token: str) -> Optional["AbstractUser"]:
         return None
     
     try:
+        User = get_user_model()
         return User.objects.get(id=payload['user_id'])
     except User.DoesNotExist:
         return None
