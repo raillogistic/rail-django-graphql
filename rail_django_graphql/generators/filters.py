@@ -6,7 +6,7 @@ GraphQL filters based on Django model field types, supporting complex
 filter combinations and field-specific operations.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union, Set
+from typing import Any, Dict, List, Optional, Type, Union, Set, Callable
 import graphene
 from django.db import models
 from django.db.models import Q
@@ -19,9 +19,11 @@ except Exception:
 import django_filters
 from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter, ModelChoiceFilter, ModelMultipleChoiceFilter
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
+from django.utils import timezone
 
 from .introspector import ModelIntrospector
+from ..core.meta import get_model_graphql_meta
 
 logger = logging.getLogger(__name__)
 
@@ -120,12 +122,26 @@ class AdvancedFilterGenerator:
         self._visited_models.add(model)
         
         try:
+            # Get GraphQLMeta configuration for the model
+            graphql_meta = get_model_graphql_meta(model)
+            
             # Generate filters for all fields
             filters = {}
             for field in model._meta.get_fields():
                 if hasattr(field, 'name'):  # Skip reverse relations without names
                     field_filters = self._generate_field_filters(field, current_depth, allow_nested=True)
                     filters.update(field_filters)
+            
+            # Add custom filters from GraphQLMeta
+            if graphql_meta and graphql_meta.custom_filters:
+                custom_filters = graphql_meta.get_custom_filters()
+                filters.update(custom_filters)
+            
+            # Add quick filter if configured
+            if graphql_meta and graphql_meta.filters.get('quick'):
+                quick_filter = self._generate_quick_filter(model, graphql_meta.filters.get('quick'))
+                if quick_filter:
+                    filters['quick'] = quick_filter
             
             # Generate reverse relationship count filters
             reverse_count_filters = self._generate_reverse_relationship_count_filters(model)
@@ -159,13 +175,174 @@ class AdvancedFilterGenerator:
             
             # Cache the result
             self._filter_cache[cache_key] = filter_set_class
-            logger.debug(f"Generated FilterSet for {model.__name__} with {len(filters)} filters at depth {current_depth}")
-            
             return filter_set_class
             
+        except Exception as e:
+            logger.error(f"Error generating FilterSet for {model.__name__}: {e}")
+            return self._generate_basic_filter_set(model)
         finally:
-            # Remove model from visited set to allow it in other branches
+            # Remove model from visited set
             self._visited_models.discard(model)
+
+    def _generate_quick_filter(self, model: Type[models.Model], quick_filter_fields: List[str]) -> Optional[CharFilter]:
+        """
+        Generate a quick filter that searches across multiple fields.
+        
+        Args:
+            model: Django model to generate quick filter for
+            quick_filter_fields: List of field paths to include in quick search
+            
+        Returns:
+            CharFilter that searches across specified fields
+        """
+        def quick_filter_method(queryset, name, value):
+            if not value:
+                return queryset
+            
+            q_objects = Q()
+            for field_path in quick_filter_fields:
+                try:
+                    # Get the field type to determine appropriate lookup
+                    field = self._get_field_from_path(model, field_path)
+                    if field:
+                        if isinstance(field, (models.CharField, models.TextField)):
+                            q_objects |= Q(**{f"{field_path}__icontains": value})
+                        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                            try:
+                                numeric_value = float(value)
+                                q_objects |= Q(**{field_path: numeric_value})
+                            except (ValueError, TypeError):
+                                continue
+                        elif isinstance(field, models.BooleanField):
+                            if value.lower() in ['true', '1', 'yes', 'on']:
+                                q_objects |= Q(**{field_path: True})
+                            elif value.lower() in ['false', '0', 'no', 'off']:
+                                q_objects |= Q(**{field_path: False})
+                        else:
+                            # For other field types, try exact match
+                            q_objects |= Q(**{f"{field_path}__icontains": value})
+                except Exception as e:
+                    logger.warning(f"Error processing quick filter field {field_path}: {e}")
+                    continue
+            
+            return queryset.filter(q_objects)
+        
+        return django_filters.CharFilter(
+            method=quick_filter_method,
+            help_text=f'Quick search across fields: {", ".join(quick_filter_fields)}'
+        )
+
+    def _get_field_from_path(self, model: Type[models.Model], field_path: str) -> Optional[models.Field]:
+        """
+        Get Django field from a field path (e.g., 'user__profile__name').
+        
+        Args:
+            model: Starting model
+            field_path: Field path with double underscores for relationships
+            
+        Returns:
+            Django field instance or None if not found
+        """
+        try:
+            current_model = model
+            field_parts = field_path.split('__')
+            
+            for i, part in enumerate(field_parts):
+                field = current_model._meta.get_field(part)
+                
+                # If this is the last part, return the field
+                if i == len(field_parts) - 1:
+                    return field
+                
+                # If it's a relationship field, get the related model
+                if hasattr(field, 'related_model'):
+                    current_model = field.related_model
+                else:
+                    return None
+            
+            return None
+        except Exception:
+            return None
+
+    # Date filter helper methods
+    def _filter_date_today(self, queryset, field_name: str, value):
+        """Filter for today's date."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        return queryset.filter(**{f"{field_name}": today})
+
+    def _filter_date_yesterday(self, queryset, field_name: str, value):
+        """Filter for yesterday's date."""
+        if not value:
+            return queryset
+        yesterday = (timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()) - timedelta(days=1)
+        return queryset.filter(**{f"{field_name}": yesterday})
+
+    def _filter_date_this_week(self, queryset, field_name: str, value):
+        """Filter for this week's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        days_since_monday = today.weekday()
+        this_week_start = today - timedelta(days=days_since_monday)
+        this_week_end = this_week_start + timedelta(days=6)
+        return queryset.filter(**{f"{field_name}__range": [this_week_start, this_week_end]})
+
+    def _filter_date_past_week(self, queryset, field_name: str, value):
+        """Filter for past week's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        days_since_monday = today.weekday()
+        this_week_start = today - timedelta(days=days_since_monday)
+        past_week_start = this_week_start - timedelta(days=7)
+        past_week_end = this_week_start - timedelta(days=1)
+        return queryset.filter(**{f"{field_name}__range": [past_week_start, past_week_end]})
+
+    def _filter_date_this_month(self, queryset, field_name: str, value):
+        """Filter for this month's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        this_month_start = today.replace(day=1)
+        if today.month == 12:
+            next_month_start = today.replace(year=today.year + 1, month=1, day=1)
+        else:
+            next_month_start = today.replace(month=today.month + 1, day=1)
+        this_month_end = next_month_start - timedelta(days=1)
+        return queryset.filter(**{f"{field_name}__dat__range": [this_month_start, this_month_end]})
+
+    def _filter_date_past_month(self, queryset, field_name: str, value):
+        """Filter for past month's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        this_month_start = today.replace(day=1)
+        if this_month_start.month == 1:
+            past_month_start = this_month_start.replace(year=this_month_start.year - 1, month=12, day=1)
+        else:
+            past_month_start = this_month_start.replace(month=this_month_start.month - 1, day=1)
+        past_month_end = this_month_start - timedelta(days=1)
+        return queryset.filter(**{f"{field_name}__range": [past_month_start, past_month_end]})
+
+    def _filter_date_this_year(self, queryset, field_name: str, value):
+        """Filter for this year's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        this_year_start = today.replace(month=1, day=1)
+        this_year_end = today.replace(month=12, day=31)
+        return queryset.filter(**{f"{field_name}__dat__range": [this_year_start, this_year_end]})
+
+    def _filter_date_past_year(self, queryset, field_name: str, value):
+        """Filter for past year's dates."""
+        if not value:
+            return queryset
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        past_year_start = today.replace(year=today.year - 1, month=1, day=1)
+        past_year_end = today.replace(year=today.year - 1, month=12, day=31)
+        return queryset.filter(**{f"{field_name}__range": [past_year_start, past_year_end]})
 
     def _generate_basic_filter_set(self, model: Type[models.Model]) -> Type[FilterSet]:
         """
@@ -984,8 +1161,8 @@ class AdvancedFilterGenerator:
         }
 
     def _generate_date_filters(self, field_name: str) -> Dict[str, DateFilter]:
-        """Generate date filters: year, month, day, range, gt, lt."""
-        return {
+        """Generate date filters: year, month, day, range, gt, lt, and time-based filters."""
+        filters = {
             f'{field_name}__year': NumberFilter(
                 field_name=field_name,
                 lookup_expr='year',
@@ -1016,6 +1193,76 @@ class AdvancedFilterGenerator:
                 help_text=f'Filter {field_name} within the specified date range'
             ),
         }
+        
+        # Add time-based filters
+        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        yesterday = today - timedelta(days=1)
+        
+        # Calculate week boundaries (Monday as start of week)
+        days_since_monday = today.weekday()
+        this_week_start = today - timedelta(days=days_since_monday)
+        this_week_end = this_week_start + timedelta(days=6)
+        past_week_start = this_week_start - timedelta(days=7)
+        past_week_end = this_week_start - timedelta(days=1)
+        
+        # Calculate month boundaries
+        this_month_start = today.replace(day=1)
+        if today.month == 12:
+            next_month_start = today.replace(year=today.year + 1, month=1, day=1)
+        else:
+            next_month_start = today.replace(month=today.month + 1, day=1)
+        this_month_end = next_month_start - timedelta(days=1)
+        
+        if this_month_start.month == 1:
+            past_month_start = this_month_start.replace(year=this_month_start.year - 1, month=12, day=1)
+        else:
+            past_month_start = this_month_start.replace(month=this_month_start.month - 1, day=1)
+        past_month_end = this_month_start - timedelta(days=1)
+        
+        # Calculate year boundaries
+        this_year_start = today.replace(month=1, day=1)
+        this_year_end = today.replace(month=12, day=31)
+        past_year_start = this_year_start.replace(year=this_year_start.year - 1)
+        past_year_end = this_year_end.replace(year=this_year_end.year - 1)
+        
+        # Add time-based filters using custom filter methods
+        time_filters = {
+            f'{field_name}_today': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_today(queryset, field_name, value),
+                help_text=f'Filter {field_name} for today'
+            ),
+            f'{field_name}_yesterday': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_yesterday(queryset, field_name, value),
+                help_text=f'Filter {field_name} for yesterday'
+            ),
+            f'{field_name}_this_week': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_this_week(queryset, field_name, value),
+                help_text=f'Filter {field_name} for this week'
+            ),
+            f'{field_name}_past_week': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_past_week(queryset, field_name, value),
+                help_text=f'Filter {field_name} for past week'
+            ),
+            f'{field_name}_this_month': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_this_month(queryset, field_name, value),
+                help_text=f'Filter {field_name} for this month'
+            ),
+            f'{field_name}_past_month': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_past_month(queryset, field_name, value),
+                help_text=f'Filter {field_name} for past month'
+            ),
+            f'{field_name}_this_year': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_this_year(queryset, field_name, value),
+                help_text=f'Filter {field_name} for this year'
+            ),
+            f'{field_name}_past_year': django_filters.BooleanFilter(
+                method=lambda queryset, name, value: self._filter_date_past_year(queryset, field_name, value),
+                help_text=f'Filter {field_name} for past year'
+            ),
+        }
+        
+        filters.update(time_filters)
+        return filters
 
     def _generate_boolean_filters(self, field_name: str) -> Dict[str, BooleanFilter]:
         """Generate boolean filters: exact matching."""
