@@ -9,7 +9,7 @@ Ce module fournit :
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Union, Callable, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Set, Union, Callable, TYPE_CHECKING, Tuple
 from enum import Enum
 from dataclasses import dataclass
 from functools import wraps
@@ -206,7 +206,7 @@ class FieldPermissionManager:
         
         return FieldAccessLevel.NONE
     
-    def get_field_visibility(self, context: FieldContext) -> tuple[FieldVisibility, Any]:
+    def get_field_visibility(self, context: FieldContext) -> Tuple[FieldVisibility, Any]:
         """
         Détermine la visibilité d'un champ et sa valeur masquée si applicable.
         
