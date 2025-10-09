@@ -25,9 +25,9 @@ if DJANGO_FILTER_INSTALLED:
 from datetime import date
 
 from ..conf import get_mutation_generator_settings, get_type_generator_settings
-from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
-from ..core.scalars import get_enabled_scalars, get_custom_scalar
 from ..core.performance import get_query_optimizer
+from ..core.scalars import get_custom_scalar, get_enabled_scalars
+from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
 
@@ -115,10 +115,10 @@ class TypeGenerator:
 
         # Initialize performance optimizer
         self.query_optimizer = get_query_optimizer(schema_name)
-        
+
         # Get enabled custom scalars for this schema
         self.custom_scalars = get_enabled_scalars(schema_name)
-        
+
         # Update field type map with custom scalars
         self._update_field_type_map()
 
@@ -136,8 +136,14 @@ class TypeGenerator:
     def _update_field_type_map(self) -> None:
         """Update field type map with custom scalars based on settings."""
         # Apply custom field mappings from settings
-        if hasattr(self.settings, 'custom_field_mappings') and self.settings.custom_field_mappings:
-            for django_field, graphql_type in self.settings.custom_field_mappings.items():
+        if (
+            hasattr(self.settings, "custom_field_mappings")
+            and self.settings.custom_field_mappings
+        ):
+            for (
+                django_field,
+                graphql_type,
+            ) in self.settings.custom_field_mappings.items():
                 if isinstance(graphql_type, str):
                     # Try to get custom scalar
                     custom_scalar = get_custom_scalar(graphql_type)
@@ -145,31 +151,31 @@ class TypeGenerator:
                         self.FIELD_TYPE_MAP[django_field] = custom_scalar
                 else:
                     self.FIELD_TYPE_MAP[django_field] = graphql_type
-        
+
         # Apply custom scalars based on field types
-        if 'Email' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.EmailField] = self.custom_scalars['Email']
-        
-        if 'URL' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.URLField] = self.custom_scalars['URL']
-        
-        if 'UUID' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.UUIDField] = self.custom_scalars['UUID']
-        
-        if 'DateTime' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.DateTimeField] = self.custom_scalars['DateTime']
-        
-        if 'Date' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.DateField] = self.custom_scalars['Date']
-        
-        if 'Time' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.TimeField] = self.custom_scalars['Time']
-        
-        if 'JSON' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.JSONField] = self.custom_scalars['JSON']
-        
-        if 'Decimal' in self.custom_scalars:
-            self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars['Decimal']
+        if "Email" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.EmailField] = self.custom_scalars["Email"]
+
+        if "URL" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.URLField] = self.custom_scalars["URL"]
+
+        if "UUID" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.UUIDField] = self.custom_scalars["UUID"]
+
+        if "DateTime" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DateTimeField] = self.custom_scalars["DateTime"]
+
+        if "Date" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DateField] = self.custom_scalars["Date"]
+
+        if "Time" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.TimeField] = self.custom_scalars["Time"]
+
+        if "JSON" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.JSONField] = self.custom_scalars["JSON"]
+
+        if "Decimal" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars["Decimal"]
 
     def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
         """Get excluded fields for a specific model."""
@@ -967,8 +973,21 @@ class TypeGenerator:
                     continue
 
                 reverse_relations[accessor_name] = rel.related_model
+        # Fallback for Django versions that use get_fields() with related fields
+        elif hasattr(model._meta, "get_fields"):
+            try:
+                for field in model._meta.get_fields():
+                    # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
+                    if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                        accessor_name = field.get_accessor_name()
+                        
+                        if self._should_include_field(model, accessor_name):
+                            reverse_relations[accessor_name] = field.related_model
+            except AttributeError:
+                # If get_fields doesn't work as expected, continue without reverse relations
+                pass
         else:
-            # Fallback for older Django versions
+            # Final fallback for very old Django versions
             try:
                 for rel in model._meta.get_all_related_objects():
                     if hasattr(rel, "get_accessor_name"):

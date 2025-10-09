@@ -1169,7 +1169,27 @@ class NestedOperationHandler:
                 if self._should_include_reverse_field(rel):
                     reverse_relations[accessor_name] = rel
 
-        # Fallback for older Django versions
+        # For modern Django versions, use related_objects
+        if hasattr(model._meta, "related_objects"):
+            for rel in model._meta.related_objects:
+                accessor_name = rel.get_accessor_name()
+                if self._should_include_reverse_field(rel):
+                    reverse_relations[accessor_name] = rel
+
+        # Fallback for Django versions that use get_fields() with related fields
+        elif hasattr(model._meta, "get_fields"):
+            try:
+                for field in model._meta.get_fields():
+                    # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
+                    if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                        if self._should_include_reverse_field(field):
+                            accessor_name = field.get_accessor_name()
+                            reverse_relations[accessor_name] = field
+            except AttributeError:
+                # If get_fields doesn't work as expected, continue without reverse relations
+                pass
+
+        # Final fallback for very old Django versions
         elif hasattr(model._meta, "get_all_related_objects"):
             for rel in model._meta.get_all_related_objects():
                 accessor_name = rel.get_accessor_name()

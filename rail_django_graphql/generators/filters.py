@@ -138,10 +138,25 @@ class AdvancedFilterGenerator:
                 filters.update(custom_filters)
             
             # Add quick filter if configured
-            if graphql_meta and graphql_meta.filters.get('quick'):
-                quick_filter = self._generate_quick_filter(model, graphql_meta.filters.get('quick'))
-                if quick_filter:
-                    filters['quick'] = quick_filter
+            if graphql_meta and (
+                graphql_meta.filters.get('quick') or 
+                graphql_meta.filter_fields.get('quick') or 
+                getattr(graphql_meta, 'quick_filter_fields', None)
+            ):
+                # Use quick_filter_fields if available, otherwise fall back to filters['quick']
+                # If filter_fields['quick'] exists but quick_filter_fields doesn't, use default searchable fields
+                quick_fields = getattr(graphql_meta, 'quick_filter_fields', None)
+                if not quick_fields:
+                    quick_fields = graphql_meta.filters.get('quick', [])
+                if not quick_fields and graphql_meta.filter_fields.get('quick'):
+                    # If filter_fields['quick'] exists but no specific fields defined,
+                    # use default searchable fields from the model
+                    quick_fields = self._get_default_quick_filter_fields(model)
+                
+                if quick_fields:
+                    quick_filter = self._generate_quick_filter(model, quick_fields)
+                    if quick_filter:
+                        filters['quick'] = quick_filter
             
             # Generate reverse relationship count filters
             reverse_count_filters = self._generate_reverse_relationship_count_filters(model)
@@ -231,6 +246,47 @@ class AdvancedFilterGenerator:
             method=quick_filter_method,
             help_text=f'Quick search across fields: {", ".join(quick_filter_fields)}'
         )
+
+    def _get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
+        """
+        Get default searchable fields for quick filter when no specific fields are defined.
+        
+        Args:
+            model: Django model to get searchable fields for
+            
+        Returns:
+            List of field names suitable for quick search
+        """
+        searchable_fields = []
+        
+        for field in model._meta.get_fields():
+            if hasattr(field, 'name'):
+                # Include text fields that are suitable for searching
+                if isinstance(field, (models.CharField, models.TextField)):
+                    # Skip very short fields and password-like fields
+                    if (hasattr(field, 'max_length') and field.max_length and field.max_length < 10) or \
+                       'password' in field.name.lower() or 'token' in field.name.lower():
+                        continue
+                    searchable_fields.append(field.name)
+                # Include email fields
+                elif isinstance(field, models.EmailField):
+                    searchable_fields.append(field.name)
+        
+        # Add some common related field searches if they exist
+        common_related_fields = [
+            'author__username', 'author__first_name', 'author__last_name',
+            'user__username', 'user__first_name', 'user__last_name',
+            'category__name', 'tags__name'
+        ]
+        
+        for field_path in common_related_fields:
+            try:
+                if self._get_field_from_path(model, field_path):
+                    searchable_fields.append(field_path)
+            except:
+                continue
+        
+        return searchable_fields
 
     def _get_field_from_path(self, model: Type[models.Model], field_path: str) -> Optional[models.Field]:
         """

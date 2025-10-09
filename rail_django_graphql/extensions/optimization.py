@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
 from django.core.cache import cache
+from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
 from django.db.models import Prefetch, QuerySet
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
@@ -167,7 +168,7 @@ class QueryAnalyzer:
                 field = model._meta.get_field(field_name)
                 if isinstance(field, (ForeignKey, OneToOneField)):
                     select_related.append(field_name)
-            except models.FieldDoesNotExist:
+            except FieldDoesNotExist:
                 # Field might be a reverse relationship or method
                 continue
 
@@ -184,13 +185,38 @@ class QueryAnalyzer:
                 field = model._meta.get_field(field_name)
                 if isinstance(field, ManyToManyField):
                     prefetch_related.append(field_name)
-            except models.FieldDoesNotExist:
+            except FieldDoesNotExist:
                 # Check for reverse relationships
-                for rel in model._meta.get_all_related_objects():
-                    if rel.get_accessor_name() == field_name:
-                        if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
-                            prefetch_related.append(field_name)
-                        break
+                # For modern Django versions, use related_objects
+                if hasattr(model._meta, 'related_objects'):
+                    for rel in model._meta.related_objects:
+                        if rel.get_accessor_name() == field_name:
+                            if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
+                                prefetch_related.append(field_name)
+                            break
+                # Fallback for Django versions that use get_fields() with related fields
+                elif hasattr(model._meta, 'get_fields'):
+                    try:
+                        for field in model._meta.get_fields():
+                            if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                                if field.get_accessor_name() == field_name:
+                                    if hasattr(field, 'many_to_many') and field.many_to_many:
+                                        prefetch_related.append(field_name)
+                                    elif hasattr(field, 'one_to_many') and field.one_to_many:
+                                        prefetch_related.append(field_name)
+                                    break
+                    except AttributeError:
+                        pass
+                else:
+                    # Final fallback for very old Django versions
+                    try:
+                        for rel in model._meta.get_all_related_objects():
+                            if rel.get_accessor_name() == field_name:
+                                if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
+                                    prefetch_related.append(field_name)
+                                break
+                    except AttributeError:
+                        pass
 
         return prefetch_related
 
@@ -249,12 +275,33 @@ class QueryAnalyzer:
                 field = model._meta.get_field(field_name)
                 if isinstance(field, (ForeignKey, OneToOneField, ManyToManyField)):
                     query_count += 1  # Additional query per relationship
-            except models.FieldDoesNotExist:
+            except FieldDoesNotExist:
                 # Reverse relationships also add queries
-                for rel in model._meta.get_all_related_objects():
-                    if rel.get_accessor_name() == field_name:
-                        query_count += 1
-                        break
+                # For modern Django versions, use related_objects
+                if hasattr(model._meta, 'related_objects'):
+                    for rel in model._meta.related_objects:
+                        if rel.get_accessor_name() == field_name:
+                            query_count += 1
+                            break
+                # Fallback for Django versions that use get_fields() with related fields
+                elif hasattr(model._meta, 'get_fields'):
+                    try:
+                        for field in model._meta.get_fields():
+                            if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                                if field.get_accessor_name() == field_name:
+                                    query_count += 1
+                                    break
+                    except AttributeError:
+                        pass
+                else:
+                    # Final fallback for very old Django versions
+                    try:
+                        for rel in model._meta.get_all_related_objects():
+                            if rel.get_accessor_name() == field_name:
+                                query_count += 1
+                                break
+                    except AttributeError:
+                        pass
 
         return query_count
 
@@ -320,7 +367,7 @@ class QueryOptimizer:
                     prefetch_objects.append(
                         Prefetch(field_name, queryset=related_model.objects.all())
                     )
-            except models.FieldDoesNotExist:
+            except FieldDoesNotExist:
                 # Handle reverse relationships
                 prefetch_objects.append(field_name)
 

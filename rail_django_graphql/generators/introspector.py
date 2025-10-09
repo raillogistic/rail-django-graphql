@@ -399,8 +399,19 @@ class ModelIntrospector:
                 # Get the accessor name (e.g., 'comments' for Comment.post -> Post)
                 accessor_name = rel.get_accessor_name()
                 reverse_relations[accessor_name] = rel.related_model
+        # Fallback for Django versions that use get_fields() with related fields
+        elif hasattr(self._meta, 'get_fields'):
+            try:
+                for field in self._meta.get_fields():
+                    # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
+                    if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                        accessor_name = field.get_accessor_name()
+                        reverse_relations[accessor_name] = field.related_model
+            except AttributeError:
+                # If get_fields doesn't work as expected, continue without reverse relations
+                pass
         else:
-            # Fallback for older Django versions
+            # Final fallback for very old Django versions
             try:
                 for rel in self._meta.get_all_related_objects():
                     if hasattr(rel, 'get_accessor_name'):
