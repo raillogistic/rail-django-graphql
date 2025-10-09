@@ -6,6 +6,7 @@ This package contains extension modules for:
 - Audit logging and security monitoring
 - Multi-factor authentication (MFA)
 - Security enhancements
+- Model data export functionality
 """
 
 from .auth import (
@@ -43,6 +44,13 @@ from .mfa import (
     MFAQueries
 )
 
+from .exporting import (
+    ExportView,
+    ModelExporter,
+    export_model_to_csv,
+    export_model_to_excel
+)
+
 __all__ = [
     # Auth module
     'UserType',
@@ -74,5 +82,11 @@ __all__ = [
     'SetupTOTPMutation',
     'VerifyTOTPMutation',
     'MFAMutations',
-    'MFAQueries'
+    'MFAQueries',
+    
+    # Export module
+    'ExportView',
+    'ModelExporter',
+    'export_model_to_csv',
+    'export_model_to_excel'
 ]
