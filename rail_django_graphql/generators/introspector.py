@@ -91,6 +91,22 @@ class PropertyInfo:
     def __init__(self, return_type: Any):
         self.return_type = return_type
 
+class ManagerInfo:
+    """
+    Stores metadata about a Django model manager.
+    
+    Attributes:
+        name: The manager name (e.g., 'objects', 'published', 'active')
+        manager_class: The manager class type
+        is_default: Whether this is the default manager (usually 'objects')
+        custom_methods: Dict of custom methods available on the manager
+    """
+    def __init__(self, name: str, manager_class: Type, is_default: bool = False, custom_methods: Dict[str, Any] = None):
+        self.name = name
+        self.manager_class = manager_class
+        self.is_default = is_default
+        self.custom_methods = custom_methods or {}
+
 class InheritanceInfo:
     """
     Stores metadata about model inheritance.
@@ -136,6 +152,41 @@ class ModelIntrospector:
         self.model = model
         self.schema_name = schema_name or 'default'
         self._meta = getattr(model, '_meta', None)
+
+    @cached_property
+    def managers(self) -> Dict[str, ManagerInfo]:
+        """Discovers model managers and their metadata."""
+        manager_info = {}
+        
+        # Get all managers from the model
+        for name in dir(self.model):
+            attr = getattr(self.model, name)
+            
+            # Check if it's a manager (has a model attribute and get_queryset method)
+            if (hasattr(attr, 'model') and 
+                hasattr(attr, 'get_queryset') and 
+                callable(getattr(attr, 'get_queryset')) and
+                not name.startswith('_')):
+                
+                # Determine if this is the default manager
+                is_default = name == 'objects'
+                
+                # Get custom methods from the manager
+                custom_methods = {}
+                for method_name in dir(attr):
+                    if (not method_name.startswith('_') and 
+                        method_name not in ['model', 'get_queryset', 'all', 'filter', 'exclude', 'get', 'create', 'update', 'delete'] and
+                        callable(getattr(attr, method_name))):
+                        custom_methods[method_name] = getattr(attr, method_name)
+                
+                manager_info[name] = ManagerInfo(
+                    name=name,
+                    manager_class=type(attr),
+                    is_default=is_default,
+                    custom_methods=custom_methods
+                )
+        
+        return manager_info
 
     @cached_property
     def fields(self) -> Dict[str, FieldInfo]:
@@ -377,6 +428,9 @@ class ModelIntrospector:
 
     def get_model_properties(self) -> Dict[str, PropertyInfo]:
         return self.properties
+
+    def get_model_managers(self) -> Dict[str, ManagerInfo]:
+        return self.managers
 
     def analyze_inheritance(self) -> InheritanceInfo:
         return self.inheritance

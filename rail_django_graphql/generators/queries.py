@@ -117,11 +117,15 @@ class QueryGenerator:
         """Access to the filter generator instance."""
         return self._filter_generator
 
-    def generate_single_query(self, model: Type[models.Model]) -> graphene.Field:
+    def generate_single_query(self, model: Type[models.Model], manager_name: str = "objects") -> graphene.Field:
         """
-        Generate a single object query for a model.
+        Generate a single object query for a model using the specified manager.
         For polymorphic models, uses the base model type with polymorphic_type field
         to identify the specific subclass instead of union types.
+        
+        Args:
+            model: Django model class
+            manager_name: Name of the manager to use (defaults to "objects")
         """
         # Always use the base model type for single queries
         # The polymorphic_type field will indicate the actual class
@@ -130,7 +134,8 @@ class QueryGenerator:
         def resolve_single(root, info, id):
             """Resolver for single object queries."""
             try:
-                return model.objects.get(pk=id)
+                manager = getattr(model, manager_name)
+                return manager.get(pk=id)
             except model.DoesNotExist:
                 return None
 
@@ -138,16 +143,20 @@ class QueryGenerator:
             model_type,
             id=graphene.ID(required=True),
             resolver=resolve_single,
-            description=f"Retrieve a single {model.__name__} by ID",
+            description=f"Retrieve a single {model.__name__} by ID using {manager_name} manager",
         )
 
     def generate_list_query(
-        self, model: Type[models.Model]
+        self, model: Type[models.Model], manager_name: str = "objects"
     ) -> Union[graphene.List, DjangoFilterConnectionField]:
         """
-        Generates a query field for retrieving a list of model instances.
+        Generates a query field for retrieving a list of model instances using the specified manager.
         For polymorphic models, returns the base model type to allow querying all instances.
         Supports advanced filtering, pagination, and ordering.
+        
+        Args:
+            model: Django model class
+            manager_name: Name of the manager to use (defaults to "objects")
         """
 
         # Regular list query for non-polymorphic models
@@ -162,7 +171,7 @@ class QueryGenerator:
             return DjangoFilterConnectionField(
                 model_type,
                 filterset_class=filter_class,
-                description=f"Retrieve a list of {model_name} instances with pagination",
+                description=f"Retrieve a list of {model_name} instances with pagination using {manager_name} manager",
             )
         else:
 
@@ -170,7 +179,8 @@ class QueryGenerator:
             def resolver(
                 root: Any, info: graphene.ResolveInfo, **kwargs
             ) -> List[models.Model]:
-                queryset = model.objects.all()
+                manager = getattr(model, manager_name)
+                queryset = manager.all()
 
                 # Apply query optimization first
                 queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -274,13 +284,17 @@ class QueryGenerator:
                 model_type,
                 args=arguments,
                 resolver=resolver,
-                description=f"Retrieve a list of {model_name} instances",
+                description=f"Retrieve a list of {model_name} instances using {manager_name} manager",
             )
 
-    def generate_paginated_query(self, model: Type[models.Model]) -> graphene.Field:
+    def generate_paginated_query(self, model: Type[models.Model], manager_name: str = "objects") -> graphene.Field:
         """
-        Generates a query field with advanced pagination support.
+        Generates a query field with advanced pagination support using the specified manager.
         Returns both the paginated results and pagination metadata.
+        
+        Args:
+            model: Django model class
+            manager_name: Name of the manager to use (defaults to "objects")
         """
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
@@ -307,7 +321,8 @@ class QueryGenerator:
         def resolver(
             root: Any, info: graphene.ResolveInfo, **kwargs
         ) -> PaginatedConnection:
-            queryset = model.objects.all()
+            manager = getattr(model, manager_name)
+            queryset = manager.all()
 
             # Apply query optimization first
             queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -447,7 +462,7 @@ class QueryGenerator:
             PaginatedConnection,
             args=arguments,
             resolver=resolver,
-            description=f"Retrieve a paginated list of {model_name} instances",
+            description=f"Retrieve a paginated list of {model_name} instances using {manager_name} manager",
         )
 
     def add_filtering_support(

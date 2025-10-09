@@ -286,6 +286,7 @@ class SchemaBuilder:
     def _generate_query_fields(self, models: List[Type[models.Model]]) -> None:
         """
         Generates query fields for all discovered models.
+        Now supports multiple managers per model with custom naming conventions.
 
         Args:
             models: List of Django models to generate queries for
@@ -295,18 +296,56 @@ class SchemaBuilder:
         for model in models:
             model_name = model.__name__.lower()
 
-            # Single object query
-            single_query = self.query_generator.generate_single_query(model)
-            self._query_fields[model_name] = single_query
+            # Get model managers using introspector
+            from ..generators.introspector import ModelIntrospector
 
-            # List query
-            list_query = self.query_generator.generate_list_query(model)
-            self._query_fields[f"{model_name}s"] = list_query
+            introspector = ModelIntrospector(model)
+            managers = introspector.get_model_managers()
 
-            # Paginated query
-            if self.settings.enable_pagination:
-                paginated_query = self.query_generator.generate_paginated_query(model)
-                self._query_fields[f"{model_name}_pages"] = paginated_query
+            # Generate queries for each manager
+            for manager_name, manager_info in managers.items():
+                if manager_info.is_default:
+                    # Default manager keeps standard naming
+                    # Single object query
+                    single_query = self.query_generator.generate_single_query(
+                        model, manager_name
+                    )
+                    self._query_fields[model_name] = single_query
+
+                    # List query
+                    list_query = self.query_generator.generate_list_query(
+                        model, manager_name
+                    )
+                    self._query_fields[f"{model_name}s"] = list_query
+
+                    # Paginated query
+                    if self.settings.enable_pagination:
+                        paginated_query = self.query_generator.generate_paginated_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}s_pages"] = paginated_query
+                else:
+                    # Custom managers use new naming convention
+                    # Single object query: modelname__custommanager
+                    single_query = self.query_generator.generate_single_query(
+                        model, manager_name
+                    )
+                    self._query_fields[f"{model_name}__{manager_name}"] = single_query
+
+                    # List query: modelname__custommanager (plural form)
+                    list_query = self.query_generator.generate_list_query(
+                        model, manager_name
+                    )
+                    self._query_fields[f"{model_name}s__{manager_name}"] = list_query
+
+                    # Paginated query: modelname_pages_custommanager
+                    if self.settings.enable_pagination:
+                        paginated_query = self.query_generator.generate_paginated_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}s_pages_{manager_name}"] = (
+                            paginated_query
+                        )
 
     def _generate_mutation_fields(self, models: List[Type[models.Model]]) -> None:
         """
