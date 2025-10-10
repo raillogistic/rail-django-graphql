@@ -34,6 +34,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
     #     "enable_pagination": True
     # }
     "schema_settings": {
+        "show_metadata": False,
         # Disable security mutations (e.g., login, logout)
         "disable_security_mutations": False,
         # Apps to exclude from schema generation (globally excluded: admin, contenttypes, sessions)

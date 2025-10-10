@@ -460,6 +460,7 @@ class SchemaBuilder:
                                 field.type,
                                 description=field.description,
                                 resolver=create_resolver_wrapper(resolver_method),
+                                **field.args,
                             )
                         else:
                             query_attrs[field_name] = field
@@ -470,6 +471,48 @@ class SchemaBuilder:
                 except ImportError as e:
                     logger.warning(
                         f"Could not import health queries for schema '{self.schema_name}': {e}"
+                    )
+
+                # Add model metadata queries
+
+                try:
+                    from ..extensions.metadata import ModelMetadataQuery
+
+                    # Create an instance of ModelMetadataQuery to get bound methods
+                    metadata_query_instance = ModelMetadataQuery()
+                    # Merge metadata queries with proper resolver binding
+                    for field_name, field in ModelMetadataQuery._meta.fields.items():
+                        # Get the resolver method from the instance
+                        resolver_method_name = f"resolve_{field_name}"
+                        if hasattr(metadata_query_instance, resolver_method_name):
+                            resolver_method = getattr(
+                                metadata_query_instance, resolver_method_name
+                            )
+
+                            # Create a wrapper that handles the root parameter
+                            def create_resolver_wrapper(method):
+                                def wrapper(root, info, **kwargs):
+                                    return method(info, **kwargs)
+
+                                return wrapper
+
+                            print(resolver_method)
+                            # Create a new field with the wrapped resolver
+                            query_attrs[field_name] = graphene.Field(
+                                field.type,
+                                description=field.description,
+                                resolver=create_resolver_wrapper(resolver_method),
+                                **field.args,
+                            )
+                        else:
+                            query_attrs[field_name] = field
+
+                    logger.info(
+                        f"Model metadata queries integrated into schema '{self.schema_name}'"
+                    )
+                except ImportError as e:
+                    logger.warning(
+                        f"Could not import metadata queries for schema '{self.schema_name}': {e}"
                     )
 
                 query_type = type("Query", (graphene.ObjectType,), query_attrs)
@@ -497,7 +540,6 @@ class SchemaBuilder:
                     # "disable_security_mutations", False, self.schema_name
                     # )
 
-                    print("xxxxxxxxxxxxxx", disable_security)
                     if not disable_security:
                         security_mutations.update(
                             {

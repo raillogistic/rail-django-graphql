@@ -326,6 +326,9 @@ class SchemaSettings:
     # Disable security mutations (e.g., login, logout)
     disable_security_mutations: bool = False
 
+    # Enable model metadata exposure for frontend rich tables and forms
+    show_metadata: bool = False
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
         """

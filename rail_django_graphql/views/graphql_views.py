@@ -77,6 +77,61 @@ class MultiSchemaGraphQLView(GraphQLView):
             logger.error(f"Error handling request for schema '{schema_name}': {e}")
             return self._error_response(str(e))
 
+    def get_context(self, request):
+        """
+        Override get_context to inject authenticated user from JWT token.
+        
+        Args:
+            request: HTTP request object
+            
+        Returns:
+            Context object with authenticated user
+        """
+        context = super().get_context(request)
+        
+        # Check for JWT token authentication
+        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+        if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
+            try:
+                # Extract token from header
+                if auth_header.startswith("Bearer "):
+                    token = auth_header.split(" ")[1]
+                elif auth_header.startswith("Token "):
+                    token = auth_header.split(" ")[1]
+                else:
+                    return context
+                
+                # Validate JWT token using JWTManager
+                from ..extensions.auth import JWTManager
+                payload = JWTManager.verify_token(token)
+                
+                if payload:
+                    # Get user from payload
+                    user_id = payload.get('user_id')
+                    if user_id:
+                        from django.contrib.auth import get_user_model
+                        User = get_user_model()
+                        
+                        try:
+                            user = User.objects.get(id=user_id)
+                            if user.is_active:
+                                # Inject authenticated user into context
+                                context.user = user
+                                # Also set on request for compatibility
+                                request.user = user
+                        except User.DoesNotExist:
+                            pass
+                            
+            except Exception as e:
+                # Log the error for debugging but don't expose details
+                logger.warning(f"JWT authentication failed: {str(e)}")
+        
+        # Add schema name to context for metadata hierarchy
+        schema_name = getattr(request, 'resolver_match', {}).kwargs.get('schema_name', 'default')
+        context.schema_name = schema_name
+        
+        return context
+
     def _get_schema_info(self, schema_name: str) -> Optional[Dict[str, Any]]:
         """
         Get schema information from the registry.
@@ -160,8 +215,6 @@ class MultiSchemaGraphQLView(GraphQLView):
             True if authentication is satisfied, False otherwise
         """
         schema_settings = getattr(schema_info, "settings", {}) or {}
-        print("qqqqqqqqqqqqqqq", schema_settings)
-        # print("qqqqqqqqq", schema_settings)
         auth_required = schema_settings.get("authentication_required", False)
 
         if not auth_required:

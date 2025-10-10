@@ -106,13 +106,24 @@ class AuditLogger:
     Gestionnaire principal pour l'audit des événements d'authentification.
     """
     
-    def __init__(self):
-        """Initialise le logger d'audit."""
+    def __init__(self, debug: bool = None):
+        """
+        Initialise le logger d'audit.
+        
+        Args:
+            debug: Mode debug - si True, les événements sont enregistrés mais les alertes sont désactivées
+        """
         self.enabled = getattr(settings, 'GRAPHQL_ENABLE_AUDIT_LOGGING', True)
         self.store_in_db = getattr(settings, 'AUDIT_STORE_IN_DATABASE', True)
         self.store_in_file = getattr(settings, 'AUDIT_STORE_IN_FILE', True)
         self.webhook_url = getattr(settings, 'AUDIT_WEBHOOK_URL', None)
         self.retention_days = getattr(settings, 'AUDIT_RETENTION_DAYS', 90)
+        
+        # Mode debug - si None, utilise la configuration Django DEBUG
+        if debug is None:
+            self.debug = getattr(settings, 'DEBUG', False)
+        else:
+            self.debug = debug
         
         # Configuration des alertes
         self.alert_thresholds = getattr(settings, 'AUDIT_ALERT_THRESHOLDS', {
@@ -390,6 +401,7 @@ class AuditLogger:
     def _check_alert_thresholds(self, event: AuditEvent) -> None:
         """
         Vérifie les seuils d'alerte et déclenche des alertes si nécessaire.
+        En mode debug, les événements sont traités mais les alertes sont supprimées.
         
         Args:
             event: Événement à vérifier
@@ -403,23 +415,32 @@ class AuditLogger:
                 if event.username:
                     self._check_failed_logins_by_user(event)
             
-            # Vérifier les activités suspectes
+            # Vérifier les activités suspectes (seulement si pas en mode debug)
             if event.severity == AuditSeverity.HIGH:
-                self._trigger_security_alert(event)
+                if self.debug:
+                    logger.debug(f"Debug mode: High severity event detected but alert suppressed - {event.event_type}")
+                else:
+                    self._trigger_security_alert(event)
                 
         except Exception as e:
             logger.error(f"Erreur lors de la vérification des seuils d'alerte: {e}")
     
     def _check_failed_logins_by_ip(self, event: AuditEvent) -> None:
         """
-        Vérifie les échecs de connexion par IP.
+        Vérifie les tentatives de connexion échouées par IP.
+        En mode debug, enregistre l'événement mais ne déclenche pas d'alerte.
         
         Args:
-            event: Événement de connexion échouée
+            event: L'événement d'audit à vérifier
         """
         cache_key = f"failed_logins_ip_{event.client_ip}"
         failed_count = cache.get(cache_key, 0) + 1
-        cache.set(cache_key, failed_count, 3600)  # 1 heure
+        cache.set(cache_key, failed_count, timeout=self.alert_thresholds['suspicious_activity_window'])
+        
+        # En mode debug, on enregistre mais on ne déclenche pas d'alerte
+        if self.debug:
+            logger.debug(f"Debug mode: Failed login attempt #{failed_count} from IP {event.client_ip} - Alert suppressed")
+            return
         
         threshold = self.alert_thresholds.get('failed_logins_per_ip', 10)
         if failed_count >= threshold:
@@ -427,18 +448,27 @@ class AuditLogger:
     
     def _check_failed_logins_by_user(self, event: AuditEvent) -> None:
         """
-        Vérifie les échecs de connexion par utilisateur.
+        Vérifie les tentatives de connexion échouées par utilisateur.
+        En mode debug, enregistre l'événement mais ne déclenche pas d'alerte.
         
         Args:
-            event: Événement de connexion échouée
+            event: L'événement d'audit à vérifier
         """
+        if not event.username:
+            return
+            
         cache_key = f"failed_logins_user_{event.username}"
         failed_count = cache.get(cache_key, 0) + 1
-        cache.set(cache_key, failed_count, 3600)  # 1 heure
+        cache.set(cache_key, failed_count, timeout=self.alert_thresholds['suspicious_activity_window'])
+        
+        # En mode debug, on enregistre mais on ne déclenche pas d'alerte
+        if self.debug:
+            logger.debug(f"Debug mode: Failed login attempt #{failed_count} for user {event.username} - Alert suppressed")
+            return
         
         threshold = self.alert_thresholds.get('failed_logins_per_user', 5)
         if failed_count >= threshold:
-            self._trigger_security_alert(event, f"Trop de tentatives de connexion échouées pour l'utilisateur {event.username}")
+            self._trigger_security_alert(event, f"Utilisateur {event.username} a échoué {failed_count} tentatives de connexion")
     
     def _trigger_security_alert(self, event: AuditEvent, message: Optional[str] = None) -> None:
         """

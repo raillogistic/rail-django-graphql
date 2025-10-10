@@ -5,6 +5,7 @@ This package provides advanced extensions for Django GraphQL Auto-Generation inc
 - Multi-factor authentication (MFA) with TOTP, SMS, and backup codes
 - Comprehensive audit logging for security events
 - Model data export functionality with JWT protection
+- Model metadata schema for rich frontend interfaces
 - Advanced security features and middleware
 
 The extensions are designed to work seamlessly with the core GraphQL auto-generation
@@ -59,6 +60,15 @@ from .mfa import (
     MFAManager,
 )
 
+# Model metadata schema for rich frontend interfaces
+from .metadata import (
+    ModelMetadataQuery,
+    ModelMetadataType,
+    FieldMetadataType,
+    RelationshipMetadataType,
+    ModelMetadataExtractor,
+)
+
 __all__ = [
     # Authentication
     "JWTManager",
@@ -93,4 +103,10 @@ __all__ = [
     "ModelExporter",
     "export_model_to_csv",
     "export_model_to_excel",
+    # Model metadata schema
+    "ModelMetadataQuery",
+    "ModelMetadataType",
+    "FieldMetadataType",
+    "RelationshipMetadataType",
+    "ModelMetadataExtractor",
 ]
