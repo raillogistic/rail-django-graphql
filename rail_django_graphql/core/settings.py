@@ -44,6 +44,11 @@ def _get_schema_registry_settings(schema_name: str) -> Dict[str, Any]:
         from .registry import schema_registry
 
         schema_info = schema_registry.get_schema(schema_name)
+        print(
+            "qqqqqqq",
+            schema_name,
+            schema_info.settings,
+        )
         return schema_info.settings if schema_info else {}
     except (ImportError, AttributeError):
         return {}
@@ -351,7 +356,7 @@ class SchemaSettings:
         schema_settings = _get_schema_registry_settings(schema_name).get(
             "schema_settings", {}
         )
-
+        print("qmqmmmmmmmmmmmmmmmmmm", schema_name, schema_settings)
         # Also check for direct schema-level settings (backward compatibility)
         schema_registry_settings = _get_schema_registry_settings(schema_name)
         direct_settings = {

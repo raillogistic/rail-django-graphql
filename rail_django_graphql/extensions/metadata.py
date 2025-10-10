@@ -204,10 +204,10 @@ class ModelMetadataExtractor:
             schema_name: Name of the schema configuration to use
         """
         # Lazy import to avoid AppRegistryNotReady
-        from ..core.settings import get_schema_settings
+        # from ..core.settings import get_schema_settings
 
         self.schema_name = schema_name
-        self.settings = get_schema_settings(schema_name)
+        # self.settings = get_schema_settings(schema_name)
 
     def extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
         """
@@ -316,7 +316,11 @@ class ModelMetadataExtractor:
         )
 
     def extract_model_metadata(
-        self, model, user, include_nested: bool = False
+        self,
+        model,
+        user,
+        include_nested: bool = False,
+        include_permissions: bool = True,
     ) -> ModelMetadata:
         """
         Extract complete metadata for a Django model.
@@ -459,10 +463,10 @@ class ModelMetadataQuery(graphene.ObjectType):
         ModelMetadataType,
         app_name=graphene.String(required=True, description="Django app name"),
         model_name=graphene.String(required=True, description="Model class name"),
-        nested_fields=graphene.Boolean(
+        include_nested=graphene.Boolean(
             default_value=False, description="Include nested relationship metadata"
         ),
-        permissions_included=graphene.Boolean(
+        include_permissions=graphene.Boolean(
             default_value=True, description="Include permission information"
         ),
         description="Get comprehensive metadata for a Django model",
@@ -473,10 +477,9 @@ class ModelMetadataQuery(graphene.ObjectType):
         info,
         app_name: str,
         model_name: str,
-        nested_fields: bool = False,
-        permissions_included: bool = True,
+        include_nested: bool = False,
+        include_permissions: bool = True,
     ) -> Optional[ModelMetadataType]:
-        print("ùùùùùùùùùùùùùùùùùùùùùùùùùùùùùù")
         """
         Resolve model metadata with permission checking and settings validation.
 
@@ -484,8 +487,8 @@ class ModelMetadataQuery(graphene.ObjectType):
             info: GraphQL resolve info
             app_name: Django app name
             model_name: Model name
-            nested_fields: Include nested relationship metadata
-            permissions_included: Include permission-based field filtering
+            include_nested: Include nested relationship metadata
+            include_permissions: Include permission-based field filtering
 
         Returns:
             ModelMetadataType or None if not accessible
@@ -494,18 +497,10 @@ class ModelMetadataQuery(graphene.ObjectType):
         from django.apps import apps
         from django.contrib.auth.models import AnonymousUser
 
-        # Get schema name from context or default
-        schema_name = getattr(info.context, "schema_name", "default")
-
-        # Check if metadata exposure is enabled using proper hierarchy
-        settings = SchemaSettings.from_schema(schema_name)
-        if not settings.show_metadata:
-            return None
-
         # Get user from context
         user = getattr(info.context, "user", AnonymousUser())
         # Check user authentication if permissions are required
-        if permissions_included and isinstance(user, AnonymousUser):
+        if include_permissions and isinstance(user, AnonymousUser):
             return None
 
         try:
@@ -519,8 +514,8 @@ class ModelMetadataQuery(graphene.ObjectType):
         metadata = extractor.extract_model_metadata(
             model=model,
             user=user,
-            include_nested=nested_fields,
-            include_permissions=permissions_included,
+            include_nested=include_nested,
+            include_permissions=include_permissions,
         )
 
         # Convert to GraphQL type
@@ -570,7 +565,7 @@ class ModelMetadataQuery(graphene.ObjectType):
                 )
                 for rel in metadata.relationships
             ],
-            permissions=metadata.permissions if permissions_included else [],
+            permissions=metadata.permissions if include_permissions else [],
             ordering=metadata.ordering,
             unique_together=metadata.unique_together,
             indexes=metadata.indexes,
