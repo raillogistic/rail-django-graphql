@@ -5,7 +5,7 @@ through an HTTP endpoint. It supports dynamic model loading, field selection,
 filtering, and ordering with GraphQL filter integration.
 
 Features:
-- HTTP endpoint for generating downloadable files
+- HTTP endpoint for generating downloadable files (JWT protected)
 - Support for Excel (.xlsx) and CSV (.csv) formats
 - Dynamic model loading by app_name and model_name
 - Flexible field selection with nested field access and custom titles
@@ -19,6 +19,7 @@ Field Format:
 
 Usage:
     POST /api/export/
+    Headers: Authorization: Bearer <jwt_token>
     {
         "app_name": "myapp",
         "model_name": "MyModel",
@@ -56,11 +57,16 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from openpyxl.styles import Border, Side
 
-# Import GraphQL filter generator
+# Import GraphQL filter generator and auth decorators
 try:
     from ..generators.filters import AdvancedFilterGenerator
 except ImportError:
     AdvancedFilterGenerator = None
+
+try:
+    from .auth_decorators import jwt_required
+except ImportError:
+    jwt_required = None
 
 # Optional Excel support
 try:
@@ -674,10 +680,14 @@ class ModelExporter:
 @method_decorator(csrf_exempt, name="dispatch")
 class ExportView(View):
     """
-    Django view for handling model export requests.
+    Django view for handling model export requests with JWT authentication.
 
     Accepts POST requests with JSON payload containing export parameters
-    and returns downloadable Excel or CSV files.
+    and returns downloadable Excel or CSV files. All requests must include
+    a valid JWT token in the Authorization header.
+
+    Authentication:
+        Requires JWT token: Authorization: Bearer <token>
 
     Field Format Examples:
     - String: "title" (uses field name as accessor and verbose_name as title)
@@ -690,9 +700,10 @@ class ExportView(View):
     - Custom filters: {"has_tags": true, "content_length": "medium"}
     """
 
+    @method_decorator(jwt_required if jwt_required else lambda f: f)
     def post(self, request):
         """
-        Handle POST request for model export.
+        Handle POST request for model export (JWT protected).
 
         Expected JSON payload:
         {
@@ -716,6 +727,10 @@ class ExportView(View):
         Returns:
             HttpResponse with file download or JsonResponse with error
         """
+        # Log authenticated user for audit purposes
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            logger.info(f"Export request from user: {request.user.username} (ID: {request.user.id})")
+        
         try:
             # Parse JSON payload
             try:
@@ -811,14 +826,24 @@ class ExportView(View):
             logger.error(f"Unexpected error during export: {e}")
             return JsonResponse({"error": "Internal server error"}, status=500)
 
+    @method_decorator(jwt_required if jwt_required else lambda f: f)
     def get(self, request):
         """
-        Handle GET request - return API documentation.
+        Handle GET request - return API documentation (JWT protected).
         """
+        # Log authenticated user for audit purposes
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            logger.info(f"Export API documentation request from user: {request.user.username}")
+        
         documentation = {
             "endpoint": "/export",
             "method": "POST",
+            "authentication": "JWT token required in Authorization header",
             "description": "Export Django model data to Excel or CSV format with GraphQL filter integration",
+            "required_headers": {
+                "Authorization": "Bearer <jwt_token>",
+                "Content-Type": "application/json"
+            },
             "required_parameters": {
                 "app_name": "string - Name of the Django app containing the model",
                 "model_name": "string - Name of the Django model to export",
@@ -843,23 +868,35 @@ class ExportView(View):
                 },
                 "custom_filters": {"has_tags": True, "content_length": "medium"},
             },
-            "example_payload": {
-                "app_name": "blog",
-                "model_name": "Post",
-                "file_extension": "excel",
-                "filename": "blog_posts_export",
-                "fields": [
-                    "title",
-                    "author.username",
-                    {"accessor": "slug", "title": "MySlug"},
-                ],
-                "ordering": ["-created_at"],
-                "variables": {
-                    "status": "active",
-                    "quick": "search term",
-                    "published_date_today": True,
+            "example_request": {
+                "url": "/api/export/",
+                "method": "POST",
+                "headers": {
+                    "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                    "Content-Type": "application/json"
                 },
+                "payload": {
+                    "app_name": "blog",
+                    "model_name": "Post",
+                    "file_extension": "excel",
+                    "filename": "blog_posts_export",
+                    "fields": [
+                        "title",
+                        "author.username",
+                        {"accessor": "slug", "title": "MySlug"},
+                    ],
+                    "ordering": ["-created_at"],
+                    "variables": {
+                        "status": "active",
+                        "quick": "search term",
+                        "published_date_today": True,
+                    },
+                }
             },
+            "authentication_errors": {
+                "401": "Missing or invalid JWT token",
+                "403": "Token valid but insufficient permissions"
+            }
         }
 
         return JsonResponse(documentation, json_dumps_params={"indent": 2})

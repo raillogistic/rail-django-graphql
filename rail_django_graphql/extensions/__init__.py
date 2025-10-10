@@ -1,92 +1,96 @@
-"""
-Extensions package for Django GraphQL Auto-Generation.
+"""Django GraphQL Auto-Generation Extensions Package.
 
-This package contains extension modules for:
-- Authentication and JWT management
-- Audit logging and security monitoring
-- Multi-factor authentication (MFA)
-- Security enhancements
-- Model data export functionality
+This package provides advanced extensions for Django GraphQL Auto-Generation including:
+- JWT-based authentication system with GraphQL mutations
+- Multi-factor authentication (MFA) with TOTP, SMS, and backup codes
+- Comprehensive audit logging for security events
+- Model data export functionality with JWT protection
+- Advanced security features and middleware
+
+The extensions are designed to work seamlessly with the core GraphQL auto-generation
+functionality while providing enterprise-grade security and monitoring capabilities.
 """
 
+# Core authentication system
+# TOTPSetupMutation,
+# TOTPVerifyMutation,
+# SMSSetupMutation,
+# SMSVerifyMutation,
+# BackupCodeGenerateMutation,
+# BackupCodeVerifyMutation,
+# TrustedDeviceManager,
+# Audit logging system
+from .audit import (
+    # AuditLogEntry,
+    AuditLogger,
+)
+
+# SecurityEvent,
+# get_audit_logger,
 from .auth import (
-    UserType,
     AuthPayload,
+    # ChangePasswordMutation,
     JWTManager,
     LoginMutation,
-    RegisterMutation,
-    RefreshTokenMutation,
     LogoutMutation,
-    MeQuery,
-    AuthMutations,
-    get_user_from_token,
-    authenticate_request
+    RefreshTokenMutation,
+    RegisterMutation,
+    UserType,
 )
 
-from .audit import (
-    AuditEventType,
-    AuditSeverity,
-    AuditEvent,
-    AuditLogger,
-    audit_logger,
-    log_authentication_event,
-    get_security_dashboard_data
+# Authentication decorators for Django views
+from .auth_decorators import (
+    get_user_from_jwt,
+    jwt_optional,
+    jwt_required,
+    require_permissions,
 )
 
-from .mfa import (
-    MFAManager,
-    mfa_manager,
-    MFADeviceType,
-    TrustedDeviceType,
-    SetupTOTPMutation,
-    VerifyTOTPMutation,
-    MFAMutations,
-    MFAQueries
-)
-
+# Model export functionality (JWT protected)
 from .exporting import (
     ExportView,
     ModelExporter,
     export_model_to_csv,
-    export_model_to_excel
+    export_model_to_excel,
+)
+
+# Multi-factor authentication
+from .mfa import (
+    MFAManager,
 )
 
 __all__ = [
-    # Auth module
-    'UserType',
-    'AuthPayload',
-    'JWTManager',
-    'LoginMutation',
-    'RegisterMutation',
-    'RefreshTokenMutation',
-    'LogoutMutation',
-    'MeQuery',
-    'AuthMutations',
-    'get_user_from_token',
-    'authenticate_request',
-    
-    # Audit module
-    'AuditEventType',
-    'AuditSeverity',
-    'AuditEvent',
-    'AuditLogger',
-    'audit_logger',
-    'log_authentication_event',
-    'get_security_dashboard_data',
-    
-    # MFA module
-    'MFAManager',
-    'mfa_manager',
-    'MFADeviceType',
-    'TrustedDeviceType',
-    'SetupTOTPMutation',
-    'VerifyTOTPMutation',
-    'MFAMutations',
-    'MFAQueries',
-    
-    # Export module
-    'ExportView',
-    'ModelExporter',
-    'export_model_to_csv',
-    'export_model_to_excel'
+    # Authentication
+    "JWTManager",
+    "AuthPayload",
+    "LoginMutation",
+    "RegisterMutation",
+    "RefreshTokenMutation",
+    "LogoutMutation",
+    "ChangePasswordMutation",
+    "UserType",
+    # Authentication decorators
+    "jwt_required",
+    "jwt_optional",
+    "get_user_from_jwt",
+    "require_permissions",
+    # Multi-factor authentication
+    "MFAManager",
+    # "TOTPSetupMutation",
+    # "TOTPVerifyMutation",
+    # "SMSSetupMutation",
+    # "SMSVerifyMutation",
+    # "BackupCodeGenerateMutation",
+    # "BackupCodeVerifyMutation",
+    # "TrustedDeviceManager",
+    # Audit logging
+    "AuditLogger",
+    # "SecurityEvent",
+    # "AuditLogEntry",
+    # "get_audit_logger",
+    # Model export (JWT protected)
+    "ExportView",
+    "ModelExporter",
+    "export_model_to_csv",
+    "export_model_to_excel",
 ]

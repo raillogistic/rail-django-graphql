@@ -1,19 +1,64 @@
 # Django Model Export Extension
 
-The Django Model Export Extension provides a powerful and flexible way to export Django model data to Excel or CSV formats through both HTTP endpoints and programmatic interfaces.
+The Django Model Export Extension provides a powerful and flexible way to export Django model data to Excel or CSV formats through both HTTP endpoints and programmatic interfaces. **All export endpoints are protected by JWT authentication for security.**
 
 ## Table of Contents
 
-1. [Features](#features)
-2. [Installation](#installation)
-3. [Quick Start](#quick-start)
-4. [HTTP API Usage](#http-api-usage)
-5. [Programmatic Usage](#programmatic-usage)
-6. [Field Configuration](#field-configuration)
-7. [Filtering and Ordering](#filtering-and-ordering)
-8. [Advanced Examples](#advanced-examples)
-9. [Error Handling](#error-handling)
-10. [Best Practices](#best-practices)
+1. [🔐 Security & Authentication](#security--authentication)
+2. [Features](#features)
+3. [Installation](#installation)
+4. [Quick Start](#quick-start)
+5. [HTTP API Usage](#http-api-usage)
+6. [Programmatic Usage](#programmatic-usage)
+7. [Field Configuration](#field-configuration)
+8. [Filtering and Ordering](#filtering-and-ordering)
+9. [Advanced Examples](#advanced-examples)
+10. [Error Handling](#error-handling)
+11. [Best Practices](#best-practices)
+
+## 🔐 Security & Authentication
+
+### JWT Token Protection
+
+All export endpoints are protected by JWT authentication, similar to GraphQL project schemas:
+
+```bash
+# Required Authorization header
+Authorization: Bearer <your_jwt_token>
+```
+
+**Authentication Requirements:**
+- Valid JWT token must be provided in the Authorization header
+- Token format: `Bearer <token>`
+- Both GET (API docs) and POST (export) endpoints require authentication
+- Expired or invalid tokens will return 401 Unauthorized
+
+### Getting JWT Tokens
+
+```python
+from rail_django_graphql.extensions.auth import JWTManager
+from django.contrib.auth.models import User
+
+# Generate token for authenticated user
+jwt_manager = JWTManager()
+user = User.objects.get(username='your_username')
+token = jwt_manager.generate_token(user)
+```
+
+### Authentication Errors
+
+```json
+// 401 Unauthorized responses
+{
+    "error": "Authentication required",
+    "detail": "No authentication token provided"
+}
+
+{
+    "error": "Invalid token", 
+    "detail": "Token has expired or is invalid"
+}
+```
 
 ## Features
 
@@ -85,6 +130,7 @@ LOGGING = {
 
 ```bash
 curl -X POST http://localhost:8000/api/export/ \
+  -H "Authorization: Bearer your_jwt_token_here" \
   -H "Content-Type: application/json" \
   -d '{
     "app_name": "blog",
