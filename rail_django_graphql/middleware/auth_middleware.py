@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # If project LOGGING is not configured for this module, attach a console handler in DEBUG.
 try:
     from django.conf import settings as _dj_settings  # reuse settings safely
+
     if getattr(_dj_settings, "DEBUG", False):
         logger.setLevel(logging.DEBUG)
         if not logger.handlers:
@@ -189,14 +190,21 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         """
         # Vérifier le header Authorization
         auth_header = request.META.get(self.jwt_header_name, "")
-        if auth_header.startswith(f"{self.jwt_header_prefix} "):
-            return auth_header.split(" ", 1)[1]
+        if auth_header:
+            header = auth_header.strip()
+            lower = header.lower()
+            prefix_lower = self.jwt_header_prefix.lower()
+            if lower.startswith(f"{prefix_lower} "):
+                parts = header.split(" ", 1)
+                if len(parts) == 2 and parts[1]:
+                    return parts[1]
 
         # Vérifier les cookies (optionnel)
         cookie_name = getattr(settings, "JWT_AUTH_COOKIE", None)
         if cookie_name:
             return request.COOKIES.get(cookie_name)
 
+        # Vérifier les paramètres de requête (pour les WebSockets)
         # Vérifier les paramètres de requête (pour les WebSockets)
         return request.GET.get("token")
 
@@ -235,7 +243,8 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
                 return None
 
             # Récupérer l'utilisateur
-            user_id = payload.get("user_id")
+            # Support standard JWT 'sub' claim as fallback
+            user_id = payload.get("user_id") or payload.get("sub")
             if not user_id:
                 return None
 

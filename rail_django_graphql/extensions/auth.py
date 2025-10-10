@@ -72,13 +72,38 @@ class JWTManager:
     
     @staticmethod
     def get_jwt_expiration() -> int:
-        """Récupère la durée d'expiration du token en secondes."""
-        return getattr(settings, 'JWT_EXPIRATION_DELTA', 3600)  # 1 heure par défaut
+        """Récupère la durée d'expiration du token en secondes.
+
+        Supports non-expiring tokens when configured with 0 or None.
+        Accepts either legacy `JWT_EXPIRATION_DELTA` or new
+        `JWT_ACCESS_TOKEN_LIFETIME` setting (in seconds).
+        """
+        # Prefer explicit access token lifetime if present
+        lifetime = getattr(settings, 'JWT_ACCESS_TOKEN_LIFETIME', None)
+        if lifetime is None:
+            lifetime = getattr(settings, 'JWT_EXPIRATION_DELTA', 3600*72)
+        # Normalize types that might be timedelta
+        if isinstance(lifetime, timedelta):
+            lifetime_seconds = int(lifetime.total_seconds())
+        else:
+            lifetime_seconds = int(lifetime)
+        return lifetime_seconds
     
     @staticmethod
     def get_refresh_expiration() -> int:
-        """Récupère la durée d'expiration du refresh token en secondes."""
-        return getattr(settings, 'JWT_REFRESH_EXPIRATION_DELTA', 604800)  # 7 jours par défaut
+        """Récupère la durée d'expiration du refresh token en secondes.
+
+        Accepts either legacy `JWT_REFRESH_EXPIRATION_DELTA` or new
+        `JWT_REFRESH_TOKEN_LIFETIME` setting (in seconds).
+        """
+        lifetime = getattr(settings, 'JWT_REFRESH_TOKEN_LIFETIME', None)
+        if lifetime is None:
+            lifetime = getattr(settings, 'JWT_REFRESH_EXPIRATION_DELTA', 604800)
+        if isinstance(lifetime, timedelta):
+            lifetime_seconds = int(lifetime.total_seconds())
+        else:
+            lifetime_seconds = int(lifetime)
+        return lifetime_seconds
     
     @classmethod
     def generate_token(cls, user: "AbstractUser") -> Dict[str, Any]:
@@ -92,16 +117,21 @@ class JWTManager:
             Dict contenant le token, refresh_token et expires_at
         """
         now = timezone.now()
-        expiration = now + timedelta(seconds=cls.get_jwt_expiration())
-        refresh_expiration = now + timedelta(seconds=cls.get_refresh_expiration())
+        access_lifetime = cls.get_jwt_expiration()
+        refresh_lifetime = cls.get_refresh_expiration()
+        # If access_lifetime is 0 or negative, treat as non-expiring (no 'exp')
+        expiration = None if access_lifetime <= 0 else now + timedelta(seconds=access_lifetime)
+        refresh_expiration = now + timedelta(seconds=refresh_lifetime)
         
         payload = {
             'user_id': user.id,
             'username': user.username,
-            'exp': expiration,
             'iat': now,
             'type': 'access'
         }
+        # Only include 'exp' if token should expire
+        if expiration is not None:
+            payload['exp'] = expiration
         
         refresh_payload = {
             'user_id': user.id,

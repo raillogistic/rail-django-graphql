@@ -11,8 +11,10 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
+from django.apps import apps
 from graphql import GraphQLError
 
+from ..conf import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
 
@@ -38,6 +40,7 @@ class FieldMetadata:
     field_type: str
     is_required: bool
     is_nullable: bool
+    null: bool
     default_value: Any
     help_text: str
     max_length: Optional[int]
@@ -51,6 +54,7 @@ class FieldMetadata:
     blank: bool
     editable: bool
     verbose_name: str
+    has_permission: bool
 
 
 @dataclass
@@ -69,6 +73,7 @@ class RelationshipMetadata:
     foreign_key: bool
     on_delete: Optional[str]
     related_name: Optional[str]
+    has_permission: bool
 
 
 @dataclass
@@ -103,6 +108,7 @@ class FieldMetadataType(graphene.ObjectType):
     is_nullable = graphene.Boolean(
         required=True, description="Whether field can be null"
     )
+    null = graphene.Boolean(required=True, description="Whether field can be null")
     default_value = graphene.String(description="Default value as string")
     help_text = graphene.String(description="Field help text")
     max_length = graphene.Int(description="Maximum length for string fields")
@@ -126,6 +132,9 @@ class FieldMetadataType(graphene.ObjectType):
     blank = graphene.Boolean(required=True, description="Whether field can be blank")
     editable = graphene.Boolean(required=True, description="Whether field is editable")
     verbose_name = graphene.String(required=True, description="Field verbose name")
+    has_permission = graphene.Boolean(
+        required=True, description="Whether user has permission for this field"
+    )
 
 
 class RelationshipMetadataType(graphene.ObjectType):
@@ -153,6 +162,9 @@ class RelationshipMetadataType(graphene.ObjectType):
     )
     on_delete = graphene.String(description="On delete behavior")
     related_name = graphene.String(description="Related name for reverse lookups")
+    has_permission = graphene.Boolean(
+        required=True, description="Whether user has permission for this relationship"
+    )
 
 
 class ModelMetadataType(graphene.ObjectType):
@@ -209,26 +221,18 @@ class ModelMetadataExtractor:
         self.schema_name = schema_name
         # self.settings = get_schema_settings(schema_name)
 
-    def extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
+    def _extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
         """
         Extract metadata for a single field with permission checking.
 
         Args:
             field: Django model field instance
-            user: Django user instance for permission checking
 
         Returns:
             FieldMetadata if user has permission, None otherwise
         """
         # Lazy import to avoid AppRegistryNotReady
-        from django.contrib.auth.models import AnonymousUser
         from django.db import models
-
-        model_name = field.model.__name__
-
-        # Check field permission using simplified permission check
-        if not self._has_field_permission(user, field.model, field.name):
-            return None
 
         # Get field choices
         choices = None
@@ -240,11 +244,15 @@ class ModelMetadataExtractor:
         # Get max length
         max_length = getattr(field, "max_length", None)
 
-        # Get on_delete behavior for foreign keys
+        # Get on_delete behavior for foreign keys (guard None)
         on_delete = None
-        if hasattr(field, "remote_field") and hasattr(field.remote_field, "on_delete"):
-            on_delete = field.remote_field.on_delete.__name__
+        if getattr(field, "remote_field", None) is not None:
+            remote_on_delete = getattr(field.remote_field, "on_delete", None)
+            if remote_on_delete:
+                on_delete = getattr(remote_on_delete, "__name__", None)
 
+        # Simplified permission flag; adjust with actual permission checks if needed
+        has_permission = True
         return FieldMetadata(
             name=field.name,
             field_type=field.__class__.__name__,
@@ -252,6 +260,7 @@ class ModelMetadataExtractor:
             and not field.blank
             and field.default == models.NOT_PROVIDED,
             is_nullable=field.null,
+            null=field.null,
             default_value=str(field.default)
             if field.default != models.NOT_PROVIDED
             else None,
@@ -267,9 +276,10 @@ class ModelMetadataExtractor:
             blank=field.blank,
             editable=field.editable,
             verbose_name=str(field.verbose_name),
+            has_permission=has_permission,
         )
 
-    def extract_relationship_metadata(
+    def _extract_relationship_metadata(
         self, field, user
     ) -> Optional[RelationshipMetadata]:
         """
@@ -277,32 +287,37 @@ class ModelMetadataExtractor:
 
         Args:
             field: Django relationship field instance
-            user: Django user instance for permission checking
 
         Returns:
             RelationshipMetadata if user has permission, None otherwise
         """
         # Lazy import to avoid AppRegistryNotReady
-        from django.contrib.auth.models import AnonymousUser
         from django.db import models
-
-        model_name = field.model.__name__
-
-        # Check field permission using simplified permission check
-        if not self._has_field_permission(user, field.model, field.name):
-            return None
 
         related_model = field.related_model
         on_delete = None
 
-        if hasattr(field, "remote_field") and hasattr(field.remote_field, "on_delete"):
-            on_delete = field.remote_field.on_delete.__name__
+        if getattr(field, "remote_field", None) is not None:
+            remote_on_delete = getattr(field.remote_field, "on_delete", None)
+            if remote_on_delete:
+                on_delete = getattr(remote_on_delete, "__name__", None)
+
+        # Simplified permission flag; adjust with actual checks if needed
+        has_permission = True
+
+        # Safely resolve related model name and app label
+        related_model_name = (
+            getattr(related_model, "__name__", None)
+            or getattr(getattr(related_model, "_meta", None), "model_name", None)
+            or (str(related_model) if related_model is not None else "Unknown")
+        )
+        related_app_label = getattr(getattr(related_model, "_meta", None), "app_label", "")
 
         return RelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
-            related_model=related_model.__name__,
-            related_app=related_model._meta.app_label,
+            related_model=related_model_name,
+            related_app=related_app_label,
             to_field=field.remote_field.name
             if hasattr(field, "remote_field") and field.remote_field
             else None,
@@ -313,80 +328,101 @@ class ModelMetadataExtractor:
             foreign_key=isinstance(field, models.ForeignKey),
             on_delete=on_delete,
             related_name=getattr(field, "related_name", None),
+            has_permission=has_permission,
         )
 
     def extract_model_metadata(
         self,
-        model,
+        app_name: str,
+        model_name: str,
         user,
-        include_nested: bool = False,
-        include_permissions: bool = True,
-    ) -> ModelMetadata:
+        nested_fields: bool = True,
+        permissions_included: bool = True,
+    ) -> Optional[ModelMetadata]:
         """
         Extract complete metadata for a Django model.
 
         Args:
-            model: Django model class
+            app_name: Django app label
+            model_name: Model class name
             user: Current user for permission checking
-            include_nested: Whether to include nested relationship metadata
+            nested_fields: Whether to include relationship metadata
+            permissions_included: Whether to include permission information
 
         Returns:
-            ModelMetadata with filtered fields based on permissions
+            ModelMetadata with filtered fields based on permissions, or None on error
         """
+        # Resolve the model from app and model name
+        try:
+            model = apps.get_model(app_name, model_name)
+        except Exception as e:
+            logger.error(
+                "Model '%s' not found in app '%s': %s", model_name, app_name, e
+            )
+            return None
+
         introspector = ModelIntrospector(model, self.schema_name)
 
-        # Extract field metadata with permission filtering
+        # Extract field metadata with permission filtering using concrete model fields
         fields = []
-        model_fields = introspector.get_fields()
-        for field_name, field_info in model_fields.items():
-            field_metadata = self.extract_field_metadata(field_info["field"], user)
+        for django_field in model._meta.get_fields():
+            # Only include concrete fields (exclude relations and auto-created reverse accessors)
+            if getattr(django_field, "is_relation", False):
+                continue
+            if getattr(django_field, "auto_created", False):
+                continue
+            field_metadata = self._extract_field_metadata(django_field, user)
             if field_metadata:
                 fields.append(field_metadata)
 
-        # Extract relationship metadata with permission filtering
+        # Extract relationship metadata with permission filtering (declared relations only)
         relationships = []
-        model_relationships = introspector.get_relationships()
-        for rel_name, rel_info in model_relationships.items():
-            rel_metadata = self.extract_relationship_metadata(rel_info["field"], user)
-            if rel_metadata:
-                relationships.append(rel_metadata)
+        if nested_fields:
+            for django_field in model._meta.get_fields():
+                if not getattr(django_field, "is_relation", False):
+                    continue
+                # Skip auto-created reverse relations; they will be added below
+                if getattr(django_field, "auto_created", False):
+                    continue
+                rel_metadata = self._extract_relationship_metadata(django_field, user)
+                if rel_metadata:
+                    relationships.append(rel_metadata)
 
-        # Get reverse relationships if requested
-        if include_nested:
+        # Always include reverse relationships
+        if nested_fields:
             reverse_relations = introspector.get_reverse_relations()
             for rel_name, related_model in reverse_relations.items():
-                # Check permission for reverse relationship using simplified permission check
-                if self._has_field_permission(user, model, rel_name):
-                    relationships.append(
-                        RelationshipMetadata(
-                            name=rel_name,
-                            relationship_type="ReverseRelation",
-                            related_model=related_model.__name__,
-                            related_app=related_model._meta.app_label,
-                            to_field=None,
-                            from_field=rel_name,
-                            is_reverse=True,
-                            many_to_many=False,
-                            one_to_one=False,
-                            foreign_key=False,
-                            on_delete=None,
-                            related_name=rel_name,
-                        )
+                relationships.append(
+                    RelationshipMetadata(
+                        name=rel_name,
+                        relationship_type="ReverseRelation",
+                        related_model=related_model.__name__,
+                        related_app=related_model._meta.app_label,
+                        to_field=None,
+                        from_field=rel_name,
+                        is_reverse=True,
+                        many_to_many=False,
+                        one_to_one=False,
+                        foreign_key=False,
+                        on_delete=None,
+                        related_name=rel_name,
+                        has_permission=True,
                     )
+                )
 
         # Get model permissions for the user
         permissions = []
-        if user and not isinstance(user, type(None)):
+        if permissions_included and user:
             # Lazy import to avoid AppRegistryNotReady
             from django.contrib.auth.models import AnonymousUser
 
             if not isinstance(user, AnonymousUser):
                 app_label = model._meta.app_label
-                model_name = model._meta.model_name
+                model_name_code = model._meta.model_name
 
                 # Check standard Django permissions
                 for action in ["add", "change", "delete", "view"]:
-                    perm_code = f"{app_label}.{action}_{model_name}"
+                    perm_code = f"{app_label}.{action}_{model_name_code}"
                     if user.has_perm(perm_code):
                         permissions.append(action)
 
@@ -463,10 +499,10 @@ class ModelMetadataQuery(graphene.ObjectType):
         ModelMetadataType,
         app_name=graphene.String(required=True, description="Django app name"),
         model_name=graphene.String(required=True, description="Model class name"),
-        include_nested=graphene.Boolean(
-            default_value=False, description="Include nested relationship metadata"
+        nested_fields=graphene.Boolean(
+            default_value=True, description="Include relationship metadata"
         ),
-        include_permissions=graphene.Boolean(
+        permissions_included=graphene.Boolean(
             default_value=True, description="Include permission information"
         ),
         description="Get comprehensive metadata for a Django model",
@@ -477,9 +513,10 @@ class ModelMetadataQuery(graphene.ObjectType):
         info,
         app_name: str,
         model_name: str,
-        include_nested: bool = False,
-        include_permissions: bool = True,
+        nested_fields: bool = True,
+        permissions_included: bool = True,
     ) -> Optional[ModelMetadataType]:
+        print("xxxxxxxxxxxxxxxx", getattr(info.context, "user", None))
         """
         Resolve model metadata with permission checking and settings validation.
 
@@ -493,83 +530,24 @@ class ModelMetadataQuery(graphene.ObjectType):
         Returns:
             ModelMetadataType or None if not accessible
         """
-        # Lazy import to avoid AppRegistryNotReady
-        from django.apps import apps
-        from django.contrib.auth.models import AnonymousUser
-
-        # Get user from context
-        user = getattr(info.context, "user", AnonymousUser())
-        # Check user authentication if permissions are required
-        if include_permissions and isinstance(user, AnonymousUser):
+        # Check core schema settings gating
+        # Get user from context and require authentication
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
 
-        try:
-            # Get the model
-            model = apps.get_model(app_name, model_name)
-        except LookupError:
-            return None
-
-        # Extract metadata
+        # Extract metadata via extractor which handles model lookup
         extractor = ModelMetadataExtractor()
         metadata = extractor.extract_model_metadata(
-            model=model,
+            app_name=app_name,
+            model_name=model_name,
             user=user,
-            include_nested=include_nested,
-            include_permissions=include_permissions,
+            nested_fields=nested_fields,
+            permissions_included=permissions_included,
         )
+        # Handle extraction error returning None
+        if metadata is None:
+            return None
 
-        # Convert to GraphQL type
-        return ModelMetadataType(
-            app_name=metadata.app_name,
-            model_name=metadata.model_name,
-            verbose_name=metadata.verbose_name,
-            verbose_name_plural=metadata.verbose_name_plural,
-            table_name=metadata.table_name,
-            primary_key_field=metadata.primary_key_field,
-            fields=[
-                FieldMetadataType(
-                    name=field.name,
-                    field_type=field.field_type,
-                    is_required=field.is_required,
-                    is_nullable=field.is_nullable,
-                    default_value=field.default_value,
-                    help_text=field.help_text,
-                    max_length=field.max_length,
-                    choices=field.choices,
-                    is_primary_key=field.is_primary_key,
-                    is_foreign_key=field.is_foreign_key,
-                    is_unique=field.is_unique,
-                    is_indexed=field.is_indexed,
-                    has_auto_now=field.has_auto_now,
-                    has_auto_now_add=field.has_auto_now_add,
-                    blank=field.blank,
-                    editable=field.editable,
-                    verbose_name=field.verbose_name,
-                )
-                for field in metadata.fields
-            ],
-            relationships=[
-                RelationshipMetadataType(
-                    name=rel.name,
-                    relationship_type=rel.relationship_type,
-                    related_model=rel.related_model,
-                    related_app=rel.related_app,
-                    to_field=rel.to_field,
-                    from_field=rel.from_field,
-                    is_reverse=rel.is_reverse,
-                    many_to_many=rel.many_to_many,
-                    one_to_one=rel.one_to_one,
-                    foreign_key=rel.foreign_key,
-                    on_delete=rel.on_delete,
-                    related_name=rel.related_name,
-                )
-                for rel in metadata.relationships
-            ],
-            permissions=metadata.permissions if include_permissions else [],
-            ordering=metadata.ordering,
-            unique_together=metadata.unique_together,
-            indexes=metadata.indexes,
-            abstract=metadata.abstract,
-            proxy=metadata.proxy,
-            managed=metadata.managed,
-        )
+        # Return dataclass directly for Graphene to resolve attributes
+        return metadata

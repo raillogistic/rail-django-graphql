@@ -89,15 +89,17 @@ class MultiSchemaGraphQLView(GraphQLView):
         """
         context = super().get_context(request)
         
-        # Check for JWT token authentication
-        auth_header = request.META.get("HTTP_AUTHORIZATION", "")
-        if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
+        # Check for JWT token authentication (case-insensitive, robust parsing)
+        raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
+        auth_header = raw_auth.strip()
+        header_lower = auth_header.lower()
+        if header_lower.startswith("bearer ") or header_lower.startswith("token "):
             try:
                 # Extract token from header
-                if auth_header.startswith("Bearer "):
-                    token = auth_header.split(" ")[1]
-                elif auth_header.startswith("Token "):
-                    token = auth_header.split(" ")[1]
+                parts = auth_header.split(" ")
+                token = parts[1] if len(parts) >= 2 else None
+                if not token:
+                    return context
                 else:
                     return context
                 
@@ -106,8 +108,8 @@ class MultiSchemaGraphQLView(GraphQLView):
                 payload = JWTManager.verify_token(token)
                 
                 if payload:
-                    # Get user from payload
-                    user_id = payload.get('user_id')
+                    # Get user from payload, support standard 'sub' claim fallback
+                    user_id = payload.get('user_id') or payload.get('sub')
                     if user_id:
                         from django.contrib.auth import get_user_model
                         User = get_user_model()
@@ -127,7 +129,8 @@ class MultiSchemaGraphQLView(GraphQLView):
                 logger.warning(f"JWT authentication failed: {str(e)}")
         
         # Add schema name to context for metadata hierarchy
-        schema_name = getattr(request, 'resolver_match', {}).kwargs.get('schema_name', 'default')
+        schema_match = getattr(request, 'resolver_match', None)
+        schema_name = getattr(schema_match, 'kwargs', {}).get('schema_name', 'default')
         context.schema_name = schema_name
         
         return context
