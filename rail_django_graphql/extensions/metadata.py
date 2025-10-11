@@ -63,17 +63,20 @@ class RelationshipMetadata:
 
     name: str
     relationship_type: str
-    related_model: str
+    # Embed full related model metadata (single-level depth by default)
+    related_model: "ModelMetadata"
     related_app: str
     to_field: Optional[str]
     from_field: str
     is_reverse: bool
+    is_required: bool
     many_to_many: bool
     one_to_one: bool
     foreign_key: bool
     on_delete: Optional[str]
     related_name: Optional[str]
     has_permission: bool
+    verbose_name: str
 
 
 @dataclass
@@ -144,11 +147,18 @@ class RelationshipMetadataType(graphene.ObjectType):
     relationship_type = graphene.String(
         required=True, description="Type of relationship"
     )
-    related_model = graphene.String(required=True, description="Related model name")
+    related_model = graphene.Field(
+        lambda: ModelMetadataType,
+        required=True,
+        description="Related model metadata",
+    )
     related_app = graphene.String(required=True, description="Related model app")
     to_field = graphene.String(description="Target field name")
     from_field = graphene.String(required=True, description="Source field name")
     is_reverse = graphene.Boolean(
+        required=True, description="Whether this is a reverse relationship"
+    )
+    is_required = graphene.Boolean(
         required=True, description="Whether this is a reverse relationship"
     )
     many_to_many = graphene.Boolean(
@@ -165,6 +175,7 @@ class RelationshipMetadataType(graphene.ObjectType):
     has_permission = graphene.Boolean(
         required=True, description="Whether user has permission for this relationship"
     )
+    verbose_name = graphene.String(required=True, description="Model verbose name")
 
 
 class ModelMetadataType(graphene.ObjectType):
@@ -208,17 +219,19 @@ class ModelMetadataType(graphene.ObjectType):
 class ModelMetadataExtractor:
     """Extracts comprehensive metadata from Django models."""
 
-    def __init__(self, schema_name: str = "default"):
+    def __init__(self, schema_name: str = "default", max_depth: int = 1):
         """
         Initialize the metadata extractor.
 
         Args:
             schema_name: Name of the schema configuration to use
+            max_depth: Maximum depth for nested related model metadata
         """
         # Lazy import to avoid AppRegistryNotReady
         # from ..core.settings import get_schema_settings
 
         self.schema_name = schema_name
+        self.max_depth = max_depth
         # self.settings = get_schema_settings(schema_name)
 
     def _extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
@@ -280,7 +293,7 @@ class ModelMetadataExtractor:
         )
 
     def _extract_relationship_metadata(
-        self, field, user
+        self, field, user, current_depth: int = 0
     ) -> Optional[RelationshipMetadata]:
         """
         Extract metadata for relationship fields.
@@ -305,18 +318,31 @@ class ModelMetadataExtractor:
         # Simplified permission flag; adjust with actual checks if needed
         has_permission = True
 
-        # Safely resolve related model name and app label
-        related_model_name = (
-            getattr(related_model, "__name__", None)
-            or getattr(getattr(related_model, "_meta", None), "model_name", None)
-            or (str(related_model) if related_model is not None else "Unknown")
+        # Build embedded related model metadata (guard depth to avoid recursion)
+        if related_model is None or not hasattr(related_model, "_meta"):
+            return None
+
+        related_app_label = getattr(related_model._meta, "app_label", "")
+        related_model_class_name = related_model.__name__
+
+        # Include nested relationships only if within max depth
+        include_nested = current_depth < self.max_depth
+        embedded_related = self.extract_model_metadata(
+            app_name=related_app_label,
+            model_name=related_model_class_name,
+            user=user,
+            nested_fields=include_nested,
+            permissions_included=True,
+            current_depth=current_depth + 1,
         )
-        related_app_label = getattr(getattr(related_model, "_meta", None), "app_label", "")
+        if embedded_related is None:
+            return None
 
         return RelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
-            related_model=related_model_name,
+            related_model=embedded_related,
+            is_required=not field.blank,
             related_app=related_app_label,
             to_field=field.remote_field.name
             if hasattr(field, "remote_field") and field.remote_field
@@ -329,6 +355,7 @@ class ModelMetadataExtractor:
             on_delete=on_delete,
             related_name=getattr(field, "related_name", None),
             has_permission=has_permission,
+            verbose_name=field.verbose_name,
         )
 
     def extract_model_metadata(
@@ -338,6 +365,7 @@ class ModelMetadataExtractor:
         user,
         nested_fields: bool = True,
         permissions_included: bool = True,
+        current_depth: int = 0,
     ) -> Optional[ModelMetadata]:
         """
         Extract complete metadata for a Django model.
@@ -384,7 +412,9 @@ class ModelMetadataExtractor:
                 # Skip auto-created reverse relations; they will be added below
                 if getattr(django_field, "auto_created", False):
                     continue
-                rel_metadata = self._extract_relationship_metadata(django_field, user)
+                rel_metadata = self._extract_relationship_metadata(
+                    django_field, user, current_depth=current_depth
+                )
                 if rel_metadata:
                     relationships.append(rel_metadata)
 
@@ -392,13 +422,27 @@ class ModelMetadataExtractor:
         if nested_fields:
             reverse_relations = introspector.get_reverse_relations()
             for rel_name, related_model in reverse_relations.items():
+                # Build embedded metadata for reverse-related model with depth guard
+                include_nested = current_depth < self.max_depth
+                embedded_related = self.extract_model_metadata(
+                    app_name=related_model._meta.app_label,
+                    model_name=related_model.__name__,
+                    user=user,
+                    nested_fields=include_nested,
+                    permissions_included=True,
+                    current_depth=current_depth + 1,
+                )
+                if embedded_related is None:
+                    continue
                 relationships.append(
                     RelationshipMetadata(
                         name=rel_name,
+                        verbose_name=related_model._meta.verbose_name,
                         relationship_type="ReverseRelation",
-                        related_model=related_model.__name__,
+                        related_model=embedded_related,
                         related_app=related_model._meta.app_label,
                         to_field=None,
+                        is_required=True,
                         from_field=rel_name,
                         is_reverse=True,
                         many_to_many=False,
