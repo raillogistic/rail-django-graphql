@@ -269,9 +269,7 @@ class ModelMetadataExtractor:
         return FieldMetadata(
             name=field.name,
             field_type=field.__class__.__name__,
-            is_required=not field.null
-            and not field.blank
-            and field.default == models.NOT_PROVIDED,
+            is_required=not field.blank and field.default == models.NOT_PROVIDED,
             is_nullable=field.null,
             null=field.null,
             default_value=str(field.default)
@@ -409,6 +407,9 @@ class ModelMetadataExtractor:
             for django_field in model._meta.get_fields():
                 if not getattr(django_field, "is_relation", False):
                     continue
+                # Skip polymorphic_ctype field
+                if django_field.name == "polymorphic_ctype":
+                    continue
                 # Skip auto-created reverse relations; they will be added below
                 if getattr(django_field, "auto_created", False):
                     continue
@@ -442,7 +443,7 @@ class ModelMetadataExtractor:
                         related_model=embedded_related,
                         related_app=related_model._meta.app_label,
                         to_field=None,
-                        is_required=True,
+                        is_required=False,
                         from_field=rel_name,
                         is_reverse=True,
                         many_to_many=False,
