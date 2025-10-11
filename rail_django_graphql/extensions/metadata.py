@@ -32,6 +32,12 @@ def get_user_model_lazy():
     return get_user_model()
 
 
+# ChoiceType : {"value":str,"label":str}    graphene class
+class ChoiceType(graphene.ObjectType):
+    value = graphene.String(required=True, description="Choice value")
+    label = graphene.String(required=True, description="Choice label")
+
+
 @dataclass
 class FieldMetadata:
     """Metadata for a single model field."""
@@ -44,7 +50,7 @@ class FieldMetadata:
     default_value: Any
     help_text: str
     max_length: Optional[int]
-    choices: Optional[List[Dict[str, Any]]]
+    choices: Optional[List[Dict[str, str]]]
     is_primary_key: bool
     is_foreign_key: bool
     is_unique: bool
@@ -115,7 +121,7 @@ class FieldMetadataType(graphene.ObjectType):
     default_value = graphene.String(description="Default value as string")
     help_text = graphene.String(description="Field help text")
     max_length = graphene.Int(description="Maximum length for string fields")
-    choices = graphene.List(graphene.JSONString, description="Field choices")
+    choices = graphene.List(ChoiceType, description="Field choices")
     is_primary_key = graphene.Boolean(
         required=True, description="Whether field is primary key"
     )
