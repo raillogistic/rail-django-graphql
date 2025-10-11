@@ -32,6 +32,237 @@ DEFAULT_MAX_NESTED_DEPTH = 3
 MAX_ALLOWED_NESTED_DEPTH = 5
 
 
+class FilterOperation:
+    """
+    Represents a single filter operation for a field.
+    """
+    def __init__(self, name: str, filter_type: str, lookup_expr: str = None, 
+                 description: str = None, is_array: bool = False):
+        self.name = name
+        self.filter_type = filter_type
+        self.lookup_expr = lookup_expr or 'exact'
+        self.description = description
+        self.is_array = is_array
+
+
+class GroupedFieldFilter:
+    """
+    Represents a grouped filter for a single field with multiple operations.
+    """
+    def __init__(self, field_name: str, field_type: str, operations: List[FilterOperation]):
+        self.field_name = field_name
+        self.field_type = field_type
+        self.operations = operations
+        
+    def to_dict(self):
+        """Convert to dictionary format for metadata."""
+        return {
+            'field_name': self.field_name,
+            'field_type': self.field_type,
+            'operations': [
+                {
+                    'name': op.name,
+                    'filter_type': op.filter_type,
+                    'lookup_expr': op.lookup_expr,
+                    'description': op.description,
+                    'is_array': op.is_array
+                }
+                for op in self.operations
+            ]
+        }
+
+
+class EnhancedFilterGenerator:
+    """
+    Enhanced filter generator that creates grouped filters with comprehensive operations.
+    """
+    
+    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH, 
+                 enable_nested_filters: bool = True, schema_name: Optional[str] = None):
+        self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
+        self.enable_nested_filters = enable_nested_filters
+        self.schema_name = schema_name or 'default'
+        self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
+        self._grouped_filter_cache: Dict[Type[models.Model], List[GroupedFieldFilter]] = {}
+        self._visited_models: set = set()
+        
+        logger.debug(
+            f"Initialized EnhancedFilterGenerator for schema '{self.schema_name}' "
+            f"with max_nested_depth={self.max_nested_depth}, "
+            f"enable_nested_filters={self.enable_nested_filters}"
+        )
+    
+    def get_grouped_filters(self, model: Type[models.Model]) -> List[GroupedFieldFilter]:
+        """
+        Get grouped filters for a model.
+        
+        Args:
+            model: Django model to generate grouped filters for
+            
+        Returns:
+            List of GroupedFieldFilter objects
+        """
+        if model in self._grouped_filter_cache:
+            return self._grouped_filter_cache[model]
+        
+        grouped_filters = []
+        
+        # Process each field in the model
+        for field in model._meta.get_fields():
+            if not hasattr(field, 'name'):
+                continue
+                
+            field_operations = self._generate_field_operations(field)
+            if field_operations:
+                grouped_filter = GroupedFieldFilter(
+                    field_name=field.name,
+                    field_type=field.__class__.__name__,
+                    operations=field_operations
+                )
+                grouped_filters.append(grouped_filter)
+        
+        # Cache the result
+        self._grouped_filter_cache[model] = grouped_filters
+        return grouped_filters
+    
+    def _generate_field_operations(self, field: models.Field) -> List[FilterOperation]:
+        """
+        Generate comprehensive filter operations for a specific field type.
+        
+        Args:
+            field: Django model field
+            
+        Returns:
+            List of FilterOperation objects
+        """
+        operations = []
+        field_name = field.name
+        
+        if isinstance(field, (models.CharField, models.TextField)):
+            operations.extend(self._get_text_operations(field_name))
+        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+            operations.extend(self._get_numeric_operations(field_name))
+        elif isinstance(field, (models.DateField, models.DateTimeField)):
+            operations.extend(self._get_date_operations(field_name))
+        elif isinstance(field, models.BooleanField):
+            operations.extend(self._get_boolean_operations(field_name))
+        elif isinstance(field, models.ForeignKey):
+            operations.extend(self._get_foreign_key_operations(field_name))
+        elif isinstance(field, models.ManyToManyField):
+            operations.extend(self._get_many_to_many_operations(field_name))
+        elif hasattr(field, 'choices') and field.choices:
+            operations.extend(self._get_choice_operations(field_name, field.choices))
+        elif isinstance(field, (models.FileField, models.ImageField)):
+            operations.extend(self._get_file_operations(field_name))
+        elif isinstance(field, models.JSONField):
+            operations.extend(self._get_json_operations(field_name))
+        
+        return operations
+    
+    def _get_text_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get comprehensive text field operations."""
+        return [
+            FilterOperation('exact', 'CharFilter', 'exact', f'Exact match for {field_name}'),
+            FilterOperation('iexact', 'CharFilter', 'iexact', f'Case-insensitive exact match for {field_name}'),
+            FilterOperation('contains', 'CharFilter', 'contains', f'Contains text in {field_name}'),
+            FilterOperation('icontains', 'CharFilter', 'icontains', f'Case-insensitive contains text in {field_name}'),
+            FilterOperation('startswith', 'CharFilter', 'startswith', f'Starts with text in {field_name}'),
+            FilterOperation('istartswith', 'CharFilter', 'istartswith', f'Case-insensitive starts with text in {field_name}'),
+            FilterOperation('endswith', 'CharFilter', 'endswith', f'Ends with text in {field_name}'),
+            FilterOperation('iendswith', 'CharFilter', 'iendswith', f'Case-insensitive ends with text in {field_name}'),
+            FilterOperation('in', 'MultipleChoiceFilter', 'in', f'Match any of the provided values for {field_name}', is_array=True),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation('regex', 'CharFilter', 'regex', f'Regular expression match for {field_name}'),
+            FilterOperation('iregex', 'CharFilter', 'iregex', f'Case-insensitive regular expression match for {field_name}'),
+        ]
+    
+    def _get_numeric_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get comprehensive numeric field operations."""
+        return [
+            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact value for {field_name}'),
+            FilterOperation('gt', 'NumberFilter', 'gt', f'Greater than value for {field_name}'),
+            FilterOperation('gte', 'NumberFilter', 'gte', f'Greater than or equal to value for {field_name}'),
+            FilterOperation('lt', 'NumberFilter', 'lt', f'Less than value for {field_name}'),
+            FilterOperation('lte', 'NumberFilter', 'lte', f'Less than or equal to value for {field_name}'),
+            FilterOperation('in', 'BaseInFilter', 'in', f'Match any of the provided numeric values for {field_name}', is_array=True),
+            FilterOperation('range', 'RangeFilter', 'range', f'Value within range for {field_name}'),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+        ]
+    
+    def _get_date_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get comprehensive date field operations."""
+        return [
+            FilterOperation('exact', 'DateFilter', 'exact', f'Exact date for {field_name}'),
+            FilterOperation('gt', 'DateFilter', 'gt', f'After date for {field_name}'),
+            FilterOperation('gte', 'DateFilter', 'gte', f'On or after date for {field_name}'),
+            FilterOperation('lt', 'DateFilter', 'lt', f'Before date for {field_name}'),
+            FilterOperation('lte', 'DateFilter', 'lte', f'On or before date for {field_name}'),
+            FilterOperation('range', 'DateRangeFilter', 'range', f'Date within range for {field_name}'),
+            FilterOperation('year', 'NumberFilter', 'year', f'Filter by year for {field_name}'),
+            FilterOperation('month', 'NumberFilter', 'month', f'Filter by month for {field_name}'),
+            FilterOperation('day', 'NumberFilter', 'day', f'Filter by day for {field_name}'),
+            FilterOperation('week_day', 'NumberFilter', 'week_day', f'Filter by week day for {field_name}'),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation('today', 'BooleanFilter', 'today', f'Filter for today\'s date in {field_name}'),
+            FilterOperation('yesterday', 'BooleanFilter', 'yesterday', f'Filter for yesterday\'s date in {field_name}'),
+            FilterOperation('this_week', 'BooleanFilter', 'this_week', f'Filter for this week\'s dates in {field_name}'),
+            FilterOperation('this_month', 'BooleanFilter', 'this_month', f'Filter for this month\'s dates in {field_name}'),
+            FilterOperation('this_year', 'BooleanFilter', 'this_year', f'Filter for this year\'s dates in {field_name}'),
+        ]
+    
+    def _get_boolean_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get boolean field operations."""
+        return [
+            FilterOperation('exact', 'BooleanFilter', 'exact', f'Boolean value for {field_name}'),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+        ]
+    
+    def _get_foreign_key_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get foreign key field operations."""
+        return [
+            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact ID for {field_name}'),
+            FilterOperation('in', 'BaseInFilter', 'in', f'Match any of the provided IDs for {field_name}', is_array=True),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+        ]
+    
+    def _get_many_to_many_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get many-to-many field operations."""
+        return [
+            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact ID in {field_name}'),
+            FilterOperation('in', 'BaseInFilter', 'in', f'Match any of the provided IDs in {field_name}', is_array=True),
+            FilterOperation('count', 'NumberFilter', 'count', f'Count of related objects in {field_name}'),
+            FilterOperation('count_gt', 'NumberFilter', 'count_gt', f'Count greater than for {field_name}'),
+            FilterOperation('count_gte', 'NumberFilter', 'count_gte', f'Count greater than or equal for {field_name}'),
+            FilterOperation('count_lt', 'NumberFilter', 'count_lt', f'Count less than for {field_name}'),
+            FilterOperation('count_lte', 'NumberFilter', 'count_lte', f'Count less than or equal for {field_name}'),
+        ]
+    
+    def _get_choice_operations(self, field_name: str, choices: List) -> List[FilterOperation]:
+        """Get choice field operations."""
+        return [
+            FilterOperation('exact', 'ChoiceFilter', 'exact', f'Exact choice for {field_name}'),
+            FilterOperation('in', 'MultipleChoiceFilter', 'in', f'Match any of the provided choices for {field_name}', is_array=True),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+        ]
+    
+    def _get_file_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get file field operations."""
+        return [
+            FilterOperation('exact', 'CharFilter', 'exact', f'Exact file path for {field_name}'),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+        ]
+    
+    def _get_json_operations(self, field_name: str) -> List[FilterOperation]:
+        """Get JSON field operations."""
+        return [
+            FilterOperation('exact', 'CharFilter', 'exact', f'Exact JSON match for {field_name}'),
+            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation('has_key', 'CharFilter', 'has_key', f'Check if JSON has key in {field_name}'),
+            FilterOperation('has_keys', 'CharFilter', 'has_keys', f'Check if JSON has all keys in {field_name}', is_array=True),
+            FilterOperation('has_any_keys', 'CharFilter', 'has_any_keys', f'Check if JSON has any of the keys in {field_name}', is_array=True),
+        ]
+
+
 class AdvancedFilterGenerator:
     """
     Generates advanced GraphQL filters for Django models based on field types.
@@ -1184,7 +1415,7 @@ class AdvancedFilterGenerator:
         }
 
     def _generate_numeric_filters(self, field_name: str) -> Dict[str, NumberFilter]:
-        """Generate numeric filters: gt, gte, lt, lte, range."""
+        """Generate numeric filters: gt, gte, lt, lte, in (replacing range)."""
         return {
             f'{field_name}': NumberFilter(
                 field_name=field_name,
@@ -1210,9 +1441,11 @@ class AdvancedFilterGenerator:
                 lookup_expr='lte',
                 help_text=f'Filter {field_name} less than or equal to the specified value'
             ),
-            f'{field_name}__range': django_filters.RangeFilter(
+            f'{field_name}__in': django_filters.BaseInFilter(
+                
                 field_name=field_name,
-                help_text=f'Filter {field_name} within the specified range'
+                lookup_expr='in',
+                help_text=f'Filter {field_name} matching any of the provided values (Int[] array)'
             ),
         }
 

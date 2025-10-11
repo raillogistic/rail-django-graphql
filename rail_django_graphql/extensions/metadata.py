@@ -38,6 +38,18 @@ class ChoiceType(graphene.ObjectType):
     label = graphene.String(required=True, description="Choice label")
 
 
+class FilterFieldType(graphene.ObjectType):
+    """GraphQL type for filter field metadata."""
+
+    name = graphene.String(required=True, description="Filter field name")
+    field_name = graphene.String(required=True, description="Target model field name")
+    filter_type = graphene.String(required=True, description="Filter class type")
+    lookup_expr = graphene.String(description="Django lookup expression")
+    help_text = graphene.String(description="Filter help text")
+    is_nested = graphene.Boolean(required=True, description="Whether this is a nested filter")
+    related_model = graphene.String(description="Related model name for nested filters")
+
+
 @dataclass
 class FieldMetadata:
     """Metadata for a single model field."""
@@ -104,6 +116,7 @@ class ModelMetadata:
     abstract: bool
     proxy: bool
     managed: bool
+    filters: List[Dict[str, Any]]
 
 
 class FieldMetadataType(graphene.ObjectType):
@@ -219,6 +232,9 @@ class ModelMetadataType(graphene.ObjectType):
     proxy = graphene.Boolean(required=True, description="Whether model is proxy")
     managed = graphene.Boolean(
         required=True, description="Whether model is managed by Django"
+    )
+    filters = graphene.List(
+        FilterFieldType, required=True, description="Available filter fields"
     )
 
 
@@ -499,6 +515,9 @@ class ModelMetadataExtractor:
                     }
                 )
 
+        # Extract filter metadata
+        filters = self._extract_filter_metadata(model)
+
         return ModelMetadata(
             app_name=model._meta.app_label,
             model_name=model.__name__,
@@ -515,6 +534,7 @@ class ModelMetadataExtractor:
             abstract=model._meta.abstract,
             proxy=model._meta.proxy,
             managed=model._meta.managed,
+            filters=filters,
         )
 
     def _has_field_permission(self, user, model: type, field_name: str) -> bool:
@@ -542,6 +562,114 @@ class ModelMetadataExtractor:
 
         return user.has_perm(view_permission)
 
+    def _extract_filter_metadata(self, model: type) -> List[Dict[str, Any]]:
+        """
+        Extract filter metadata for a Django model using the EnhancedFilterGenerator.
+        
+        Args:
+            model: Django model class
+            
+        Returns:
+            List of filter field metadata dictionaries with grouped operations
+        """
+        try:
+            # Import the enhanced filter generator
+            from ..generators.filters import EnhancedFilterGenerator
+            
+            # Create enhanced filter generator instance
+            enhanced_generator = EnhancedFilterGenerator(
+                max_nested_depth=2,
+                enable_nested_filters=True,
+                schema_name=self.schema_name
+            )
+            
+            # Get grouped filters for the model
+            grouped_filters = enhanced_generator.get_grouped_filters(model)
+            
+            # Convert grouped filters to metadata format
+            filters = []
+            for grouped_filter in grouped_filters:
+                # Add each operation as a separate filter entry for backward compatibility
+                for operation in grouped_filter.operations:
+                    filter_name = f"{grouped_filter.field_name}__{operation.lookup_expr}" if operation.lookup_expr != 'exact' else grouped_filter.field_name
+                    
+                    filters.append({
+                        'name': filter_name,
+                        'field_name': grouped_filter.field_name,
+                        'field_type': grouped_filter.field_type,
+                        'filter_type': operation.filter_type,
+                        'lookup_expr': operation.lookup_expr,
+                        'description': operation.description,
+                        'help_text': operation.description or '',
+                        'is_array': operation.is_array,
+                        'is_nested': False,  # Enhanced generator handles top-level fields
+                        'related_model': None,
+                        'operation_name': operation.name
+                    })
+            
+            # Also get traditional filters for backward compatibility
+            try:
+                from ..generators.filters import AdvancedFilterGenerator
+                
+                filter_generator = AdvancedFilterGenerator(
+                    max_nested_depth=2,
+                    enable_nested_filters=True,
+                    schema_name=self.schema_name
+                )
+                
+                filter_class = filter_generator.generate_filter_set(model)
+                
+                # Add nested filters from traditional generator
+                for filter_name, filter_instance in filter_class.base_filters.items():
+                    # Only add nested filters (those with __)
+                    if '__' in filter_name:
+                        is_nested = '__' in filter_name and not filter_name.endswith('__count')
+                        
+                        related_model = None
+                        if is_nested:
+                            field_parts = filter_name.split('__')
+                            try:
+                                field = model._meta.get_field(field_parts[0])
+                                if hasattr(field, 'related_model'):
+                                    related_model = field.related_model.__name__
+                            except:
+                                pass
+                        
+                        field_name = filter_name
+                        lookup_expr = None
+                        
+                        if hasattr(filter_instance, 'lookup_expr') and filter_instance.lookup_expr:
+                            lookup_expr = filter_instance.lookup_expr
+                        elif '__' in filter_name:
+                            parts = filter_name.split('__')
+                            if len(parts) > 1:
+                                potential_lookup = parts[-1]
+                                if potential_lookup in ['exact', 'iexact', 'contains', 'icontains', 
+                                                      'startswith', 'endswith', 'gt', 'gte', 'lt', 'lte',
+                                                      'in', 'year', 'month', 'day', 'count']:
+                                    lookup_expr = potential_lookup
+                                    field_name = '__'.join(parts[:-1])
+                        
+                        filters.append({
+                            'name': filter_name,
+                            'field_name': field_name,
+                            'filter_type': filter_instance.__class__.__name__,
+                            'lookup_expr': lookup_expr,
+                            'help_text': getattr(filter_instance, 'help_text', '') or '',
+                            'is_nested': is_nested,
+                            'related_model': related_model,
+                            'is_array': 'BaseInFilter' in filter_instance.__class__.__name__
+                        })
+                        
+            except Exception as nested_error:
+                logger.warning(f"Could not extract nested filters for {model}: {nested_error}")
+                
+            return filters
+            
+        except Exception as e:
+            logger.error(f"Error extracting filter metadata for {model}: {e}")
+            return []
+
 
 class ModelMetadataQuery(graphene.ObjectType):
     """GraphQL queries for model metadata."""
@@ -567,7 +695,6 @@ class ModelMetadataQuery(graphene.ObjectType):
         nested_fields: bool = True,
         permissions_included: bool = True,
     ) -> Optional[ModelMetadataType]:
-        print("xxxxxxxxxxxxxxxx", getattr(info.context, "user", None))
         """
         Resolve model metadata with permission checking and settings validation.
 
@@ -585,7 +712,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         # Get user from context and require authentication
         user = getattr(info.context, "user", None)
         if not user or not getattr(user, "is_authenticated", False):
-            return None
+            permissions_included = False
 
         # Extract metadata via extractor which handles model lookup
         extractor = ModelMetadataExtractor()
