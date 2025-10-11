@@ -38,16 +38,23 @@ class ChoiceType(graphene.ObjectType):
     label = graphene.String(required=True, description="Choice label")
 
 
-class FilterFieldType(graphene.ObjectType):
-    """GraphQL type for filter field metadata."""
+class FilterOptionType(graphene.ObjectType):
+    """GraphQL type for individual filter options within a grouped filter."""
+    
+    name = graphene.String(required=True, description="Filter option name (e.g., 'slug__iexact')")
+    lookup_expr = graphene.String(required=True, description="Django lookup expression (e.g., 'iexact')")
+    help_text = graphene.String(required=True, description="Filter help text in French using field verbose_name")
+    filter_type = graphene.String(required=True, description="Filter class type (e.g., 'CharFilter')")
 
-    name = graphene.String(required=True, description="Filter field name")
+
+class FilterFieldType(graphene.ObjectType):
+    """GraphQL type for grouped filter field metadata."""
+
     field_name = graphene.String(required=True, description="Target model field name")
-    filter_type = graphene.String(required=True, description="Filter class type")
-    lookup_expr = graphene.String(description="Django lookup expression")
-    help_text = graphene.String(description="Filter help text")
     is_nested = graphene.Boolean(required=True, description="Whether this is a nested filter")
     related_model = graphene.String(description="Related model name for nested filters")
+    is_custom = graphene.Boolean(required=True, description="Whether this includes custom filters")
+    options = graphene.List(FilterOptionType, required=True, description="List of filter options for this field")
 
 
 @dataclass
@@ -564,111 +571,236 @@ class ModelMetadataExtractor:
 
     def _extract_filter_metadata(self, model: type) -> List[Dict[str, Any]]:
         """
-        Extract filter metadata for a Django model using the EnhancedFilterGenerator.
-        
+        Extract grouped filter metadata for a Django model.
+
         Args:
             model: Django model class
-            
+
         Returns:
-            List of filter field metadata dictionaries with grouped operations
+            List of grouped filter field metadata dictionaries
         """
         try:
             # Import the enhanced filter generator
-            from ..generators.filters import EnhancedFilterGenerator
-            
+            from ..generators.filters import EnhancedFilterGenerator, AdvancedFilterGenerator
+            from ..utils.graphql_meta import get_model_graphql_meta
+
             # Create enhanced filter generator instance
             enhanced_generator = EnhancedFilterGenerator(
                 max_nested_depth=2,
                 enable_nested_filters=True,
-                schema_name=self.schema_name
+                schema_name=self.schema_name,
             )
-            
+
             # Get grouped filters for the model
             grouped_filters = enhanced_generator.get_grouped_filters(model)
             
-            # Convert grouped filters to metadata format
-            filters = []
-            for grouped_filter in grouped_filters:
-                # Add each operation as a separate filter entry for backward compatibility
-                for operation in grouped_filter.operations:
-                    filter_name = f"{grouped_filter.field_name}__{operation.lookup_expr}" if operation.lookup_expr != 'exact' else grouped_filter.field_name
-                    
-                    filters.append({
-                        'name': filter_name,
-                        'field_name': grouped_filter.field_name,
-                        'field_type': grouped_filter.field_type,
-                        'filter_type': operation.filter_type,
-                        'lookup_expr': operation.lookup_expr,
-                        'description': operation.description,
-                        'help_text': operation.description or '',
-                        'is_array': operation.is_array,
-                        'is_nested': False,  # Enhanced generator handles top-level fields
-                        'related_model': None,
-                        'operation_name': operation.name
-                    })
+            # Get GraphQL meta for custom filters
+            graphql_meta = get_model_graphql_meta(model)
             
-            # Also get traditional filters for backward compatibility
-            try:
-                from ..generators.filters import AdvancedFilterGenerator
+            # Create a dictionary to group filters by field name
+            grouped_filter_dict = {}
+            
+            # Process enhanced filters
+            for grouped_filter in grouped_filters:
+                field_name = grouped_filter.field_name
                 
+                # Get field verbose name for help text
+                try:
+                    field = model._meta.get_field(field_name)
+                    verbose_name = str(field.verbose_name)
+                except:
+                    verbose_name = field_name
+                
+                options = []
+                for operation in grouped_filter.operations:
+                    filter_name = (
+                        f"{field_name}__{operation.lookup_expr}"
+                        if operation.lookup_expr != "exact"
+                        else field_name
+                    )
+                    
+                    # Translate help text to French using verbose_name
+                    help_text = self._translate_help_text_to_french(operation.description, verbose_name)
+                    
+                    options.append({
+                        "name": filter_name,
+                        "lookup_expr": operation.lookup_expr,
+                        "help_text": help_text,
+                        "filter_type": operation.filter_type
+                    })
+                
+                grouped_filter_dict[field_name] = {
+                    "field_name": field_name,
+                    "is_nested": False,
+                    "related_model": None,
+                    "is_custom": False,
+                    "options": options
+                }
+            
+            # Add nested filters from traditional generator
+            try:
                 filter_generator = AdvancedFilterGenerator(
                     max_nested_depth=2,
                     enable_nested_filters=True,
-                    schema_name=self.schema_name
+                    schema_name=self.schema_name,
                 )
-                
+
                 filter_class = filter_generator.generate_filter_set(model)
-                
-                # Add nested filters from traditional generator
+
+                # Process nested filters
                 for filter_name, filter_instance in filter_class.base_filters.items():
-                    # Only add nested filters (those with __)
-                    if '__' in filter_name:
-                        is_nested = '__' in filter_name and not filter_name.endswith('__count')
+                    if "__" in filter_name and not filter_name.endswith("__count"):
+                        field_parts = filter_name.split("__")
+                        base_field_name = field_parts[0]
+                        lookup_expr = "__".join(field_parts[1:])
                         
+                        # Get related model info
                         related_model = None
-                        if is_nested:
-                            field_parts = filter_name.split('__')
-                            try:
-                                field = model._meta.get_field(field_parts[0])
-                                if hasattr(field, 'related_model'):
-                                    related_model = field.related_model.__name__
-                            except:
-                                pass
+                        try:
+                            field = model._meta.get_field(base_field_name)
+                            if hasattr(field, "related_model"):
+                                related_model = field.related_model.__name__
+                        except:
+                            continue
                         
-                        field_name = filter_name
-                        lookup_expr = None
+                        # Get verbose name for nested field
+                        try:
+                            verbose_name = str(field.verbose_name)
+                        except:
+                            verbose_name = base_field_name
                         
-                        if hasattr(filter_instance, 'lookup_expr') and filter_instance.lookup_expr:
-                            lookup_expr = filter_instance.lookup_expr
-                        elif '__' in filter_name:
-                            parts = filter_name.split('__')
-                            if len(parts) > 1:
-                                potential_lookup = parts[-1]
-                                if potential_lookup in ['exact', 'iexact', 'contains', 'icontains', 
-                                                      'startswith', 'endswith', 'gt', 'gte', 'lt', 'lte',
-                                                      'in', 'year', 'month', 'day', 'count']:
-                                    lookup_expr = potential_lookup
-                                    field_name = '__'.join(parts[:-1])
+                        # Create help text for nested filter
+                        help_text = self._translate_help_text_to_french(
+                            f"Filter by {lookup_expr} in related {base_field_name}",
+                            verbose_name
+                        )
                         
-                        filters.append({
-                            'name': filter_name,
-                            'field_name': field_name,
-                            'filter_type': filter_instance.__class__.__name__,
-                            'lookup_expr': lookup_expr,
-                            'help_text': getattr(filter_instance, 'help_text', '') or '',
-                            'is_nested': is_nested,
-                            'related_model': related_model,
-                            'is_array': 'BaseInFilter' in filter_instance.__class__.__name__
+                        if base_field_name not in grouped_filter_dict:
+                            grouped_filter_dict[base_field_name] = {
+                                "field_name": base_field_name,
+                                "is_nested": True,
+                                "related_model": related_model,
+                                "is_custom": False,
+                                "options": []
+                            }
+                        
+                        # Add nested filter option
+                        grouped_filter_dict[base_field_name]["options"].append({
+                            "name": filter_name,
+                            "lookup_expr": lookup_expr,
+                            "help_text": help_text,
+                            "filter_type": filter_instance.__class__.__name__
                         })
                         
-            except Exception as nested_error:
-                logger.warning(f"Could not extract nested filters for {model}: {nested_error}")
-                
-            return filters
+                        # Mark as nested if it wasn't already
+                        if not grouped_filter_dict[base_field_name]["is_nested"]:
+                            grouped_filter_dict[base_field_name]["is_nested"] = True
+                            grouped_filter_dict[base_field_name]["related_model"] = related_model
+
+            except Exception as e:
+                logger.warning(f"Error processing nested filters for {model.__name__}: {e}")
             
+            # Add custom filters from GraphQLMeta
+            if graphql_meta:
+                # Add quick filters
+                if hasattr(graphql_meta, 'quick_filter_fields') and graphql_meta.quick_filter_fields:
+                    if 'quick' not in grouped_filter_dict:
+                        grouped_filter_dict['quick'] = {
+                            "field_name": "quick",
+                            "is_nested": False,
+                            "related_model": None,
+                            "is_custom": True,
+                            "options": []
+                        }
+                    
+                    grouped_filter_dict['quick']["options"].append({
+                        "name": "quick",
+                        "lookup_expr": "icontains",
+                        "help_text": "Recherche rapide dans plusieurs champs",
+                        "filter_type": "CharFilter"
+                    })
+                
+                # Add custom filters
+                if hasattr(graphql_meta, 'custom_filters') and graphql_meta.custom_filters:
+                    for custom_name, custom_method in graphql_meta.custom_filters.items():
+                        if custom_name not in grouped_filter_dict:
+                            grouped_filter_dict[custom_name] = {
+                                "field_name": custom_name,
+                                "is_nested": False,
+                                "related_model": None,
+                                "is_custom": True,
+                                "options": []
+                            }
+                        
+                        grouped_filter_dict[custom_name]["options"].append({
+                            "name": custom_name,
+                            "lookup_expr": "custom",
+                            "help_text": f"Filtre personnalisé: {custom_name}",
+                            "filter_type": "CustomFilter"
+                        })
+                        grouped_filter_dict[custom_name]["is_custom"] = True
+            
+            # Convert to list format
+            return list(grouped_filter_dict.values())
+
         except Exception as e:
-            logger.error(f"Error extracting filter metadata for {model}: {e}")
+            logger.error(f"Error extracting filter metadata for {model.__name__}: {e}")
             return []
+    
+    def _translate_help_text_to_french(self, original_text: str, verbose_name: str) -> str:
+        """
+        Translate help text to French using field verbose_name.
+        
+        Args:
+            original_text: Original English help text
+            verbose_name: Field verbose name to use in translation
+            
+        Returns:
+            French translated help text
+        """
+        # Basic translation mapping
+        translations = {
+            "exact": f"Correspondance exacte pour {verbose_name}",
+            "iexact": f"Correspondance exacte insensible à la casse pour {verbose_name}",
+            "contains": f"Contient le texte dans {verbose_name}",
+            "icontains": f"Contient le texte (insensible à la casse) dans {verbose_name}",
+            "startswith": f"Commence par le texte dans {verbose_name}",
+            "istartswith": f"Commence par le texte (insensible à la casse) dans {verbose_name}",
+            "endswith": f"Se termine par le texte dans {verbose_name}",
+            "iendswith": f"Se termine par le texte (insensible à la casse) dans {verbose_name}",
+            "in": f"Correspond à l'une des valeurs fournies pour {verbose_name}",
+            "gt": f"Supérieur à la valeur pour {verbose_name}",
+            "gte": f"Supérieur ou égal à la valeur pour {verbose_name}",
+            "lt": f"Inférieur à la valeur pour {verbose_name}",
+            "lte": f"Inférieur ou égal à la valeur pour {verbose_name}",
+            "range": f"Valeur dans la plage pour {verbose_name}",
+            "isnull": f"Vérifier si {verbose_name} est nul",
+            "today": f"Filtrer pour la date d'aujourd'hui dans {verbose_name}",
+            "yesterday": f"Filtrer pour la date d'hier dans {verbose_name}",
+            "this_week": f"Filtrer pour les dates de cette semaine dans {verbose_name}",
+            "this_month": f"Filtrer pour les dates de ce mois dans {verbose_name}",
+            "this_year": f"Filtrer pour les dates de cette année dans {verbose_name}",
+            "year": f"Filtrer par année pour {verbose_name}",
+            "month": f"Filtrer par mois pour {verbose_name}",
+            "day": f"Filtrer par jour pour {verbose_name}",
+        }
+        
+        # Extract lookup expression from original text
+        for lookup, french_text in translations.items():
+            if lookup in original_text.lower():
+                return french_text
+        
+        # Fallback: basic translation
+        if "exact match" in original_text.lower():
+            return f"Correspondance exacte pour {verbose_name}"
+        elif "contains" in original_text.lower():
+            return f"Contient le texte dans {verbose_name}"
+        elif "greater than" in original_text.lower():
+            return f"Supérieur à la valeur pour {verbose_name}"
+        elif "less than" in original_text.lower():
+            return f"Inférieur à la valeur pour {verbose_name}"
+        else:
+            return f"Filtre pour {verbose_name}"
 
 
 class ModelMetadataQuery(graphene.ObjectType):
