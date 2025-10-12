@@ -448,12 +448,7 @@ class ModelIntrospector:
             return method._is_mutation
 
         # Check for business logic decorator
-        if method_name == "test_prop":
-            print(
-                "xxxxxxxxxxxxxxxxxxxxxxxxxx",
-                method_name,
-                hasattr(method, "_is_business_logic"),
-            )
+        
 
         if hasattr(method, "_is_business_logic"):
             return method._is_business_logic

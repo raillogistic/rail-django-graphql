@@ -88,7 +88,6 @@ class MutationGenerator:
         self.type_generator.mutation_settings = self.settings
         self._mutation_classes: Dict[str, Type[graphene.Mutation]] = {}
         self.nested_handler = NestedOperationHandler(self.settings)
-        print("xxxxxxxxx", self.settings.enable_create)
 
     def generate_create_mutation(
         self, model: Type[models.Model]
@@ -1203,7 +1202,6 @@ class MutationGenerator:
         """
         mutations = {}
         model_name = model.__name__.lower()
-        # print("xxxxxxxxxxxxxxxxxx", self.settings.enable_create)
         # Generate CRUD mutations if enabled
         if self.settings.enable_create:
             mutation_class = self.generate_create_mutation(model)

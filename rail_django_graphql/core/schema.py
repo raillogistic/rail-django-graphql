@@ -474,7 +474,6 @@ class SchemaBuilder:
                     )
 
                 # Add model metadata queries
-                print("mmmmmmmmmmmmmmmmmmmmmm", self.settings.show_metadata)
                 if self.settings.show_metadata:
                     try:
                         from ..extensions.metadata import ModelMetadataQuery
