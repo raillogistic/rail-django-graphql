@@ -6,17 +6,24 @@ rich frontend interfaces including advanced filtering, CRUD operations, and
 complex forms with nested fields.
 """
 
+import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import wraps
 from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
 from django.apps import apps
+from django.core.cache import cache
+from django.db import models
+from django.db.models.signals import m2m_changed, post_delete, post_save
+from django.dispatch import receiver
 from graphql import GraphQLError
 
 from ..conf import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
+from .caching import CacheConfig, get_cache_manager
 
 # Remove imports that cause AppRegistryNotReady error
 # from ..core.security import AuthorizationManager
@@ -24,12 +31,186 @@ from ..generators.introspector import ModelIntrospector
 
 logger = logging.getLogger(__name__)
 
+# Cache configuration for metadata
+METADATA_CACHE_CONFIG = CacheConfig(
+    enabled=True,
+    default_timeout=1800,  # 30 minutes for metadata
+    schema_cache_timeout=3600 * 24,  # 1 hour for schema metadata
+    query_cache_timeout=900,  # 15 minutes for query metadata
+    field_cache_timeout=1200,  # 20 minutes for field metadata
+    cache_hit_logging=True,
+    cache_stats_enabled=True,
+)
+
+
+def cache_metadata(
+    timeout: int = None,
+    user_specific: bool = True,
+    invalidate_on_model_change: bool = True,
+):
+    """
+    Decorator for caching metadata extraction methods.
+
+    Args:
+        timeout: Cache timeout in seconds (uses default if None)
+        user_specific: Whether to include user ID in cache key
+        invalidate_on_model_change: Whether to invalidate cache when model changes
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if not METADATA_CACHE_CONFIG.enabled:
+                return func(self, *args, **kwargs)
+
+            # Generate cache key based on function name, args, and user
+            cache_key_parts = [
+                f"metadata_{func.__name__}",
+                str(hash(str(args))),
+                str(hash(str(sorted(kwargs.items())))),
+            ]
+
+            # Add user ID if user_specific and user is available
+            if user_specific and len(args) > 0:
+                # Try to find user in args or kwargs
+                user = None
+                if "user" in kwargs:
+                    user = kwargs["user"]
+                elif len(args) >= 3 and hasattr(
+                    args[2], "id"
+                ):  # Common pattern: (self, app_name, model_name, user)
+                    user = args[2]
+
+                if user and hasattr(user, "id"):
+                    cache_key_parts.append(f"user_{user.id}")
+
+            # Create final cache key
+            cache_key_raw = "_".join(cache_key_parts)
+            cache_key = f"metadata_{hashlib.md5(cache_key_raw.encode()).hexdigest()}"
+
+            # Try to get from cache
+            cache_manager = get_cache_manager()
+            cached_result = cache.get(cache_key)
+
+            if cached_result is not None:
+                if METADATA_CACHE_CONFIG.cache_hit_logging:
+                    logger.debug(f"Cache hit for metadata: {func.__name__}")
+                return cached_result
+
+            # Execute function and cache result
+            result = func(self, *args, **kwargs)
+
+            if result is not None:
+                cache_timeout = timeout or METADATA_CACHE_CONFIG.default_timeout
+                cache.set(cache_key, result, cache_timeout)
+
+                if METADATA_CACHE_CONFIG.cache_hit_logging:
+                    logger.debug(
+                        f"Cached metadata result: {func.__name__} (timeout: {cache_timeout}s)"
+                    )
+
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
+    """
+    Invalidate metadata cache for specific model or all models.
+
+    Args:
+        model_name: Specific model name to invalidate (optional)
+        app_name: Specific app name to invalidate (optional)
+    """
+    cache_manager = get_cache_manager()
+
+    if model_name and app_name:
+        # Invalidate specific model cache
+        pattern = f"metadata_*{app_name}*{model_name}*"
+        logger.info(f"Invalidating metadata cache for {app_name}.{model_name}")
+    elif app_name:
+        # Invalidate app cache
+        pattern = f"metadata_*{app_name}*"
+        logger.info(f"Invalidating metadata cache for app {app_name}")
+    else:
+        # Invalidate all metadata cache
+        pattern = "metadata_*"
+        logger.info("Invalidating all metadata cache")
+
+    # Clear cache entries matching pattern
+    try:
+        cache_manager.invalidate_cache(pattern)
+    except AttributeError:
+        logger.warning(
+            f"Failed to invalidate cache pattern {pattern}: 'GraphQLCacheManager' object has no attribute 'invalidate_cache'"
+        )
+        # Fallback: clear specific cache keys or all cache
+        if model_name and app_name:
+            cache.delete_many(
+                [
+                    f"metadata_{app_name}_{model_name}_model",
+                    f"metadata_{app_name}_{model_name}_fields",
+                    f"metadata_{app_name}_{model_name}_relationships",
+                    f"metadata_{app_name}_{model_name}_filters",
+                    f"metadata_{app_name}_{model_name}_mutations",
+                ]
+            )
+        else:
+            cache.clear()
+    except Exception as e:
+        logger.warning(f"Failed to invalidate cache pattern {pattern}: {e}")
+        # Fallback: clear all cache
+        cache.clear()
+
 
 # Use lazy import to avoid AppRegistryNotReady error
 def get_user_model_lazy():
     from django.contrib.auth import get_user_model
 
     return get_user_model()
+
+
+@dataclass
+class InputFieldMetadata:
+    """Metadata for mutation input fields."""
+
+    name: str
+    field_type: str
+    required: bool
+    default_value: Optional[Any] = None
+    description: Optional[str] = None
+    choices: Optional[List[Dict[str, Any]]] = None
+    validation_rules: Optional[Dict[str, Any]] = None
+    widget_type: Optional[str] = None
+    placeholder: Optional[str] = None
+    help_text: Optional[str] = None
+    min_length: Optional[int] = None
+    max_length: Optional[int] = None
+    min_value: Optional[Union[int, float]] = None
+    max_value: Optional[Union[int, float]] = None
+    pattern: Optional[str] = None
+    related_model: Optional[str] = None
+    multiple: bool = False
+
+
+@dataclass
+class MutationMetadata:
+    """Metadata for GraphQL mutations."""
+
+    name: str
+    description: Optional[str] = None
+    input_fields: List[InputFieldMetadata] = field(default_factory=list)
+    return_type: Optional[str] = None
+    requires_authentication: bool = True
+    required_permissions: List[str] = field(default_factory=list)
+    mutation_type: str = "custom"  # create, update, delete, custom
+    model_name: Optional[str] = None
+    form_config: Optional[Dict[str, Any]] = None
+    validation_schema: Optional[Dict[str, Any]] = None
+    success_message: Optional[str] = None
+    error_messages: Optional[Dict[str, str]] = None
 
 
 # ChoiceType : {"value":str,"label":str}    graphene class
@@ -40,21 +221,94 @@ class ChoiceType(graphene.ObjectType):
 
 class FilterOptionType(graphene.ObjectType):
     """GraphQL type for individual filter options within a grouped filter."""
-    
-    name = graphene.String(required=True, description="Filter option name (e.g., 'slug__iexact')")
-    lookup_expr = graphene.String(required=True, description="Django lookup expression (e.g., 'iexact')")
-    help_text = graphene.String(required=True, description="Filter help text in French using field verbose_name")
-    filter_type = graphene.String(required=True, description="Filter class type (e.g., 'CharFilter')")
+
+    name = graphene.String(
+        required=True, description="Filter option name (e.g., 'slug__iexact')"
+    )
+    lookup_expr = graphene.String(
+        required=True, description="Django lookup expression (e.g., 'iexact')"
+    )
+    help_text = graphene.String(
+        required=True, description="Filter help text in French using field verbose_name"
+    )
+    filter_type = graphene.String(
+        required=True, description="Filter class type (e.g., 'CharFilter')"
+    )
 
 
 class FilterFieldType(graphene.ObjectType):
     """GraphQL type for grouped filter field metadata."""
 
     field_name = graphene.String(required=True, description="Target model field name")
-    is_nested = graphene.Boolean(required=True, description="Whether this is a nested filter")
+    is_nested = graphene.Boolean(
+        required=True, description="Whether this is a nested filter"
+    )
     related_model = graphene.String(description="Related model name for nested filters")
-    is_custom = graphene.Boolean(required=True, description="Whether this includes custom filters")
-    options = graphene.List(FilterOptionType, required=True, description="List of filter options for this field")
+    is_custom = graphene.Boolean(
+        required=True, description="Whether this includes custom filters"
+    )
+    options = graphene.List(
+        FilterOptionType,
+        required=True,
+        description="List of filter options for this field",
+    )
+
+
+class InputFieldMetadataType(graphene.ObjectType):
+    """GraphQL type for input field metadata."""
+
+    name = graphene.String(required=True, description="Field name")
+    field_type = graphene.String(required=True, description="Field data type")
+    required = graphene.Boolean(required=True, description="Whether field is required")
+    default_value = graphene.JSONString(description="Default value for the field")
+    description = graphene.String(description="Field description")
+    choices = graphene.List(
+        graphene.JSONString, description="Available choices for the field"
+    )
+    validation_rules = graphene.JSONString(description="Validation rules as JSON")
+    widget_type = graphene.String(description="Recommended UI widget type")
+    placeholder = graphene.String(description="Placeholder text for input")
+    help_text = graphene.String(description="Help text for the field")
+    min_length = graphene.Int(description="Minimum length for string fields")
+    max_length = graphene.Int(description="Maximum length for string fields")
+    min_value = graphene.Float(description="Minimum value for numeric fields")
+    max_value = graphene.Float(description="Maximum value for numeric fields")
+    pattern = graphene.String(description="Regex pattern for validation")
+    related_model = graphene.String(description="Related model name for foreign keys")
+    multiple = graphene.Boolean(
+        required=True, description="Whether field accepts multiple values"
+    )
+
+
+class MutationMetadataType(graphene.ObjectType):
+    """GraphQL type for mutation metadata."""
+
+    name = graphene.String(required=True, description="Mutation name")
+    description = graphene.String(description="Mutation description")
+    input_fields = graphene.List(
+        InputFieldMetadataType,
+        required=True,
+        description="Input fields for the mutation",
+    )
+    return_type = graphene.String(description="Return type of the mutation")
+    requires_authentication = graphene.Boolean(
+        required=True, description="Whether mutation requires authentication"
+    )
+    required_permissions = graphene.List(
+        graphene.String,
+        required=True,
+        description="Required permissions to execute mutation",
+    )
+    mutation_type = graphene.String(
+        required=True, description="Type of mutation (create, update, delete, custom)"
+    )
+    model_name = graphene.String(description="Associated model name")
+    form_config = graphene.JSONString(description="Frontend form configuration")
+    validation_schema = graphene.JSONString(
+        description="Validation schema for the mutation"
+    )
+    success_message = graphene.String(description="Success message template")
+    error_messages = graphene.JSONString(description="Error message templates")
 
 
 @dataclass
@@ -124,6 +378,7 @@ class ModelMetadata:
     proxy: bool
     managed: bool
     filters: List[Dict[str, Any]]
+    mutations: List["MutationMetadata"]
 
 
 class FieldMetadataType(graphene.ObjectType):
@@ -243,6 +498,11 @@ class ModelMetadataType(graphene.ObjectType):
     filters = graphene.List(
         FilterFieldType, required=True, description="Available filter fields"
     )
+    mutations = graphene.List(
+        MutationMetadataType,
+        required=True,
+        description="Available mutations for this model",
+    )
 
 
 class ModelMetadataExtractor:
@@ -263,6 +523,9 @@ class ModelMetadataExtractor:
         self.max_depth = max_depth
         # self.settings = get_schema_settings(schema_name)
 
+    @cache_metadata(
+        timeout=1200, user_specific=True
+    )  # 20 minutes cache for field metadata
     def _extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
         """
         Extract metadata for a single field with permission checking.
@@ -319,6 +582,9 @@ class ModelMetadataExtractor:
             has_permission=has_permission,
         )
 
+    @cache_metadata(
+        timeout=1200, user_specific=True
+    )  # 20 minutes cache for relationship metadata
     def _extract_relationship_metadata(
         self, field, user, current_depth: int = 0
     ) -> Optional[RelationshipMetadata]:
@@ -385,6 +651,9 @@ class ModelMetadataExtractor:
             verbose_name=field.verbose_name,
         )
 
+    @cache_metadata(
+        timeout=1800, user_specific=False
+    )  # 30 minutes cache for complete model metadata
     def extract_model_metadata(
         self,
         app_name: str,
@@ -498,7 +767,7 @@ class ModelMetadataExtractor:
                 for action in ["add", "change", "delete", "view"]:
                     perm_code = f"{app_label}.{action}_{model_name_code}"
                     if user.has_perm(perm_code):
-                        permissions.append(action)
+                        permissions.append(perm_code)
 
         # Get ordering
         ordering = list(model._meta.ordering) if model._meta.ordering else []
@@ -525,6 +794,11 @@ class ModelMetadataExtractor:
         # Extract filter metadata
         filters = self._extract_filter_metadata(model)
 
+        # Extract mutations metadata
+        mutations = self.extract_mutations_metadata(
+            model,
+        )
+
         return ModelMetadata(
             app_name=model._meta.app_label,
             model_name=model.__name__,
@@ -542,6 +816,7 @@ class ModelMetadataExtractor:
             proxy=model._meta.proxy,
             managed=model._meta.managed,
             filters=filters,
+            mutations=mutations,
         )
 
     def _has_field_permission(self, user, model: type, field_name: str) -> bool:
@@ -569,19 +844,25 @@ class ModelMetadataExtractor:
 
         return user.has_perm(view_permission)
 
+    @cache_metadata(
+        timeout=1800, user_specific=False
+    )  # 30 minutes cache for filter metadata (not user-specific)
     def _extract_filter_metadata(self, model) -> List[Dict[str, Any]]:
         """
         Extract comprehensive filter metadata for a Django model with enhanced features.
-        
+
         Args:
             model: Django model class
-            
+
         Returns:
             List of grouped filter field metadata dictionaries
         """
         try:
             # Import the enhanced filter generator
-            from ..generators.filters import EnhancedFilterGenerator, AdvancedFilterGenerator
+            from ..generators.filters import (
+                AdvancedFilterGenerator,
+                EnhancedFilterGenerator,
+            )
             from ..utils.graphql_meta import get_model_graphql_meta
 
             # Use the instance's max_depth parameter
@@ -596,24 +877,24 @@ class ModelMetadataExtractor:
 
             # Get grouped filters for the model
             grouped_filters = enhanced_generator.get_grouped_filters(model)
-            
+
             # Get GraphQL meta for custom filters
             graphql_meta = get_model_graphql_meta(model)
-            
+
             # Create a dictionary to group filters by field name
             grouped_filter_dict = {}
-            
+
             # Process enhanced filters
             for grouped_filter in grouped_filters:
                 field_name = grouped_filter.field_name
-                
+
                 # Get field verbose name for help text
                 try:
                     field = model._meta.get_field(field_name)
                     verbose_name = str(field.verbose_name)
                 except:
                     verbose_name = field_name
-                
+
                 options = []
                 for operation in grouped_filter.operations:
                     filter_name = (
@@ -621,25 +902,29 @@ class ModelMetadataExtractor:
                         if operation.lookup_expr != "exact"
                         else field_name
                     )
-                    
+
                     # Translate help text to French using verbose_name
-                    help_text = self._translate_help_text_to_french(operation.description, verbose_name)
-                    
-                    options.append({
-                        "name": filter_name,
-                        "lookup_expr": operation.lookup_expr,
-                        "help_text": help_text,
-                        "filter_type": operation.filter_type
-                    })
-                
+                    help_text = self._translate_help_text_to_french(
+                        operation.description, verbose_name
+                    )
+
+                    options.append(
+                        {
+                            "name": filter_name,
+                            "lookup_expr": operation.lookup_expr,
+                            "help_text": help_text,
+                            "filter_type": operation.filter_type,
+                        }
+                    )
+
                 grouped_filter_dict[field_name] = {
                     "field_name": field_name,
                     "is_nested": False,
                     "related_model": None,
                     "is_custom": False,
-                    "options": options
+                    "options": options,
                 }
-            
+
             # Add nested filters from traditional generator - RESTRUCTURED TO PARENT LEVEL
             try:
                 filter_generator = AdvancedFilterGenerator(
@@ -656,11 +941,11 @@ class ModelMetadataExtractor:
                         field_parts = filter_name.split("__")
                         base_field_name = field_parts[0]
                         lookup_expr = "__".join(field_parts[1:])
-                        
+
                         # Skip if depth exceeds max_depth
                         if len(field_parts) - 1 > max_depth:
                             continue
-                        
+
                         # Get related model info
                         related_model = None
                         try:
@@ -669,140 +954,167 @@ class ModelMetadataExtractor:
                                 related_model = field.related_model.__name__
                         except:
                             continue
-                        
+
                         # Get verbose name for nested field
                         try:
                             verbose_name = str(field.verbose_name)
                         except:
                             verbose_name = base_field_name
-                        
+
                         # RESTRUCTURE: Move nested filters to parent level
                         # Instead of grouping under base_field_name, create individual entries
-                        parent_filter_name = filter_name  # Use full filter name as parent
-                        
+                        parent_filter_name = (
+                            filter_name  # Use full filter name as parent
+                        )
+
                         # Create help text for restructured filter
                         help_text = self._translate_help_text_to_french(
                             f"Filter by {lookup_expr} in related {base_field_name}",
-                            verbose_name
+                            verbose_name,
                         )
-                        
+
                         # Create individual filter entry at parent level
                         grouped_filter_dict[parent_filter_name] = {
                             "field_name": parent_filter_name,  # Use full name
                             "is_nested": True,
                             "related_model": related_model,
                             "is_custom": False,
-                            "options": [{
-                                "name": filter_name,
-                                "lookup_expr": lookup_expr,
-                                "help_text": help_text,
-                                "filter_type": filter_instance.__class__.__name__
-                            }]
+                            "options": [
+                                {
+                                    "name": filter_name,
+                                    "lookup_expr": lookup_expr,
+                                    "help_text": help_text,
+                                    "filter_type": filter_instance.__class__.__name__,
+                                }
+                            ],
                         }
 
             except Exception as e:
-                logger.warning(f"Error processing nested filters for {model.__name__}: {e}")
-            
+                logger.warning(
+                    f"Error processing nested filters for {model.__name__}: {e}"
+                )
+
             # ENHANCED: Add custom filters from GraphQLMeta with better quick filter support
             if graphql_meta:
                 # Add quick filters with comprehensive field support
-                if hasattr(graphql_meta, 'quick_filter_fields') and graphql_meta.quick_filter_fields:
+                if (
+                    hasattr(graphql_meta, "quick_filter_fields")
+                    and graphql_meta.quick_filter_fields
+                ):
                     quick_fields = graphql_meta.quick_filter_fields
-                    
+
                     # Create comprehensive quick filter entry
-                    grouped_filter_dict['quick'] = {
+                    grouped_filter_dict["quick"] = {
                         "field_name": "quick",
                         "is_nested": False,
                         "related_model": None,
                         "is_custom": True,
-                        "options": [{
-                            "name": "quick",
-                            "lookup_expr": "icontains",
-                            "help_text": f"Recherche rapide dans les champs: {', '.join(quick_fields)}",
-                            "filter_type": "CharFilter"
-                        }]
+                        "options": [
+                            {
+                                "name": "quick",
+                                "lookup_expr": "icontains",
+                                "help_text": f"Recherche rapide dans les champs: {', '.join(quick_fields)}",
+                                "filter_type": "CharFilter",
+                            }
+                        ],
                     }
-                    
+
                     # Also add individual quick filter options for each field
                     for quick_field in quick_fields:
                         if "__" in quick_field:  # Handle nested quick fields
                             # Add nested quick field as separate filter
-                            quick_filter_name = f"quick_{quick_field.replace('__', '_')}"
+                            quick_filter_name = (
+                                f"quick_{quick_field.replace('__', '_')}"
+                            )
                             grouped_filter_dict[quick_filter_name] = {
                                 "field_name": quick_filter_name,
                                 "is_nested": True,
-                                "related_model": self._get_related_model_name(model, quick_field),
+                                "related_model": self._get_related_model_name(
+                                    model, quick_field
+                                ),
                                 "is_custom": True,
-                                "options": [{
-                                    "name": quick_filter_name,
-                                    "lookup_expr": "icontains",
-                                    "help_text": f"Recherche rapide dans {quick_field}",
-                                    "filter_type": "CharFilter"
-                                }]
+                                "options": [
+                                    {
+                                        "name": quick_filter_name,
+                                        "lookup_expr": "icontains",
+                                        "help_text": f"Recherche rapide dans {quick_field}",
+                                        "filter_type": "CharFilter",
+                                    }
+                                ],
                             }
-                
+
                 # Add custom filters
-                if hasattr(graphql_meta, 'custom_filters') and graphql_meta.custom_filters:
-                    for custom_name, custom_method in graphql_meta.custom_filters.items():
+                if (
+                    hasattr(graphql_meta, "custom_filters")
+                    and graphql_meta.custom_filters
+                ):
+                    for (
+                        custom_name,
+                        custom_method,
+                    ) in graphql_meta.custom_filters.items():
                         grouped_filter_dict[custom_name] = {
                             "field_name": custom_name,
                             "is_nested": False,
                             "related_model": None,
                             "is_custom": True,
-                            "options": [{
-                                "name": custom_name,
-                                "lookup_expr": "custom",
-                                "help_text": f"Filtre personnalisé: {custom_name}",
-                                "filter_type": "CustomFilter"
-                            }]
+                            "options": [
+                                {
+                                    "name": custom_name,
+                                    "lookup_expr": "custom",
+                                    "help_text": f"Filtre personnalisé: {custom_name}",
+                                    "filter_type": "CustomFilter",
+                                }
+                            ],
                         }
-            
+
             # Convert to list format and sort for consistency
             result = list(grouped_filter_dict.values())
-            
+
             # Sort filters: regular fields first, then nested, then custom
             result.sort(key=lambda x: (x["is_custom"], x["is_nested"], x["field_name"]))
-            
+
             return result
 
         except Exception as e:
             logger.error(f"Error extracting filter metadata for {model.__name__}: {e}")
             return []
-    
+
     def _get_related_model_name(self, model, field_path: str) -> Optional[str]:
         """
         Get the related model name for a nested field path.
-        
+
         Args:
             model: Base Django model
             field_path: Field path like 'author__username'
-            
+
         Returns:
             Related model name or None
         """
         try:
             field_parts = field_path.split("__")
             current_model = model
-            
+
             for field_name in field_parts[:-1]:  # Exclude the final field
                 field = current_model._meta.get_field(field_name)
                 if hasattr(field, "related_model"):
                     current_model = field.related_model
                 else:
                     return None
-            
+
             return current_model.__name__
         except:
             return None
 
-    def _translate_help_text_to_french(self, original_text: str, verbose_name: str) -> str:
+    def _translate_help_text_to_french(
+        self, original_text: str, verbose_name: str
+    ) -> str:
         """
         Translate help text to French using field verbose_name.
-        
+
         Args:
             original_text: Original English help text
             verbose_name: Field verbose name to use in translation
-            
+
         Returns:
             French translated help text
         """
@@ -832,12 +1144,12 @@ class ModelMetadataExtractor:
             "month": f"Filtrer par mois pour {verbose_name}",
             "day": f"Filtrer par jour pour {verbose_name}",
         }
-        
+
         # Extract lookup expression from original text
         for lookup, french_text in translations.items():
             if lookup in original_text.lower():
                 return french_text
-        
+
         # Fallback: basic translation
         if "exact match" in original_text.lower():
             return f"Correspondance exacte pour {verbose_name}"
@@ -849,6 +1161,495 @@ class ModelMetadataExtractor:
             return f"Inférieur à la valeur pour {verbose_name}"
         else:
             return f"Filtre pour {verbose_name}"
+
+    @cache_metadata(
+        timeout=900, user_specific=False
+    )  # 15 minutes cache for mutations metadata (not user-specific)
+    def extract_mutations_metadata(
+        self, model: Type[models.Model]
+    ) -> List[MutationMetadata]:
+        """
+        Extract mutation metadata for a Django model.
+
+        Args:
+            model: Django model class
+
+        Returns:
+            List of MutationMetadata objects
+        """
+        try:
+            from ..conf import get_mutation_generator_settings
+            from ..generators.mutations import MutationGenerator
+            from ..generators.types import TypeGenerator
+
+            mutations = []
+            model_name = model.__name__
+
+            # Initialize mutation generator
+            type_generator = TypeGenerator(schema_name=self.schema_name)
+            mutation_settings = get_mutation_generator_settings(self.schema_name)
+            mutation_generator = MutationGenerator(
+                type_generator=type_generator,
+                settings=mutation_settings,
+                schema_name=self.schema_name,
+            )
+
+            # Generate CRUD mutations if enabled
+            if mutation_settings.enable_create:
+                create_mutation = self._extract_create_mutation_metadata(
+                    model, mutation_generator
+                )
+                if create_mutation:
+                    mutations.append(create_mutation)
+
+            if mutation_settings.enable_update:
+                update_mutation = self._extract_update_mutation_metadata(
+                    model, mutation_generator
+                )
+                if update_mutation:
+                    mutations.append(update_mutation)
+
+            if mutation_settings.enable_delete:
+                delete_mutation = self._extract_delete_mutation_metadata(
+                    model, mutation_generator
+                )
+                if delete_mutation:
+                    mutations.append(delete_mutation)
+
+            # Generate bulk mutations if enabled
+            if mutation_settings.enable_bulk_operations:
+                bulk_mutations = self._extract_bulk_mutations_metadata(
+                    model, mutation_generator
+                )
+                mutations.extend(bulk_mutations)
+
+            # Generate method mutations if enabled
+            if mutation_settings.enable_method_mutations:
+                method_mutations = self._extract_method_mutations_metadata(
+                    model, mutation_generator
+                )
+                mutations.extend(method_mutations)
+
+            return mutations
+
+        except Exception as e:
+            logger.error(
+                f"Error extracting mutations metadata for {model.__name__}: {e}"
+            )
+            return []
+
+    def _extract_create_mutation_metadata(
+        self, model: Type[models.Model], mutation_generator
+    ) -> Optional[MutationMetadata]:
+        """Extract metadata for create mutation."""
+        try:
+            model_name = model.__name__
+            input_fields = self._extract_input_fields_from_model(model, "create")
+
+            return MutationMetadata(
+                name=f"create_{model_name.lower()}",
+                description=f"Create a new {model_name} instance",
+                input_fields=input_fields,
+                return_type=f"{model_name}Type",
+                requires_authentication=True,
+                required_permissions=[
+                    f"{model._meta.app_label}.add_{model._meta.model_name}"
+                ],
+                mutation_type="create",
+                model_name=model_name,
+                success_message=f"{model_name} created successfully",
+                form_config={
+                    "title": f"Create {model_name}",
+                    "submit_text": "Create",
+                    "cancel_text": "Cancel",
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error extracting create mutation metadata: {e}")
+            return None
+
+    def _extract_update_mutation_metadata(
+        self, model: Type[models.Model], mutation_generator
+    ) -> Optional[MutationMetadata]:
+        """Extract metadata for update mutation."""
+        try:
+            model_name = model.__name__
+            input_fields = self._extract_input_fields_from_model(model, "update")
+
+            # Add ID field for update
+            id_field = InputFieldMetadata(
+                name="id",
+                field_type="ID",
+                required=True,
+                description=f"ID of the {model_name} to update",
+                widget_type="hidden",
+            )
+            input_fields.insert(0, id_field)
+
+            return MutationMetadata(
+                name=f"update_{model_name.lower()}",
+                description=f"Update an existing {model_name} instance",
+                input_fields=input_fields,
+                return_type=f"{model_name}Type",
+                requires_authentication=True,
+                required_permissions=[f"change_{model._meta.model_name}"],
+                mutation_type="update",
+                model_name=model_name,
+                success_message=f"{model_name} updated successfully",
+                form_config={
+                    "title": f"Update {model_name}",
+                    "submit_text": "Update",
+                    "cancel_text": "Cancel",
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error extracting update mutation metadata: {e}")
+            return None
+
+    def _extract_delete_mutation_metadata(
+        self, model: Type[models.Model], mutation_generator
+    ) -> Optional[MutationMetadata]:
+        """Extract metadata for delete mutation."""
+        try:
+            model_name = model.__name__
+
+            id_field = InputFieldMetadata(
+                name="id",
+                field_type="ID",
+                required=True,
+                description=f"ID of the {model_name} to delete",
+                widget_type="hidden",
+            )
+
+            return MutationMetadata(
+                name=f"delete_{model_name.lower()}",
+                description=f"Delete a {model_name} instance",
+                input_fields=[id_field],
+                return_type="Boolean",
+                requires_authentication=True,
+                required_permissions=[f"delete_{model._meta.model_name}"],
+                mutation_type="delete",
+                model_name=model_name,
+                success_message=f"{model_name} deleted successfully",
+                form_config={
+                    "title": f"Delete {model_name}",
+                    "submit_text": "Delete",
+                    "cancel_text": "Cancel",
+                    "confirmation_required": True,
+                    "confirmation_message": f"Are you sure you want to delete this {model_name}?",
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error extracting delete mutation metadata: {e}")
+            return None
+
+    def _extract_bulk_mutations_metadata(
+        self, model: Type[models.Model], mutation_generator
+    ) -> List[MutationMetadata]:
+        """Extract metadata for bulk mutations."""
+        mutations = []
+        model_name = model.__name__
+
+        try:
+            # Bulk create
+            input_fields = self._extract_input_fields_from_model(model, "create")
+            bulk_create = MutationMetadata(
+                name=f"bulk_create_{model_name.lower()}",
+                description=f"Create multiple {model_name} instances",
+                input_fields=[
+                    InputFieldMetadata(
+                        name="objects",
+                        field_type="List",
+                        required=True,
+                        description=f"List of {model_name} objects to create",
+                        multiple=True,
+                    )
+                ],
+                return_type=f"List[{model_name}Type]",
+                requires_authentication=True,
+                required_permissions=[f"add_{model._meta.model_name}"],
+                mutation_type="bulk_create",
+                model_name=model_name,
+                success_message=f"Multiple {model_name} instances created successfully",
+            )
+            mutations.append(bulk_create)
+
+            # Bulk update
+            bulk_update = MutationMetadata(
+                name=f"bulk_update_{model_name.lower()}",
+                description=f"Update multiple {model_name} instances",
+                input_fields=[
+                    InputFieldMetadata(
+                        name="objects",
+                        field_type="List",
+                        required=True,
+                        description=f"List of {model_name} objects to update",
+                        multiple=True,
+                    )
+                ],
+                return_type=f"List[{model_name}Type]",
+                requires_authentication=True,
+                required_permissions=[f"change_{model._meta.model_name}"],
+                mutation_type="bulk_update",
+                model_name=model_name,
+                success_message=f"Multiple {model_name} instances updated successfully",
+            )
+            mutations.append(bulk_update)
+
+            # Bulk delete
+            bulk_delete = MutationMetadata(
+                name=f"bulk_delete_{model_name.lower()}",
+                description=f"Delete multiple {model_name} instances",
+                input_fields=[
+                    InputFieldMetadata(
+                        name="ids",
+                        field_type="List[ID]",
+                        required=True,
+                        description=f"List of {model_name} IDs to delete",
+                        multiple=True,
+                    )
+                ],
+                return_type="Boolean",
+                requires_authentication=True,
+                required_permissions=[f"delete_{model._meta.model_name}"],
+                mutation_type="bulk_delete",
+                model_name=model_name,
+                success_message=f"Multiple {model_name} instances deleted successfully",
+            )
+            mutations.append(bulk_delete)
+
+        except Exception as e:
+            logger.error(f"Error extracting bulk mutations metadata: {e}")
+
+        return mutations
+
+    def _extract_method_mutations_metadata(
+        self, model: Type[models.Model], mutation_generator
+    ) -> List[MutationMetadata]:
+        """Extract metadata for method-based mutations."""
+        mutations = []
+
+        try:
+            from ..generators.introspector import ModelIntrospector
+
+            introspector = ModelIntrospector(model)
+            model_methods = introspector.get_model_methods()
+
+            for method_name, method_info in model_methods.items():
+                if method_info.is_mutation and not method_info.is_private:
+                    method_mutation = self._extract_method_mutation_metadata(
+                        model, method_name, method_info
+                    )
+                    if method_mutation:
+                        mutations.append(method_mutation)
+
+        except Exception as e:
+            logger.error(f"Error extracting method mutations metadata: {e}")
+
+        return mutations
+
+    def _extract_method_mutation_metadata(
+        self, model: Type[models.Model], method_name: str, method_info
+    ) -> Optional[MutationMetadata]:
+        """Extract metadata for a specific method mutation."""
+        try:
+            model_name = model.__name__
+            method = getattr(model, method_name)
+
+            # Extract input fields from method signature
+            input_fields = self._extract_input_fields_from_method(method)
+
+            # Get custom attributes from decorators
+            description = getattr(method, "_mutation_description", method.__doc__)
+            custom_name = getattr(method, "_custom_mutation_name", None)
+            requires_permission = getattr(method, "_requires_permission", None)
+
+            mutation_name = custom_name or f"{model_name.lower()}_{method_name}"
+
+            return MutationMetadata(
+                name=mutation_name,
+                description=description or f"Execute {method_name} on {model_name}",
+                input_fields=input_fields,
+                return_type="JSONString",
+                requires_authentication=True,
+                required_permissions=[requires_permission]
+                if requires_permission
+                else [],
+                mutation_type="custom",
+                model_name=model_name,
+                success_message=f"{method_name} executed successfully",
+            )
+
+        except Exception as e:
+            logger.error(f"Error extracting method mutation metadata: {e}")
+            return None
+
+    def _extract_input_fields_from_model(
+        self, model: Type[models.Model], mutation_type: str
+    ) -> List[InputFieldMetadata]:
+        """Extract input fields from Django model fields."""
+        input_fields = []
+
+        for field in model._meta.fields:
+            # Skip auto fields and primary keys for create mutations
+            if field.primary_key and mutation_type == "create":
+                continue
+
+            # Skip auto-generated fields
+            if hasattr(field, "auto_now") or hasattr(field, "auto_now_add"):
+                continue
+
+            input_field = self._convert_django_field_to_input_metadata(
+                field, mutation_type
+            )
+            if input_field:
+                input_fields.append(input_field)
+
+        return input_fields
+
+    def _convert_django_field_to_input_metadata(
+        self, field, mutation_type: str
+    ) -> Optional[InputFieldMetadata]:
+        """Convert Django field to InputFieldMetadata."""
+        try:
+            from django.db import models
+
+            field_name = field.name
+            field_type = "String"  # Default
+            required = (
+                not field.null and not field.blank and not hasattr(field, "default")
+            )
+
+            # For update mutations, make fields optional
+            if mutation_type == "update":
+                required = False
+
+            # Map Django field types to GraphQL types
+            if isinstance(field, models.CharField):
+                field_type = "String"
+            elif isinstance(field, models.TextField):
+                field_type = "String"
+            elif isinstance(field, models.IntegerField):
+                field_type = "Int"
+            elif isinstance(field, models.FloatField):
+                field_type = "Float"
+            elif isinstance(field, models.BooleanField):
+                field_type = "Boolean"
+            elif isinstance(field, models.DateTimeField):
+                field_type = "DateTime"
+            elif isinstance(field, models.DateField):
+                field_type = "Date"
+            elif isinstance(field, models.EmailField):
+                field_type = "String"
+            elif isinstance(field, models.URLField):
+                field_type = "String"
+            elif isinstance(field, models.ForeignKey):
+                field_type = "ID"
+            elif isinstance(field, models.ManyToManyField):
+                field_type = "List[ID]"
+
+            # Get choices if available
+            choices = None
+            if hasattr(field, "choices") and field.choices:
+                choices = [
+                    {"value": choice[0], "label": choice[1]} for choice in field.choices
+                ]
+
+            # Determine widget type
+            widget_type = self._get_widget_type_for_field(field)
+
+            return InputFieldMetadata(
+                name=field_name,
+                field_type=field_type,
+                required=required,
+                description=str(field.verbose_name)
+                if hasattr(field, "verbose_name")
+                else None,
+                choices=choices,
+                widget_type=widget_type,
+                help_text=str(field.help_text)
+                if hasattr(field, "help_text") and field.help_text
+                else None,
+                max_length=getattr(field, "max_length", None),
+                related_model=field.related_model.__name__
+                if hasattr(field, "related_model") and field.related_model
+                else None,
+                multiple=isinstance(field, models.ManyToManyField),
+            )
+
+        except Exception as e:
+            logger.error(f"Error converting field {field.name}: {e}")
+            return None
+
+    def _get_widget_type_for_field(self, field) -> str:
+        """Determine the appropriate widget type for a Django field."""
+        from django.db import models
+
+        if isinstance(field, models.TextField):
+            return "textarea"
+        elif isinstance(field, models.EmailField):
+            return "email"
+        elif isinstance(field, models.URLField):
+            return "url"
+        elif isinstance(field, models.BooleanField):
+            return "checkbox"
+        elif isinstance(field, models.DateTimeField):
+            return "datetime-local"
+        elif isinstance(field, models.DateField):
+            return "date"
+        elif isinstance(field, models.IntegerField):
+            return "number"
+        elif isinstance(field, models.FloatField):
+            return "number"
+        elif isinstance(field, models.ForeignKey):
+            return "select"
+        elif isinstance(field, models.ManyToManyField):
+            return "multiselect"
+        elif hasattr(field, "choices") and field.choices:
+            return "select"
+        else:
+            return "text"
+
+    def _extract_input_fields_from_method(self, method) -> List[InputFieldMetadata]:
+        """Extract input fields from method signature."""
+        import inspect
+
+        input_fields = []
+        signature = inspect.signature(method)
+
+        for param_name, param in signature.parameters.items():
+            if param_name == "self":
+                continue
+
+            field_type = "String"  # Default
+            required = param.default == inspect.Parameter.empty
+            default_value = (
+                param.default if param.default != inspect.Parameter.empty else None
+            )
+
+            # Try to infer type from annotation
+            if param.annotation != inspect.Parameter.empty:
+                annotation = param.annotation
+                if annotation == int:
+                    field_type = "Int"
+                elif annotation == float:
+                    field_type = "Float"
+                elif annotation == bool:
+                    field_type = "Boolean"
+                elif hasattr(annotation, "__origin__"):
+                    if annotation.__origin__ == list:
+                        field_type = "List[String]"
+
+            input_field = InputFieldMetadata(
+                name=param_name,
+                field_type=field_type,
+                required=required,
+                default_value=default_value,
+                description=f"Parameter {param_name} for method execution",
+            )
+            input_fields.append(input_field)
+
+        return input_fields
 
 
 class ModelMetadataQuery(graphene.ObjectType):
@@ -865,7 +1666,8 @@ class ModelMetadataQuery(graphene.ObjectType):
             default_value=True, description="Include permission information"
         ),
         max_depth=graphene.Int(
-            default_value=2, description="Maximum nesting depth for filters (default: 2)"
+            default_value=2,
+            description="Maximum nesting depth for filters (default: 2)",
         ),
         description="Get comprehensive metadata for a Django model",
     )
@@ -914,3 +1716,113 @@ class ModelMetadataQuery(graphene.ObjectType):
 
         # Return dataclass directly for Graphene to resolve attributes
         return metadata
+
+
+# Cache invalidation signals
+@receiver([post_save, post_delete], sender=None)
+def invalidate_model_metadata_cache(sender, **kwargs):
+    """
+    Invalidate metadata cache when any model is saved or deleted.
+
+    Args:
+        sender: The model class that was saved/deleted
+        **kwargs: Signal arguments
+    """
+    if sender and hasattr(sender, "_meta"):
+        app_name = sender._meta.app_label
+        model_name = sender.__name__
+
+        # Invalidate cache for this specific model
+        invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+
+        logger.debug(f"Invalidated metadata cache for {app_name}.{model_name}")
+
+
+@receiver(m2m_changed)
+def invalidate_m2m_metadata_cache(sender, **kwargs):
+    """
+    Invalidate metadata cache when many-to-many relationships change.
+
+    Args:
+        sender: The through model for the m2m field
+        **kwargs: Signal arguments
+    """
+    if sender and hasattr(sender, "_meta"):
+        app_name = sender._meta.app_label
+        model_name = sender.__name__
+
+        # Invalidate cache for this specific model
+        invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+
+        logger.debug(f"Invalidated m2m metadata cache for {app_name}.{model_name}")
+
+
+# Cache warming functions
+def warm_metadata_cache(app_name: str = None, model_name: str = None, user=None):
+    """
+    Pre-warm metadata cache for specified models.
+
+    Args:
+        app_name: Specific app to warm cache for (optional)
+        model_name: Specific model to warm cache for (optional)
+        user: User context for permission-based caching
+    """
+    extractor = ModelMetadataExtractor()
+
+    if app_name and model_name:
+        # Warm cache for specific model
+        try:
+            extractor.extract_model_metadata(app_name, model_name, user)
+            logger.info(f"Warmed metadata cache for {app_name}.{model_name}")
+        except Exception as e:
+            logger.error(f"Failed to warm cache for {app_name}.{model_name}: {e}")
+    elif app_name:
+        # Warm cache for all models in app
+        try:
+            app_config = apps.get_app_config(app_name)
+            for model in app_config.get_models():
+                extractor.extract_model_metadata(app_name, model.__name__, user)
+            logger.info(f"Warmed metadata cache for app {app_name}")
+        except Exception as e:
+            logger.error(f"Failed to warm cache for app {app_name}: {e}")
+    else:
+        # Warm cache for all models
+        for app_config in apps.get_app_configs():
+            for model in app_config.get_models():
+                try:
+                    extractor.extract_model_metadata(
+                        app_config.label, model.__name__, user
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to warm cache for {app_config.label}.{model.__name__}: {e}"
+                    )
+        logger.info("Warmed metadata cache for all models")
+
+
+def get_cache_stats() -> Dict[str, Any]:
+    """
+    Get metadata cache statistics.
+
+    Returns:
+        Dictionary with cache statistics
+    """
+    cache_manager = get_cache_manager()
+    stats = cache_manager.get_stats()
+
+    return {
+        "enabled": METADATA_CACHE_CONFIG.enabled,
+        "hit_rate": stats.hit_rate,
+        "hits": stats.hits,
+        "misses": stats.misses,
+        "sets": stats.sets,
+        "deletes": stats.deletes,
+        "invalidations": stats.invalidations,
+        "default_timeout": METADATA_CACHE_CONFIG.default_timeout,
+        "schema_cache_timeout": METADATA_CACHE_CONFIG.schema_cache_timeout,
+        "query_cache_timeout": METADATA_CACHE_CONFIG.query_cache_timeout,
+        "field_cache_timeout": METADATA_CACHE_CONFIG.field_cache_timeout,
+    }
+
+
+# Use lazy import to avoid AppRegistryNotReady error
