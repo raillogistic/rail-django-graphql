@@ -1718,43 +1718,170 @@ class ModelMetadataQuery(graphene.ObjectType):
         return metadata
 
 
-# Cache invalidation signals
-@receiver([post_save, post_delete], sender=None)
-def invalidate_model_metadata_cache(sender, **kwargs):
+# Cache invalidation signals - only invalidate when models actually change
+@receiver(post_save, sender=None)
+def invalidate_model_metadata_cache_on_save(sender, instance, created, **kwargs):
     """
-    Invalidate metadata cache when any model is saved or deleted.
-
+    Invalidate metadata cache only when model structure changes.
+    
+    This is triggered when:
+    - New models are created (migrations)
+    - Model fields are added/removed (migrations)
+    - Model relationships change (migrations)
+    
     Args:
-        sender: The model class that was saved/deleted
+        sender: The model class that was saved
+        instance: The model instance
+        created: Whether this is a new instance
+        **kwargs: Signal arguments
+    """
+    # Only invalidate cache for model structure changes, not data changes
+    # We check if this is likely a migration or model structure change
+    if sender and hasattr(sender, "_meta"):
+        # Skip cache invalidation for regular data operations
+        # Only invalidate during migrations or when model structure changes
+        if _is_model_structure_change(sender, instance, created, **kwargs):
+            app_name = sender._meta.app_label
+            model_name = sender.__name__
+
+            # Invalidate cache for this specific model
+            invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+            logger.info(f"Invalidated metadata cache for {app_name}.{model_name} due to model structure change")
+
+
+@receiver(post_delete, sender=None)
+def invalidate_model_metadata_cache_on_delete(sender, instance, **kwargs):
+    """
+    Invalidate metadata cache when models are deleted.
+    
+    This is more conservative and only invalidates when it's likely
+    a model structure change rather than regular data deletion.
+    
+    Args:
+        sender: The model class that was deleted
+        instance: The model instance
         **kwargs: Signal arguments
     """
     if sender and hasattr(sender, "_meta"):
-        app_name = sender._meta.app_label
-        model_name = sender.__name__
+        # Only invalidate for structural changes, not regular deletions
+        if _is_model_structure_change(sender, instance, False, **kwargs):
+            app_name = sender._meta.app_label
+            model_name = sender.__name__
 
-        # Invalidate cache for this specific model
-        invalidate_metadata_cache(model_name=model_name, app_name=app_name)
-
-        logger.debug(f"Invalidated metadata cache for {app_name}.{model_name}")
+            # Invalidate cache for this specific model
+            invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+            logger.info(f"Invalidated metadata cache for {app_name}.{model_name} due to model deletion")
 
 
 @receiver(m2m_changed)
-def invalidate_m2m_metadata_cache(sender, **kwargs):
+def invalidate_m2m_metadata_cache(sender, action, **kwargs):
     """
-    Invalidate metadata cache when many-to-many relationships change.
-
+    Invalidate metadata cache when many-to-many relationships change structurally.
+    
+    Only invalidates on structural changes, not data changes.
+    
     Args:
         sender: The through model for the m2m field
+        action: The type of m2m change
         **kwargs: Signal arguments
     """
-    if sender and hasattr(sender, "_meta"):
-        app_name = sender._meta.app_label
-        model_name = sender.__name__
+    # Only invalidate on structural changes, not data operations
+    if action in ['post_add', 'post_remove', 'post_clear'] and sender and hasattr(sender, "_meta"):
+        # Check if this is a structural change vs data change
+        if _is_m2m_structure_change(sender, action, **kwargs):
+            app_name = sender._meta.app_label
+            model_name = sender.__name__
 
-        # Invalidate cache for this specific model
-        invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+            # Invalidate cache for this specific model
+            invalidate_metadata_cache(model_name=model_name, app_name=app_name)
+            logger.info(f"Invalidated m2m metadata cache for {app_name}.{model_name} due to relationship structure change")
 
-        logger.debug(f"Invalidated m2m metadata cache for {app_name}.{model_name}")
+
+def _is_model_structure_change(sender, instance, created, **kwargs):
+    """
+    Determine if this is a model structure change vs regular data operation.
+    
+    Args:
+        sender: The model class
+        instance: The model instance
+        created: Whether this is a new instance
+        **kwargs: Signal arguments
+        
+    Returns:
+        bool: True if this is likely a structure change
+    """
+    # Check if we're in a migration context
+    if _is_in_migration_context():
+        return True
+    
+    # Check if this is a Django internal model that affects schema
+    if sender._meta.app_label in ['contenttypes', 'auth', 'admin']:
+        # These apps can affect GraphQL schema structure
+        return True
+    
+    # Check if this model has custom metadata that might affect schema
+    if hasattr(sender, '_graphql_metadata_affects_schema'):
+        return getattr(sender, '_graphql_metadata_affects_schema', False)
+    
+    # For now, be conservative and don't invalidate on regular data operations
+    return False
+
+
+def _is_m2m_structure_change(sender, action, **kwargs):
+    """
+    Determine if this is an M2M structure change vs regular data operation.
+    
+    Args:
+        sender: The through model
+        action: The M2M action
+        **kwargs: Signal arguments
+        
+    Returns:
+        bool: True if this is likely a structure change
+    """
+    # Check if we're in a migration context
+    if _is_in_migration_context():
+        return True
+    
+    # For now, be conservative and don't invalidate on regular M2M operations
+    return False
+
+
+def _is_in_migration_context():
+    """
+    Check if we're currently in a Django migration context.
+    
+    Returns:
+        bool: True if in migration context
+    """
+    import sys
+    
+    # Check if we're running migrations
+    if 'migrate' in sys.argv:
+        return True
+    
+    # Check if we're in a migration module
+    for frame_info in __import__('inspect').stack():
+        if 'migrations' in frame_info.filename:
+            return True
+    
+    return False
+
+
+def invalidate_cache_on_startup():
+    """
+    Invalidate metadata cache on application startup.
+    
+    This ensures that cache is fresh when the application starts,
+    which is useful for deployments and development.
+    """
+    try:
+        logger.info("Invalidating metadata cache on application startup")
+        invalidate_metadata_cache()  # Invalidate all metadata cache
+        logger.info("Metadata cache invalidated successfully on startup")
+    except Exception as e:
+        logger.warning(f"Failed to invalidate metadata cache on startup: {e}")
+        # Don't raise exception to avoid breaking app startup
 
 
 # Cache warming functions

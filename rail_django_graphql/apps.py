@@ -37,6 +37,9 @@ class RailDjangoGraphQLConfig(AppConfig):
             # Initialize schema registry
             self._initialize_schema_registry()
             
+            # Invalidate metadata cache on startup
+            self._invalidate_cache_on_startup()
+            
             logger.info("Rail Django GraphQL library initialized successfully")
             
         except Exception as e:
@@ -112,6 +115,17 @@ class RailDjangoGraphQLConfig(AppConfig):
         logging.getLogger('rail_django_graphql').setLevel(
             logging.DEBUG if os.environ.get('DEBUG') else logging.INFO
         )
+
+    def _invalidate_cache_on_startup(self):
+        """Invalidate metadata cache on application startup."""
+        try:
+            from .extensions.metadata import invalidate_cache_on_startup
+            invalidate_cache_on_startup()
+            logger.info("Metadata cache invalidated on startup")
+        except ImportError:
+            logger.warning("Could not import cache invalidation function")
+        except Exception as e:
+            logger.error(f"Error invalidating cache on startup: {e}")
 
 
 # Backward compatibility alias
