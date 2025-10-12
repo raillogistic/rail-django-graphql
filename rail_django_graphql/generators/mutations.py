@@ -31,10 +31,10 @@ class MutationError(graphene.ObjectType):
 
 
 from ..conf import get_mutation_generator_settings
-from ..core.settings import MutationGeneratorSettings
-from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
 from ..core.error_handling import get_error_handler
 from ..core.performance import get_query_optimizer
+from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
+from ..core.settings import MutationGeneratorSettings
 from .introspector import MethodInfo, ModelIntrospector
 from .nested_operations import NestedOperationHandler
 from .types import TypeGenerator
@@ -44,7 +44,7 @@ class MutationGenerator:
     """
     Creates GraphQL mutations for Django models, supporting CRUD operations
     and custom method-based mutations.
-    
+
     This class supports:
     - CRUD operations (Create, Read, Update, Delete)
     - Bulk operations for multiple records
@@ -70,7 +70,7 @@ class MutationGenerator:
         """
         self.type_generator = type_generator
         self.schema_name = schema_name
-        
+
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
             self.settings = MutationGeneratorSettings.from_schema(schema_name)
@@ -1052,7 +1052,6 @@ class MutationGenerator:
         """
         if not self.settings.enable_method_mutations:
             return None
-
         method_name = method_info.name
         method = getattr(model, method_name)
         signature = inspect.signature(method)
@@ -1230,12 +1229,11 @@ class MutationGenerator:
             mutations[f"bulk_delete_{model_name}"] = bulk_delete_class.Field()
 
         # Generate method mutations if enabled
-        if self.settings.enable_method_mutations:
-            introspector = ModelIntrospector(model)
-            for method_name, method_info in introspector.get_model_methods().items():
-                if method_info.is_mutation and not method_info.is_private:
-                    mutation = self.generate_method_mutation(model, method_info)
-                    if mutation:
-                        mutations[f"{model_name}_{method_name}"] = mutation.Field()
 
+        introspector = ModelIntrospector(model)
+        for method_name, method_info in introspector.get_model_methods().items():
+            if method_info.is_mutation and not method_info.is_private:
+                mutation = self.generate_method_mutation(model, method_info)
+                if mutation:
+                    mutations[f"{model_name}_{method_name}"] = mutation.Field()
         return mutations

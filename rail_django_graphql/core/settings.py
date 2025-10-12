@@ -249,7 +249,7 @@ class MutationGeneratorSettings:
     enable_bulk_operations: bool = False
 
     # Enable method mutations
-    enable_method_mutations: bool = False
+    enable_method_mutations: bool = True
 
     # Maximum number of items in bulk operations
     bulk_batch_size: int = 100

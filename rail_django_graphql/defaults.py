@@ -110,7 +110,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         # Enable bulk operations
         "enable_bulk_operations": False,
         # Enable method mutations
-        "enable_method_mutations": False,
+        "enable_method_mutations": True,
         # Maximum number of items in bulk operations
         "bulk_batch_size": 100,
         # Fields required for update operations
