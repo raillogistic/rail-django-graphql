@@ -99,5 +99,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated PyPI publishing on releases
 - Documentation building and deployment
 
-[Unreleased]: https://github.com/yourusername/rail-django-graphql/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/rail-django-graphql/releases/tag/v1.0.0
+[Unreleased]: https://github.com/raillogistic/rail-django-graphql/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/raillogistic/rail-django-graphql/releases/tag/v1.0.0

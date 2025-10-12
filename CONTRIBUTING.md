@@ -12,7 +12,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 1. **Fork and Clone**
    ```bash
-   git clone https://github.com/yourusername/rail-django-graphql.git
+   git clone https://github.com/raillogistic/rail-django-graphql.git
    cd rail-django-graphql
    ```
 

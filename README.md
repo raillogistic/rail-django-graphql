@@ -1,6 +1,6 @@
 # Rail Django GraphQL
 
-[![CI](https://github.com/yourusername/rail-django-graphql/workflows/CI/badge.svg)](https://github.com/yourusername/rail-django-graphql/actions)
+[![CI](https://github.com/raillogistic/rail-django-graphql/workflows/CI/badge.svg)](https://github.com/raillogistic/rail-django-graphql/actions)
 [![PyPI version](https://badge.fury.io/py/rail-django-graphql.svg)](https://badge.fury.io/py/rail-django-graphql)
 [![Python versions](https://img.shields.io/pypi/pyversions/rail-django-graphql.svg)](https://pypi.org/project/rail-django-graphql/)
 [![Django versions](https://img.shields.io/pypi/djversions/rail-django-graphql.svg)](https://pypi.org/project/rail-django-graphql/)
@@ -33,10 +33,10 @@ pip install rail-django-graphql
 
 ```bash
 # Install directly from GitHub
-pip install git+https://github.com/yourusername/rail-django-graphql.git
+pip install git+https://github.com/raillogistic/rail-django-graphql.git
 
 # Or clone and install locally
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql
 pip install -e .
 ```
@@ -374,7 +374,7 @@ RAIL_GRAPHQL = {
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql
 
 # Create virtual environment
@@ -448,8 +448,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- [GitHub Issues](https://github.com/yourusername/rail-django-graphql/issues)
-- [Discussions](https://github.com/yourusername/rail-django-graphql/discussions)
+- [GitHub Issues](https://github.com/raillogistic/rail-django-graphql/issues)
+- [Discussions](https://github.com/raillogistic/rail-django-graphql/discussions)
 - [Stack Overflow](https://stackoverflow.com/questions/tagged/rail-django-graphql)
 
 ## Acknowledgments

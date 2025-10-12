@@ -50,7 +50,7 @@ This directory contains comprehensive examples demonstrating how to use the Rail
    pip install rail-django-graphql
    
    # From GitHub (latest)
-   pip install git+https://github.com/yourusername/rail-django-graphql.git
+   pip install git+https://github.com/raillogistic/rail-django-graphql.git
    ```
 
 3. **Run an example**:
@@ -73,7 +73,7 @@ Before running the examples, make sure you have:
 ### Option 1: Quick Setup (Recommended)
 ```bash
 # Clone or download the examples
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 cd rail-django-graphql/examples/
 
 # Install dependencies
@@ -138,10 +138,10 @@ UserType = TypeGenerator.from_model(
 ```python
 # Shows how to:
 # 1. Install from GitHub
-pip install git+https://github.com/yourusername/rail-django-graphql.git
+pip install git+https://github.com/raillogistic/rail-django-graphql.git
 
 # 2. Set up development environment
-git clone https://github.com/yourusername/rail-django-graphql.git
+git clone https://github.com/raillogistic/rail-django-graphql.git
 pip install -e ".[dev]"
 
 # 3. Run tests and contribute
@@ -254,8 +254,8 @@ python github_installation.py
 ### Getting Help
 
 - 📚 Check the [main documentation](../README.md)
-- 🐛 Report issues on [GitHub Issues](https://github.com/yourusername/rail-django-graphql/issues)
-- 💬 Ask questions in [Discussions](https://github.com/yourusername/rail-django-graphql/discussions)
+- 🐛 Report issues on [GitHub Issues](https://github.com/raillogistic/rail-django-graphql/issues)
+- 💬 Ask questions in [Discussions](https://github.com/raillogistic/rail-django-graphql/discussions)
 - 📧 Contact maintainers (see [CONTRIBUTING.md](../CONTRIBUTING.md))
 
 ## 🤝 Contributing Examples
