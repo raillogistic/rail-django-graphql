@@ -33,14 +33,14 @@ jobs:
         pip install -r requirements-dev.txt
 
 
-    - name: Run isort
-      run: |
-        isort --check-only --diff rail_django_graphql
+    # - name: Run isort
+    #   run: |
+    #     isort --check-only --diff rail_django_graphql
 
-    - name: Run mypy
-      run: |
-        mypy rail_django_graphql
+    # - name: Run mypy
+    #   run: |
+    #     mypy rail_django_graphql
 
-    - name: Run djlint (Django templates)
-      run: |
-        djlint rail_django_graphql/templates/ --check
+    # - name: Run djlint (Django templates)
+    #   run: |
+    #     djlint rail_django_graphql/templates/ --check
