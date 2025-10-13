@@ -8,17 +8,17 @@ Ce module fournit des fonctionnalités de sécurité avancées pour :
 - Logging des menaces détectées
 """
 
+import hashlib
+import logging
 import os
 import subprocess
 import tempfile
-import hashlib
-from typing import Dict, List, Optional, Union, Tuple
-from pathlib import Path
-import logging
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.conf import settings
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 
 from ..core.settings import GraphQLAutoConfig
 

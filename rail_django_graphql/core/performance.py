@@ -6,12 +6,12 @@ including query optimization, caching, and dataloader functionality.
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Type, Union
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Type, Union
 
+from django.conf import settings as django_settings
 from django.core.cache import cache
 from django.db import models
-from django.conf import settings as django_settings
 
 from ..conf import get_setting
 
@@ -157,7 +157,7 @@ class QueryCache:
     def get_cache_key(self, query: str, variables: Dict[str, Any] = None) -> str:
         """Generate cache key for a GraphQL query."""
         import hashlib
-        
+
         # Create a hash of the query and variables
         content = f"{query}:{variables or {}}"
         query_hash = hashlib.md5(content.encode()).hexdigest()

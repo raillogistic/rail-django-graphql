@@ -7,16 +7,15 @@ including custom error types, error formatting, and error reporting.
 
 import logging
 import traceback
-from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
 from enum import Enum
-
-from graphql.error import GraphQLError
-from graphql.execution import ExecutionResult
+from typing import Any, Dict, List, Optional, Union
 
 from django.conf import settings as django_settings
-from django.core.exceptions import ValidationError, PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError
+from graphql.error import GraphQLError
+from graphql.execution import ExecutionResult
 
 from ..conf import get_setting
 

@@ -15,12 +15,8 @@ from typing import Any, Dict, List, Optional
 import graphene
 from django.contrib.auth.models import User
 from django.utils import timezone
-from rail_django_graphql import (
-    MutationGenerator,
-    QueryGenerator,
-    SchemaBuilder,
-    TypeGenerator,
-)
+
+from rail_django_graphql import MutationGenerator, QueryGenerator, SchemaBuilder, TypeGenerator
 from rail_django_graphql.extensions import BaseExtension
 from rail_django_graphql.middleware import BaseMiddleware
 from rail_django_graphql.optimization import QueryOptimizer

@@ -22,11 +22,7 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
 from django.db.models import Prefetch, QuerySet
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
-from django.db.models.fields.reverse_related import (
-    ManyToManyRel,
-    ManyToOneRel,
-    OneToOneRel,
-)
+from django.db.models.fields.reverse_related import ManyToManyRel, ManyToOneRel, OneToOneRel
 from graphql import GraphQLResolveInfo
 from graphql.execution.collect_fields import collect_fields
 

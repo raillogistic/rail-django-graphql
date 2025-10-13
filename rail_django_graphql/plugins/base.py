@@ -4,7 +4,8 @@ Base plugin architecture for GraphQL schema registry.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional, Type
+from typing import Any, Dict, List, Optional, Type
+
 from django.conf import settings
 
 logger = logging.getLogger(__name__)

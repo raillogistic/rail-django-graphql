@@ -6,13 +6,13 @@ including schema configuration validation, GraphQL schema validation, and
 enhanced error handling.
 """
 
-from .schema_validator import SchemaValidator, ValidationResult
 from .error_handlers import (
+    SchemaConflictError,
     SchemaRegistryError,
     SchemaValidationError,
-    SchemaConflictError,
-    ValidationErrorHandler
+    ValidationErrorHandler,
 )
+from .schema_validator import SchemaValidator, ValidationResult
 
 __all__ = [
     'SchemaValidator',

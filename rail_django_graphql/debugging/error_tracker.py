@@ -5,16 +5,16 @@ This module provides comprehensive error tracking and analysis for GraphQL opera
 including error categorization, trend analysis, and alerting.
 """
 
-import traceback
-import threading
-from typing import Dict, Any, List, Optional, Callable, Set
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from collections import defaultdict, deque
-from enum import Enum
+import hashlib
 import json
 import logging
-import hashlib
+import threading
+import traceback
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 

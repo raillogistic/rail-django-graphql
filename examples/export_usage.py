@@ -6,8 +6,10 @@ provided by the rail-django-graphql extensions package.
 """
 
 import json
+
 import requests
-from rail_django_graphql.extensions import export_model_to_csv, export_model_to_excel, ModelExporter
+
+from rail_django_graphql.extensions import ModelExporter, export_model_to_csv, export_model_to_excel
 
 
 def example_programmatic_csv_export():

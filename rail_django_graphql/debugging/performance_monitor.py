@@ -5,17 +5,18 @@ This module provides comprehensive performance monitoring for GraphQL operations
 including query execution times, memory usage, and system resource tracking.
 """
 
-import time
-import psutil
-import threading
-from typing import Dict, Any, List, Optional, Callable, NamedTuple
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from collections import defaultdict, deque
-from enum import Enum
-import statistics
 import json
 import logging
+import statistics
+import threading
+import time
+from collections import defaultdict, deque
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, NamedTuple, Optional
+
+import psutil
 
 logger = logging.getLogger(__name__)
 

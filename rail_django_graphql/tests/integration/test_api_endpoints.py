@@ -25,6 +25,7 @@ from django.urls import reverse
 from graphene import Schema
 from graphene.test import Client
 from graphene_django.views import GraphQLView
+
 from rail_django_graphql.core.schema import SchemaBuilder
 from rail_django_graphql.middleware import GraphQLPerformanceMiddleware
 

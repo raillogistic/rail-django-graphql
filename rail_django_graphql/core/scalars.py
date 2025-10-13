@@ -8,20 +8,19 @@ including DateTime, Date, Time, JSON, UUID, Email, URL, and Phone scalars.
 import json
 import re
 import uuid
-from datetime import datetime, date, time
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
 import graphene
-from graphene import Scalar
-from graphql.language import ast
-from graphql.error import GraphQLError
-
-from django.core.validators import validate_email
 from django.core.exceptions import ValidationError
-from django.utils.dateparse import parse_datetime, parse_date, parse_time
+from django.core.validators import validate_email
 from django.utils import timezone
+from django.utils.dateparse import parse_date, parse_datetime, parse_time
+from graphene import Scalar
+from graphql.error import GraphQLError
+from graphql.language import ast
 
 from ..conf import get_setting
 
@@ -459,7 +458,7 @@ def get_enabled_scalars(schema_name: Optional[str] = None) -> dict:
         Dictionary of enabled scalars
     """
     from ..defaults import LIBRARY_DEFAULTS
-    
+
     # Get custom scalars configuration
     custom_scalars_config = LIBRARY_DEFAULTS.get("custom_scalars", {})
     

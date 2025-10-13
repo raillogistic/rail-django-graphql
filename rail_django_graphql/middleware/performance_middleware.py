@@ -5,19 +5,23 @@ This middleware automatically collects performance metrics for all GraphQL queri
 including execution time, complexity analysis, and slow query detection.
 """
 
+import logging
 import time
 import tracemalloc
-import logging
 from typing import Any, Dict, Optional
-from django.db import connection
+
 from django.core.cache import cache
+from django.db import connection
 from django.utils.deprecation import MiddlewareMixin
 from graphql import GraphQLError
+
 from ..extensions.performance_metrics import performance_collector
 
 logger = logging.getLogger(__name__)
 
 import django
+
+
 class GraphQLPerformanceMiddleware(MiddlewareMixin):
     """
     Middleware pour surveiller les performances des requêtes GraphQL.

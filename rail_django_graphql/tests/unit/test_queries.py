@@ -9,31 +9,25 @@ Ce module teste:
 - La résolution des relations
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase
-from django.db import models
-from django.contrib.auth.models import User
 from typing import Dict, List, Optional, Type
+from unittest.mock import MagicMock, Mock, patch
 
 import graphene
-from graphene import (
-    ObjectType,
-    String,
-    Int,
-    Boolean,
-    DateTime,
-    List as GrapheneList,
-    Field,
-)
+import pytest
+from django.contrib.auth.models import User
+from django.db import models
+from django.test import TestCase
+from graphene import Boolean, DateTime, Field, Int
+from graphene import List as GrapheneList
+from graphene import ObjectType, String
 from graphene.test import Client
 from graphene_django import DjangoObjectType
 from graphene_django.filter import DjangoFilterConnectionField
 
-from rail_django_graphql.generators.queries import QueryGenerator
-from rail_django_graphql.generators.types import TypeGenerator
 from rail_django_graphql.generators.filters import AdvancedFilterGenerator
 from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 
 # Modèles de test pour la génération de requêtes

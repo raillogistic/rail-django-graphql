@@ -5,26 +5,26 @@ This module provides the FileGenerator class, which is responsible for generatin
 and managing GraphQL schema files for Django apps and models.
 """
 
+import ast
+import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Type, Union
-import ast
-import black
-import logging
-from datetime import datetime
 
+import black
 from django.apps import apps
 from django.db import models
 from django.template.loader import render_to_string
 
-from ..core.settings import SchemaSettings
+from ..core.error_handling import get_error_handler
 from ..core.performance import get_query_optimizer
 from ..core.security import get_authz_manager
-from ..core.error_handling import get_error_handler
+from ..core.settings import SchemaSettings
 from .introspector import ModelIntrospector
-from .types import TypeGenerator
-from .queries import QueryGenerator
 from .mutations import MutationGenerator
+from .queries import QueryGenerator
+from .types import TypeGenerator
 
 logger = logging.getLogger(__name__)
 

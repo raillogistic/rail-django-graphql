@@ -17,14 +17,14 @@ import pytest
 from django.contrib.auth.models import User
 from django.db import models
 from django.test import TestCase
-from graphene import Boolean, DateTime, Int, ObjectType, String
+from graphene import Boolean, DateTime, Int
 from graphene import List as GrapheneList
+from graphene import ObjectType, String
 from graphene_django import DjangoObjectType
-from rail_django_graphql.generators.introspector import FieldInfo, ModelIntrospector
-from rail_django_graphql.generators.types import (
-    TypeGenerator,
-)
 from test_app.models import Category, Post, Tag
+
+from rail_django_graphql.generators.introspector import FieldInfo, ModelIntrospector
+from rail_django_graphql.generators.types import TypeGenerator
 
 
 class TestTypeGenerator(TestCase):

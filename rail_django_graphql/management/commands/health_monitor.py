@@ -5,16 +5,18 @@ This command provides continuous monitoring capabilities for the GraphQL system,
 including automated health checks, alerting, and diagnostic reporting.
 """
 
-import time
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Any, Optional
-from django.core.management.base import BaseCommand, CommandError
-from django.core.mail import send_mail
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
 from django.conf import settings
+from django.core.mail import send_mail
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone as django_timezone
-from rail_django_graphql.extensions.health import health_checker, HealthStatus
+
+from rail_django_graphql.extensions.health import HealthStatus, health_checker
 
 logger = logging.getLogger(__name__)
 

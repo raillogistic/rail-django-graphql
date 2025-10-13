@@ -29,11 +29,7 @@ except ImportError:
 
 # Legacy imports for backward compatibility
 try:
-    from .settings import (
-        MutationGeneratorSettings,
-        SchemaSettings,
-        TypeGeneratorSettings,
-    )
+    from .settings import MutationGeneratorSettings, SchemaSettings, TypeGeneratorSettings
 except ImportError:
     logger.warning("Legacy settings classes not available")
     MutationGeneratorSettings = None

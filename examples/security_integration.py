@@ -10,32 +10,34 @@ Ce fichier montre comment :
 """
 
 import graphene
-from graphene_django import DjangoObjectType
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.db import models
+from graphene_django import DjangoObjectType
 
 # Imports du système de sécurité
-from rail_django_graphql.security import (
-    # RBAC
-    role_manager, require_role, require_permission,
-    RoleDefinition, RoleType, PermissionContext,
-    
-    # Field Permissions
-    field_permission_manager, field_permission_required,
-    FieldPermissionRule, FieldAccessLevel, FieldVisibility,
+from rail_django_graphql.security import (  # RBAC; Field Permissions; Input Validation; GraphQL Security; Audit Logging
+    AuditEventType,
+    AuditSeverity,
+    FieldAccessLevel,
+    FieldPermissionRule,
+    FieldVisibility,
+    InputValidator,
+    PermissionContext,
+    RoleDefinition,
+    RoleType,
+    SecurityConfig,
+    audit_data_modification,
+    audit_graphql_operation,
+    create_security_middleware,
+    field_permission_manager,
+    field_permission_required,
     mask_sensitive_fields,
-    
-    # Input Validation
-    validate_input, InputValidator,
-    
-    # GraphQL Security
-    SecurityConfig, create_security_middleware,
     require_introspection_permission,
-    
-    # Audit Logging
-    audit_graphql_operation, audit_data_modification,
-    AuditEventType, AuditSeverity
+    require_permission,
+    require_role,
+    role_manager,
+    validate_input,
 )
 
 User = get_user_model()

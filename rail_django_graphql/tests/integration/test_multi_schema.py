@@ -13,6 +13,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 from django.test import Client, TestCase, override_settings
 from django.urls import include, path, reverse
+
 from rail_django_graphql.core.registry import SchemaInfo, SchemaRegistry
 from rail_django_graphql.views.graphql_views import (
     GraphQLPlaygroundView,

@@ -6,13 +6,13 @@ features at runtime without code changes or server restarts.
 """
 
 import logging
-from typing import Dict, Any, Optional, Union, List
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional, Union
+
 from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
-from dataclasses import dataclass, field
-from enum import Enum
-
 
 logger = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@
 Serializers for GraphQL schema management REST API.
 """
 
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 
 class SchemaSerializer:

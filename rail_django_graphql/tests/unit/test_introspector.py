@@ -9,16 +9,17 @@ Ce module teste:
 - La gestion du cache d'introspection
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase
-from django.db import models
-from django.contrib.auth.models import User
 from typing import Dict, List, Optional
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
+from django.contrib.auth.models import User
+from django.db import models
+from django.test import TestCase
 
 from rail_django_graphql.generators.introspector import (
-    ModelIntrospector,
     FieldInfo,
+    ModelIntrospector,
     RelationshipInfo,
 )
 

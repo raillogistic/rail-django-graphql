@@ -5,16 +5,16 @@ This module provides comprehensive debugging hooks for GraphQL schema operations
 including query execution, schema registration, and error handling.
 """
 
+import json
 import logging
+import threading
 import time
 import traceback
-from typing import Dict, Any, List, Optional, Callable, Union
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-import json
-import threading
-from contextlib import contextmanager
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 

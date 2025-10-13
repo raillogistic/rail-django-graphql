@@ -5,16 +5,16 @@ This module provides capabilities for generating comprehensive documentation
 from GraphQL schema introspections, including HTML, Markdown, and JSON formats.
 """
 
-import logging
 import json
-from typing import Dict, Any, List, Optional, Set
+import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import re
+from typing import Any, Dict, List, Optional, Set
 
-from .schema_introspector import SchemaIntrospection, TypeInfo, FieldInfo
 from .schema_comparator import SchemaComparison
+from .schema_introspector import FieldInfo, SchemaIntrospection, TypeInfo
 
 logger = logging.getLogger(__name__)
 

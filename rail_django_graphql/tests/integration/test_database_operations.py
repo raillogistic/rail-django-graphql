@@ -8,24 +8,24 @@ Ce module teste:
 - L'intégration avec l'ORM Django
 """
 
-import pytest
+from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, patch
-from django.test import TestCase, TransactionTestCase
-from django.db import models, transaction, connection, IntegrityError
-from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
-from django.test.utils import override_settings
-from typing import Dict, List, Optional, Any
 
 import graphene
+import pytest
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, connection, models, transaction
+from django.test import TestCase, TransactionTestCase
+from django.test.utils import override_settings
 from graphene import Schema
 from graphene.test import Client
+from test_app.models import Category, Post, Tag
 
 from rail_django_graphql.generators.introspector import ModelIntrospector
-from rail_django_graphql.generators.types import TypeGenerator
-from rail_django_graphql.generators.queries import QueryGenerator
 from rail_django_graphql.generators.mutations import MutationGenerator
-from test_app.models import Category, Post, Tag
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 
 class TestDatabaseOperationsIntegration(TransactionTestCase):

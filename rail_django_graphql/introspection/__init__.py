@@ -5,14 +5,9 @@ This module provides comprehensive introspection capabilities for GraphQL schema
 including schema analysis, comparison, documentation generation, and metadata extraction.
 """
 
-from .schema_introspector import SchemaIntrospector, SchemaIntrospection
-from .schema_comparator import (
-    SchemaComparator,
-    SchemaComparison,
-    ChangeType,
-    BreakingChangeLevel,
-)
 from .documentation_generator import DocumentationGenerator
+from .schema_comparator import BreakingChangeLevel, ChangeType, SchemaComparator, SchemaComparison
+from .schema_introspector import SchemaIntrospection, SchemaIntrospector
 
 __all__ = [
     'SchemaIntrospector',

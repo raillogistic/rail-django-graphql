@@ -12,16 +12,12 @@ Supports both backward compatibility with single schema
 and new multi-schema functionality.
 """
 
-from django.urls import path, include
+from django.urls import include, path
 from graphene_django.views import GraphQLView
 
 from .schema import schema
-from .views.graphql_views import MultiSchemaGraphQLView, SchemaListView, GraphQLPlaygroundView
-from .views.health_views import (
-    HealthCheckView, 
-    HealthDashboardView, 
-    PerformanceView
-)
+from .views.graphql_views import GraphQLPlaygroundView, MultiSchemaGraphQLView, SchemaListView
+from .views.health_views import HealthCheckView, HealthDashboardView, PerformanceView
 
 urlpatterns = [
     # Main GraphQL endpoint (backward compatibility)

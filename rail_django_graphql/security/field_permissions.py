@@ -9,16 +9,16 @@ Ce module fournit :
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Union, Callable, TYPE_CHECKING, Tuple
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from functools import wraps
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from django.contrib.auth import get_user_model
-from django.db import models
 from django.core.cache import cache
-from graphql import GraphQLError
+from django.db import models
 from graphene import Field, ObjectType
+from graphql import GraphQLError
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser

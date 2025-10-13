@@ -7,10 +7,10 @@ similar to the authentication used in GraphQL schemas.
 
 import logging
 from functools import wraps
-from typing import Optional, Dict, Any, Callable
+from typing import Any, Callable, Dict, Optional
 
-from django.http import JsonResponse, HttpRequest
 from django.contrib.auth import get_user_model
+from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from .auth import JWTManager

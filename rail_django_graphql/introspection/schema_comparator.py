@@ -6,12 +6,12 @@ detecting changes, and generating migration reports.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-from .schema_introspector import SchemaIntrospection, TypeInfo, FieldInfo
+from .schema_introspector import FieldInfo, SchemaIntrospection, TypeInfo
 
 logger = logging.getLogger(__name__)
 

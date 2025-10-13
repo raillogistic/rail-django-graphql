@@ -5,9 +5,10 @@ Ce module définit tous les endpoints pour le monitoring de santé,
 les diagnostics et le tableau de bord.
 """
 
+from django.http import JsonResponse
 from django.urls import path
 from django.views.generic import TemplateView
-from django.http import JsonResponse
+
 
 # Simple health check views to avoid circular imports
 def simple_health_dashboard(request):

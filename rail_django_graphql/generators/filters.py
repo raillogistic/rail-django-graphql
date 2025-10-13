@@ -6,24 +6,36 @@ GraphQL filters based on Django model field types, supporting complex
 filter combinations and field-specific operations.
 """
 
-from typing import Any, Dict, List, Optional, Type, Union, Set, Callable
+from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
+
 import graphene
 from django.db import models
 from django.db.models import Q
 from graphene_django import DjangoObjectType
+
 # Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
 try:
     from graphene_django.filter import DjangoFilterConnectionField  # type: ignore
 except Exception:
     DjangoFilterConnectionField = None
-import django_filters
-from django_filters import FilterSet, CharFilter, NumberFilter, DateFilter, BooleanFilter, ChoiceFilter, ModelChoiceFilter, ModelMultipleChoiceFilter
 import logging
 from datetime import date, datetime, timedelta
-from django.utils import timezone
 
-from .introspector import ModelIntrospector
+import django_filters
+from django.utils import timezone
+from django_filters import (
+    BooleanFilter,
+    CharFilter,
+    ChoiceFilter,
+    DateFilter,
+    FilterSet,
+    ModelChoiceFilter,
+    ModelMultipleChoiceFilter,
+    NumberFilter,
+)
+
 from ..core.meta import get_model_graphql_meta
+from .introspector import ModelIntrospector
 
 logger = logging.getLogger(__name__)
 
@@ -782,7 +794,7 @@ class AdvancedFilterGenerator:
                 return queryset
             
             from django.db.models import Count
-            
+
             # Annotate with count and filter
             count_field = f'{field_name}_count_annotation'
             queryset = queryset.annotate(**{count_field: Count(field_name)})
@@ -818,7 +830,7 @@ class AdvancedFilterGenerator:
                 return queryset
             
             from django.db.models import Count
-            
+
             # Annotate with count and filter
             count_field = f'{accessor_name}_count_annotation'
             queryset = queryset.annotate(**{count_field: Count(accessor_name)})
@@ -1992,7 +2004,7 @@ class AdvancedFilterGenerator:
         if hasattr(model._meta, 'related_objects'):
             for rel in model._meta.related_objects:
                 # Include both OneToMany and OneToOne reverse relationships
-                from django.db.models.fields.reverse_related import OneToOneRel, ManyToOneRel
+                from django.db.models.fields.reverse_related import ManyToOneRel, OneToOneRel
                 if isinstance(rel, (OneToOneRel, ManyToOneRel)):
                     reverse_relations.append(rel)
         

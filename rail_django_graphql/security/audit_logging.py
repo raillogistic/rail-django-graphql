@@ -9,21 +9,21 @@ Ce module fournit :
 - Rapports de sécurité
 """
 
-import logging
-import json
 import hashlib
+import json
+import logging
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 from enum import Enum
-from dataclasses import dataclass, asdict
 from functools import wraps
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from django.contrib.auth import get_user_model
-from django.db import models
-from django.core.serializers.json import DjangoJSONEncoder
 from django.contrib.contenttypes.models import ContentType
+from django.core.serializers.json import DjangoJSONEncoder
+from django.db import models
 from django.utils import timezone as django_timezone
-from graphql import GraphQLResolveInfo, GraphQLError
+from graphql import GraphQLError, GraphQLResolveInfo
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser

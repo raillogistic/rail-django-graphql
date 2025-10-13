@@ -8,23 +8,25 @@ Ce module fournit des fonctionnalités automatiques pour :
 - Traitement et optimisation des médias
 """
 
-import os
-import mimetypes
-from typing import Dict, List, Optional, Type, Any, Union
-from pathlib import Path
 import hashlib
+import mimetypes
+import os
 import uuid
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
-from graphene import ObjectType, Mutation, Field, String, Boolean, Int, List as GrapheneList
-from graphene_file_upload.scalars import Upload
-from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
-from django.core.files.storage import default_storage
 from django.conf import settings
-from django.db import models
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
+from django.db import models
 from django.utils.text import slugify
+from graphene import Boolean, Field, Int
+from graphene import List as GrapheneList
+from graphene import Mutation, ObjectType, String
+from graphene_file_upload.scalars import Upload
 
 from ..core.settings import GraphQLAutoConfig
 

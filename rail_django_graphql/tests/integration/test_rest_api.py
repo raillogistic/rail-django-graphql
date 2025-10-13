@@ -4,13 +4,13 @@ Integration tests for GraphQL schema management REST API.
 
 import json
 from datetime import datetime
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, Client
-from django.urls import reverse
 from django.contrib.auth.models import User
+from django.test import Client, TestCase
+from django.urls import reverse
 
-from rail_django_graphql.core.registry import schema_registry, SchemaInfo
+from rail_django_graphql.core.registry import SchemaInfo, schema_registry
 from rail_django_graphql.plugins.base import plugin_manager
 
 

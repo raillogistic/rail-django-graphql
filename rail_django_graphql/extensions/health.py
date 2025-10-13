@@ -6,36 +6,32 @@ for the GraphQL system including schema validation, database connectivity,
 cache system status, and performance metrics.
 """
 
-import time
-import psutil
 import logging
+import time
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass, asdict
-from django.db import connection, connections
-from django.core.cache import cache, caches
-from django.conf import settings
+from typing import Any, Dict, List, Optional, Tuple
+
+import psutil
 from django.apps import apps
-from graphene import (
-    ObjectType,
-    Field,
-    String,
-    Boolean,
-    Int,
-    Float,
-    List as GrapheneList,
-)
-from graphql import validate, build_schema
+from django.conf import settings
+from django.core.cache import cache, caches
+from django.db import connection, connections
+from graphene import Boolean, Field, Float, Int
+from graphene import List as GrapheneList
+from graphene import ObjectType, String
+from graphql import build_schema, validate
 from graphql.error import GraphQLError
+
 from .performance_metrics import (
-    performance_collector,
-    PerformanceDistribution,
-    QueryFrequencyStats,
-    SlowQueryAlert,
-    PerformanceDistributionType,
-    QueryFrequencyStatsType,
-    SlowQueryAlertType,
     ComplexityStatsType,
+    PerformanceDistribution,
+    PerformanceDistributionType,
+    QueryFrequencyStats,
+    QueryFrequencyStatsType,
+    SlowQueryAlert,
+    SlowQueryAlertType,
+    performance_collector,
 )
 
 logger = logging.getLogger(__name__)

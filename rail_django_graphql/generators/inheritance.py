@@ -6,6 +6,7 @@ including abstract models, multi-table inheritance, and proxy models in GraphQL 
 """
 
 from typing import Any, Dict, List, Optional, Set, Type, Union
+
 import graphene
 from django.db import models
 from django.db.models import Q

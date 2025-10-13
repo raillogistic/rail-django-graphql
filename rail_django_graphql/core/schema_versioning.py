@@ -3,18 +3,19 @@ Système de versioning pour les schémas GraphQL
 Gère les versions de schéma, les migrations et les rollbacks.
 """
 
-import json
 import hashlib
+import json
 import logging
+from dataclasses import asdict, dataclass
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from typing import Any, Dict, List, Optional, Tuple
+
+import graphene
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models, transaction
 from django.utils import timezone
-import graphene
 from graphene import Schema
 
 logger = logging.getLogger(__name__)

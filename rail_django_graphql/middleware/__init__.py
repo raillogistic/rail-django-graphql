@@ -10,17 +10,13 @@ This package contains middleware components for:
 - Rate limiting and audit logging
 """
 
+from .auth_middleware import GraphQLAuthenticationMiddleware, GraphQLRateLimitMiddleware
 from .performance import (
     GraphQLPerformanceMiddleware,
     GraphQLPerformanceView,
     get_performance_aggregator,
+    monitor_performance,
     setup_performance_monitoring,
-    monitor_performance
-)
-
-from .auth_middleware import (
-    GraphQLAuthenticationMiddleware,
-    GraphQLRateLimitMiddleware
 )
 
 __all__ = [

@@ -5,23 +5,23 @@ This module provides comprehensive rate limiting, query depth analysis,
 and complexity scoring to prevent abuse and resource exhaustion.
 """
 
-import time
+import hashlib
 import logging
-from typing import Dict, List, Optional, Any, Callable, Tuple
+import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from functools import wraps
-import hashlib
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import graphene
+from django.conf import settings
+from django.core.cache import cache
 from graphql import GraphQLError
 from graphql.execution import ExecutionResult
 from graphql.language import ast
-from django.core.cache import cache
-from django.conf import settings
 
 # Import des nouvelles exceptions personnalisées
-from ..core.exceptions import RateLimitError, QueryComplexityError, QueryDepthError
+from ..core.exceptions import QueryComplexityError, QueryDepthError, RateLimitError
 
 logger = logging.getLogger(__name__)
 

@@ -6,22 +6,22 @@ including registration, discovery, health checks, and monitoring."""
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from django.http import JsonResponse, HttpRequest
+from django.conf import settings
+from django.http import HttpRequest, JsonResponse
+from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
-from django.conf import settings
 
 from ..core.registry import schema_registry
 from ..plugins.base import plugin_manager
 from .serializers import (
-    SchemaSerializer,
-    ManagementActionSerializer,
+    DiscoverySerializer,
     HealthSerializer,
+    ManagementActionSerializer,
     MetricsSerializer,
-    DiscoverySerializer
+    SchemaSerializer,
 )
 
 logger = logging.getLogger(__name__)

@@ -8,8 +8,9 @@ Ce module fournit des configurations et des utilitaires pour :
 - Paramètres de limitation de débit
 """
 
+from typing import Any, Dict, List
+
 from django.conf import settings
-from typing import Dict, Any, List
 
 
 class SecurityConfig:

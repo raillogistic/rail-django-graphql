@@ -5,15 +5,23 @@ This module provides comprehensive analysis of GraphQL queries,
 including complexity analysis, security checks, and optimization suggestions.
 """
 
+import logging
 import re
-from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-import logging
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 from graphql import (
-    parse, validate, build_schema, GraphQLError, 
-    visit, Visitor, FieldNode, FragmentDefinitionNode,
-    InlineFragmentNode, OperationDefinitionNode
+    FieldNode,
+    FragmentDefinitionNode,
+    GraphQLError,
+    InlineFragmentNode,
+    OperationDefinitionNode,
+    Visitor,
+    build_schema,
+    parse,
+    validate,
+    visit,
 )
 
 logger = logging.getLogger(__name__)

@@ -5,23 +5,24 @@ This module tests the ModelMetadataQuery and related components to ensure
 proper exposure of Django model metadata with appropriate permission filtering.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
+import graphene
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase
-from django.contrib.auth.models import User, Permission
+from django.contrib.auth.models import Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.test import TestCase
 from graphene.test import Client
-import graphene
 
+from rail_django_graphql.core.settings import SchemaSettings
 from rail_django_graphql.extensions.metadata import (
-    ModelMetadataQuery,
-    ModelMetadataExtractor,
-    ModelMetadataType,
     FieldMetadataType,
+    ModelMetadataExtractor,
+    ModelMetadataQuery,
+    ModelMetadataType,
     RelationshipMetadataType,
 )
-from rail_django_graphql.core.settings import SchemaSettings
 
 
 class TestModel(models.Model):

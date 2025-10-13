@@ -8,8 +8,9 @@ This module configures:
 - Library settings validation
 """
 
-from django.apps import AppConfig
 import logging
+
+from django.apps import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class RailDjangoGraphQLConfig(AppConfig):
     def _configure_environment(self):
         """Configure l'environnement pour l'application."""
         import os
-        
+
         # Configuration des logs pour l'application
         logging.getLogger('rail_django_graphql').setLevel(
             logging.DEBUG if os.environ.get('DEBUG') else logging.INFO

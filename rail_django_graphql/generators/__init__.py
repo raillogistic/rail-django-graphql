@@ -18,10 +18,10 @@ from typing import TYPE_CHECKING
 
 # Lazy imports to avoid circular dependencies
 if TYPE_CHECKING:
-    from .types import TypeGenerator
-    from .queries import QueryGenerator
-    from .mutations import MutationGenerator
     from .introspector import ModelIntrospector
+    from .mutations import MutationGenerator
+    from .queries import QueryGenerator
+    from .types import TypeGenerator
 
 __all__ = [
     'TypeGenerator',

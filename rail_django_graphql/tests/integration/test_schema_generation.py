@@ -7,35 +7,35 @@ Ce module teste:
 - L'exécution de requêtes et mutations réelles
 """
 
-import pytest
+from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, patch
-from django.test import TestCase, TransactionTestCase
-from django.db import models, transaction
-from django.contrib.auth.models import User
-from django.core.management import call_command
-from django.test.utils import override_settings
-from typing import Dict, List, Optional, Any
 
 import graphene
+import pytest
+from django.contrib.auth.models import User
+from django.core.management import call_command
+from django.db import models, transaction
+from django.test import TestCase, TransactionTestCase
+from django.test.utils import override_settings
 from graphene import ObjectType, Schema
 from graphene.test import Client
 from graphene_django import DjangoObjectType
-
-from rail_django_graphql.core.schema import SchemaBuilder
-from rail_django_graphql.generators.introspector import ModelIntrospector
-from rail_django_graphql.generators.types import TypeGenerator
-from rail_django_graphql.generators.queries import QueryGenerator
-from rail_django_graphql.generators.mutations import MutationGenerator
-from rail_django_graphql.generators.filters import AdvancedFilterGenerator
-from rail_django_graphql.decorators import business_logic
-
 from tests.models import (
-    TestCompany, TestEmployee, TestSkill, TestSkillCategory,
-    TestProject, TestProjectAssignment
+    TestCompany,
+    TestEmployee,
+    TestProject,
+    TestProjectAssignment,
+    TestSkill,
+    TestSkillCategory,
 )
 
-
-
+from rail_django_graphql.core.schema import SchemaBuilder
+from rail_django_graphql.decorators import business_logic
+from rail_django_graphql.generators.filters import AdvancedFilterGenerator
+from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.mutations import MutationGenerator
+from rail_django_graphql.generators.queries import QueryGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 
 class TestSchemaGenerationIntegration(TransactionTestCase):
@@ -47,7 +47,10 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         call_command('migrate', verbosity=0, interactive=False)
         
         # Initialiser les générateurs avec des paramètres appropriés
-        from rail_django_graphql.core.settings import TypeGeneratorSettings, MutationGeneratorSettings
+        from rail_django_graphql.core.settings import (
+            MutationGeneratorSettings,
+            TypeGeneratorSettings,
+        )
         
         self.introspector = ModelIntrospector(TestCompany)
         self.type_generator = TypeGenerator(settings=TypeGeneratorSettings())
@@ -408,7 +411,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
     def test_performance_with_large_dataset(self):
         """Test les performances avec un grand dataset."""
         import time
-        
+
         # Créer un grand nombre d'entreprises
         companies = []
         for i in range(100):
@@ -497,7 +500,7 @@ class TestSchemaGenerationIntegration(TransactionTestCase):
         """Test l'accès concurrent au schéma généré."""
         import threading
         import time
-        
+
         # Générer le schéma
         schema = self.schema_generator.get_schema([TestCompany])
         

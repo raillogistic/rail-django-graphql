@@ -5,25 +5,25 @@ This module provides comprehensive schema lifecycle management including
 registration, updates, versioning, and administrative operations.
 """
 
-import threading
+import hashlib
 import json
-from typing import Dict, Any, List, Optional, Callable, Set, Union
+import logging
+import threading
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-import logging
-import hashlib
-from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from graphql import GraphQLSchema, build_ast_schema, validate
 
-from ..validation import SchemaValidator, ValidationResult
-from ..introspection import SchemaIntrospector, SchemaComparison
 from ..debugging import DebugHooks, PerformanceMonitor
+from ..introspection import SchemaComparison, SchemaIntrospector
+from ..validation import SchemaValidator, ValidationResult
 
 logger = logging.getLogger(__name__)
 

@@ -6,22 +6,23 @@ including detailed analysis of types, fields, directives, and schema complexity.
 """
 
 import logging
-from typing import Dict, Any, List, Optional, Set, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 from graphql import (
-    GraphQLSchema, 
-    GraphQLObjectType, 
-    GraphQLInterfaceType,
-    GraphQLUnionType,
-    GraphQLEnumType,
-    GraphQLScalarType,
-    GraphQLInputObjectType,
-    GraphQLField,
     GraphQLArgument,
-    GraphQLNonNull,
+    GraphQLEnumType,
+    GraphQLField,
+    GraphQLInputObjectType,
+    GraphQLInterfaceType,
     GraphQLList,
-    get_named_type
+    GraphQLNonNull,
+    GraphQLObjectType,
+    GraphQLScalarType,
+    GraphQLSchema,
+    GraphQLUnionType,
+    get_named_type,
 )
 from graphql.execution import execute
 from graphql.utilities import build_ast_schema, print_schema

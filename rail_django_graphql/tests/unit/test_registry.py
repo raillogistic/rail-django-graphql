@@ -5,21 +5,17 @@ Ce module contient des tests complets pour la classe SchemaRegistry,
 incluant l'enregistrement, la découverte automatique, et la gestion des schémas.
 """
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any
 import threading
 import time
+import unittest
+from typing import Any, Dict
+from unittest.mock import MagicMock, Mock, patch
 
-from django.test import TestCase
 from django.apps import apps
 from django.conf import settings
+from django.test import TestCase
 
-from rail_django_graphql.core.registry import (
-    SchemaRegistry,
-    SchemaInfo,
-    schema_registry,
-)
+from rail_django_graphql.core.registry import SchemaInfo, SchemaRegistry, schema_registry
 from rail_django_graphql.core.schema import SchemaBuilder
 
 
@@ -357,7 +353,7 @@ class TestGlobalSchemaRegistry(TestCase):
     def test_global_registry_functionality(self):
         """Test que l'instance globale fonctionne correctement."""
         from rail_django_graphql.core.registry import schema_registry
-        
+
         # Nettoyer d'abord
         schema_registry.clear()
         

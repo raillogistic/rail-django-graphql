@@ -5,16 +5,16 @@ This module provides JWT-based authentication with built-in GraphQL mutations
 for login, register, token refresh, and user management.
 """
 
-import jwt
 import logging
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 import graphene
-from django.contrib.auth import authenticate, login, logout, get_user_model
+import jwt
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from graphene_django import DjangoObjectType
 

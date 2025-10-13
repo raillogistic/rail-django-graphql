@@ -8,22 +8,22 @@ les endpoints, les vérifications de santé, et le tableau de bord.
 import json
 import time
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from django.test import TestCase, Client
-from django.urls import reverse
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
+from django.test import Client, TestCase
+from django.urls import reverse
 
 from ..extensions.health import HealthChecker, HealthStatus, SystemMetrics
 from ..views.health_views import (
-    HealthDashboardView,
     HealthAPIView,
-    health_check_endpoint,
-    health_metrics_endpoint,
-    health_components_endpoint,
+    HealthDashboardView,
     HealthHistoryView,
+    health_check_endpoint,
+    health_components_endpoint,
+    health_metrics_endpoint,
 )
 
 

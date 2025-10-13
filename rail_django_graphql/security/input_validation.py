@@ -8,16 +8,16 @@ Ce module fournit :
 - Validation des types de données
 """
 
-import re
 import html
 import logging
-from typing import Any, Dict, List, Optional, Union, Callable
-from enum import Enum
+import re
 from dataclasses import dataclass
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import bleach
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_email, URLValidator
+from django.core.validators import URLValidator, validate_email
 from django.utils.html import strip_tags
 from graphql import GraphQLError
 

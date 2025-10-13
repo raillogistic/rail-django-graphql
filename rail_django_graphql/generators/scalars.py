@@ -7,7 +7,7 @@ for complex GraphQL schemas with custom data types and method-based fields.
 
 import inspect
 import json
-from datetime import datetime, date, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Type, Union, get_type_hints
 from uuid import UUID

@@ -9,12 +9,13 @@ Cette commande vérifie :
 - Recommandations de sécurité Django
 """
 
-from django.core.management.base import BaseCommand, CommandError
+import logging
+from typing import Any, Dict, List
+
 from django.conf import settings
 from django.core.cache import cache
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
-from typing import Dict, Any, List
-import logging
 
 from rail_django_graphql.security_config import SecurityConfig, get_security_status
 

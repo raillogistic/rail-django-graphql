@@ -9,10 +9,10 @@ Ce module fournit :
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Set, Union, TYPE_CHECKING
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from functools import wraps
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission

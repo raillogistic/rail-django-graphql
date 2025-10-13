@@ -10,20 +10,20 @@ Ce module fournit un middleware complet pour surveiller:
 """
 
 import logging
-import time
 import threading
+import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, Deque
 from datetime import datetime, timedelta
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 import graphene
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.deprecation import MiddlewareMixin
 
-from ..extensions.optimization import get_performance_monitor
 from ..extensions.caching import get_cache_manager
+from ..extensions.optimization import get_performance_monitor
 
 logger = logging.getLogger(__name__)
 

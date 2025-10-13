@@ -313,6 +313,7 @@ def test_github_installation():
 
         # Test schema building
         import graphene
+
         from rail_django_graphql import SchemaBuilder
 
         class Query(graphene.ObjectType):

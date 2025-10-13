@@ -5,22 +5,22 @@ This module provides comprehensive schema migration planning, execution,
 and rollback capabilities for GraphQL schemas.
 """
 
+import hashlib
 import json
+import logging
 import threading
-from typing import Dict, Any, List, Optional, Callable, Union, Tuple
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-import logging
-import hashlib
-from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from django.conf import settings
 from django.db import transaction
 from graphql import GraphQLSchema, build_ast_schema, print_schema
 
-from ..introspection import SchemaComparator, SchemaComparison, ChangeType, BreakingChangeLevel
+from ..introspection import BreakingChangeLevel, ChangeType, SchemaComparator, SchemaComparison
 from ..validation import SchemaValidator
 
 logger = logging.getLogger(__name__)

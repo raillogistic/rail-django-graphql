@@ -11,21 +11,28 @@ Ce module fournit :
 
 import logging
 import time
-from typing import Any, Dict, List, Optional, Set, Union, Callable
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 
-from graphql import (
-    GraphQLError, GraphQLSchema, DocumentNode, OperationDefinitionNode,
-    FieldNode, FragmentDefinitionNode, InlineFragmentNode, validate,
-    ValidationRule, GraphQLResolveInfo
-)
-from graphql.validation import ValidationContext
-from graphql.language.ast import Node
 from django.conf import settings
-from django.core.cache import cache
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
+from graphql import (
+    DocumentNode,
+    FieldNode,
+    FragmentDefinitionNode,
+    GraphQLError,
+    GraphQLResolveInfo,
+    GraphQLSchema,
+    InlineFragmentNode,
+    OperationDefinitionNode,
+    ValidationRule,
+    validate,
+)
+from graphql.language.ast import Node
+from graphql.validation import ValidationContext
 
 logger = logging.getLogger(__name__)
 

@@ -19,10 +19,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from rail_django_graphql.security_config import (
-    SecurityConfig,
-    setup_security_middleware,
-)
+from rail_django_graphql.security_config import SecurityConfig, setup_security_middleware
 
 
 class Command(BaseCommand):

@@ -859,10 +859,7 @@ class ModelMetadataExtractor:
         """
         try:
             # Import the enhanced filter generator
-            from ..generators.filters import (
-                AdvancedFilterGenerator,
-                EnhancedFilterGenerator,
-            )
+            from ..generators.filters import AdvancedFilterGenerator, EnhancedFilterGenerator
             from ..utils.graphql_meta import get_model_graphql_meta
 
             # Use the instance's max_depth parameter

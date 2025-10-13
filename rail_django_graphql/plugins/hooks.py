@@ -3,8 +3,8 @@ Hook registry system for GraphQL schema registry.
 """
 
 import logging
-from typing import Dict, List, Callable, Any, Optional
 from collections import defaultdict
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 

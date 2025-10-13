@@ -5,22 +5,23 @@ This module provides comprehensive input validation, sanitization,
 and security measures to prevent common attacks.
 """
 
-import re
 import html
 import logging
-from typing import Any, Dict, List, Optional, Union, Callable
+import re
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from datetime import datetime, date
+from typing import Any, Callable, Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 import graphene
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_email, URLValidator
-from django.utils.html import strip_tags
+from django.core.validators import URLValidator, validate_email
 from django.db import models
+from django.utils.html import strip_tags
 
 # Import des nouvelles exceptions personnalisées
-from ..core.exceptions import ValidationError as GraphQLValidationError, SecurityError
+from ..core.exceptions import SecurityError
+from ..core.exceptions import ValidationError as GraphQLValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class InputSanitizer:
         # Suppression des balises non autorisées
         # Cette implémentation est basique, pour la production utiliser bleach
         import re
-        
+
         # Suppression des attributs dangereux
         value = re.sub(r'on\w+\s*=\s*["\'][^"\']*["\']', '', value, flags=re.IGNORECASE)
         value = re.sub(r'javascript:', '', value, flags=re.IGNORECASE)

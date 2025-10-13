@@ -7,19 +7,20 @@ configuration validation, schema structure validation, and conflict detection.
 
 import logging
 import re
-from typing import Dict, Any, List, Optional, Set
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
+
 from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
-from graphql import GraphQLSchema, validate, build_ast_schema
+from graphql import GraphQLSchema, build_ast_schema, validate
 from graphql.error import GraphQLError
 
 from .error_handlers import (
-    ValidationErrorHandler,
-    SchemaValidationError,
-    SchemaConflictError,
     InvalidSchemaConfigError,
-    handle_validation_exception
+    SchemaConflictError,
+    SchemaValidationError,
+    ValidationErrorHandler,
+    handle_validation_exception,
 )
 
 logger = logging.getLogger(__name__)

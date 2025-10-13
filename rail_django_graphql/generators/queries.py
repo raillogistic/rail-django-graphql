@@ -19,9 +19,9 @@ except Exception:
     DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
 from ..conf import get_query_generator_settings
-from ..core.settings import QueryGeneratorSettings
-from ..core.performance import get_query_optimizer, get_query_cache
+from ..core.performance import get_query_cache, get_query_optimizer
 from ..core.security import get_authz_manager
+from ..core.settings import QueryGeneratorSettings
 from ..extensions.optimization import (
     QueryOptimizationConfig,
     get_optimizer,

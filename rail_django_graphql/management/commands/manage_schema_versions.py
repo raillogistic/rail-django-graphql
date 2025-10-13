@@ -3,10 +3,12 @@ Commande de gestion Django pour les versions de schéma GraphQL.
 """
 
 import json
+
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-from rail_django_graphql.core.schema_versioning import schema_version_manager
+
 from rail_django_graphql.core.schema_builder import SchemaBuilder
+from rail_django_graphql.core.schema_versioning import schema_version_manager
 
 
 class Command(BaseCommand):

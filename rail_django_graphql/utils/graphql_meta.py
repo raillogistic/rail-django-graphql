@@ -6,6 +6,7 @@ from Django models, including extracting GraphqlMeta configurations.
 """
 
 from typing import Any, Dict, List, Optional, Type
+
 from django.db import models
 
 

@@ -9,29 +9,28 @@ Ce module teste:
 - L'intégration avec les méthodes métier
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from django.test import TestCase
-from django.db import models, transaction
-from django.contrib.auth.models import User
-from django.core.exceptions import ValidationError
-from typing import Dict, List, Optional, Type, Any
+from typing import Any, Dict, List, Optional, Type
+from unittest.mock import MagicMock, Mock, patch
 
 import graphene
-from graphene import ObjectType, String, Int, Boolean, DateTime, Field, Mutation
+import pytest
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.test import TestCase
+from graphene import Boolean, DateTime, Field, Int, Mutation, ObjectType, String
 from graphene.test import Client
 from graphene_django import DjangoObjectType
+from test_app.models import Category, Client, Comment
+from test_app.models import Post
+from test_app.models import Post as TestOrder
+from test_app.models import Product as TestProduct
+from test_app.models import Profile, Tag
 
-from rail_django_graphql.generators.mutations import (
-    MutationGenerator,
-    MutationError,
-)
-from rail_django_graphql.generators.types import TypeGenerator
-from rail_django_graphql.generators.introspector import ModelIntrospector
-from test_app.models import Product as TestProduct, Post as TestOrder
 from rail_django_graphql.decorators import business_logic
-from test_app.models import Category, Tag, Post, Comment, Client, Profile
-
+from rail_django_graphql.generators.introspector import ModelIntrospector
+from rail_django_graphql.generators.mutations import MutationError, MutationGenerator
+from rail_django_graphql.generators.types import TypeGenerator
 
 # Test classes start here
 

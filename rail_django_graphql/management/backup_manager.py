@@ -6,13 +6,12 @@ imports during Django initialization. This stub can be extended with real
 backup logic later.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Any, Optional
-import logging
-
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

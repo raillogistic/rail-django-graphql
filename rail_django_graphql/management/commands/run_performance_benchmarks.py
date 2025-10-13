@@ -7,13 +7,10 @@ depuis la ligne de commande avec diverses options de configuration.
 
 import os
 import sys
-from django.core.management.base import BaseCommand, CommandError
-from django.conf import settings
 
-from benchmarks.performance_benchmarks import (
-    PerformanceBenchmark,
-    run_full_benchmark_suite,
-)
+from benchmarks.performance_benchmarks import PerformanceBenchmark, run_full_benchmark_suite
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):

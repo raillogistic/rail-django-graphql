@@ -8,9 +8,10 @@ for each manager with appropriate naming conventions.
 
 import os
 import sys
+
 import django
-from django.db import models
 from django.conf import settings
+from django.db import models
 
 # Configure Django settings
 if not settings.configured:
@@ -76,7 +77,7 @@ def demonstrate_manager_detection():
     
     # Import the introspector
     from rail_django_graphql.generators.introspector import ModelIntrospector
-    
+
     # Create introspector for the Article model
     introspector = ModelIntrospector(Article)
     
@@ -98,7 +99,7 @@ def demonstrate_query_generation():
     print("\n=== GraphQL Query Generation ===\n")
     
     from rail_django_graphql.core.schema import SchemaBuilder
-    
+
     # Create schema builder
     schema_builder = SchemaBuilder()
     

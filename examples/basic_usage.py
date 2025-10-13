@@ -101,12 +101,8 @@ class Comment(models.Model):
 
 # 3. GraphQL Schema Creation
 import graphene
-from rail_django_graphql import (
-    MutationGenerator,
-    QueryGenerator,
-    SchemaBuilder,
-    TypeGenerator,
-)
+
+from rail_django_graphql import MutationGenerator, QueryGenerator, SchemaBuilder, TypeGenerator
 
 # Assuming we have the models imported
 # from blog.models import Category, Post, Comment

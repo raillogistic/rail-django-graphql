@@ -5,20 +5,20 @@ Ce module contient des tests complets pour les décorateurs,
 en particulier le décorateur @register_schema pour l'enregistrement de schémas.
 """
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any
 import logging
+import unittest
+from typing import Any, Dict
+from unittest.mock import MagicMock, Mock, patch
 
-from django.test import TestCase
 from django.apps import apps
+from django.test import TestCase
 
 from rail_django_graphql.decorators import (
-    register_schema,
-    mutation,
     business_logic,
-    private_method,
     custom_mutation_name,
+    mutation,
+    private_method,
+    register_schema,
 )
 
 

@@ -4,21 +4,20 @@ This package provides REST API endpoints for managing GraphQL schemas,
 including CRUD operations, health checks, and metrics.
 """
 
+from .serializers import (
+    DiscoverySerializer,
+    HealthSerializer,
+    ManagementActionSerializer,
+    MetricsSerializer,
+    SchemaSerializer,
+)
 from .views import (
-    SchemaListAPIView,
     SchemaDetailAPIView,
-    SchemaManagementAPIView,
     SchemaDiscoveryAPIView,
     SchemaHealthAPIView,
-    SchemaMetricsAPIView
-)
-
-from .serializers import (
-    SchemaSerializer,
-    ManagementActionSerializer,
-    HealthSerializer,
-    MetricsSerializer,
-    DiscoverySerializer
+    SchemaListAPIView,
+    SchemaManagementAPIView,
+    SchemaMetricsAPIView,
 )
 
 __all__ = [

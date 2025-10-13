@@ -5,8 +5,10 @@ This file provides backward compatibility for older pip versions
 and build systems that don't support pyproject.toml.
 """
 
-from setuptools import setup, find_packages
 import os
+
+from setuptools import find_packages, setup
+
 
 # Read the README file
 def read_readme():

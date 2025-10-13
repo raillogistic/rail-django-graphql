@@ -15,8 +15,14 @@ Filter Integration:
 """
 
 import json
+
 import requests
-from rail_django_graphql.extensions.exporting import ModelExporter, export_model_to_csv, export_model_to_excel
+
+from rail_django_graphql.extensions.exporting import (
+    ModelExporter,
+    export_model_to_csv,
+    export_model_to_excel,
+)
 
 
 def example_csv_export():
