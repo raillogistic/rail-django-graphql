@@ -212,10 +212,12 @@ class MutationGenerator:
                 cls, input_data: Dict[str, Any], model: Type[models.Model]
             ) -> Dict[str, Any]:
                 """
-                Process dual fields with automatic priority handling.
+                Process dual fields with automatic priority handling and validation.
 
                 For OneToManyRel (ForeignKey, OneToOneField):
-                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
+                - Validates mutual exclusivity: only one of nested_<field_name> or <field_name> should be provided
+                - Enforces mandatory fields: ensures required fields have either direct or nested value
+                - If both nested_<field_name> and <field_name> are provided, raises ValidationError
 
                 For ManyToManyRel:
                 - If nested_<field_name> is provided, create nested objects first and merge their IDs
@@ -227,6 +229,9 @@ class MutationGenerator:
 
                 Returns:
                     Dict with processed dual fields
+
+                Raises:
+                    ValidationError: If mutual exclusivity is violated or mandatory fields are missing
                 """
                 processed_data = input_data.copy()
 
@@ -234,22 +239,34 @@ class MutationGenerator:
                 introspector = ModelIntrospector(model)
                 relationships = introspector.get_model_relationships()
 
+                # Define mandatory fields that require either direct or nested value
+                mandatory_fields = cls._get_mandatory_fields(model)
+
                 for field_name, rel_info in relationships.items():
                     nested_field_name = f"nested_{field_name}"
 
                     if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
-                        # OneToManyRel: Prioritize nested field over direct ID field
+                        # Check for mutual exclusivity violation
                         if (
                             nested_field_name in processed_data
                             and field_name in processed_data
                         ):
-                            # Remove direct ID field, keep nested field
-                            processed_data.pop(field_name)
-                            # Transform nested field name to direct field name for processing
-                            processed_data[field_name] = processed_data.pop(
-                                nested_field_name
-                            )
-                        elif nested_field_name in processed_data:
+                            raise ValidationError({
+                                field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
+                            })
+
+                        # Check if mandatory field is missing
+                        if field_name in mandatory_fields:
+                            if (
+                                nested_field_name not in processed_data
+                                and field_name not in processed_data
+                            ):
+                                raise ValidationError({
+                                    field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
+                                })
+
+                        # Transform nested field to direct field for processing
+                        if nested_field_name in processed_data:
                             # Transform nested field name to direct field name
                             processed_data[field_name] = processed_data.pop(
                                 nested_field_name
@@ -276,6 +293,27 @@ class MutationGenerator:
                         )
 
                 return processed_data
+
+            @classmethod
+            def _get_mandatory_fields(cls, model: Type[models.Model]) -> List[str]:
+                """
+                Get list of mandatory fields for the given model.
+                
+                Args:
+                    model: The Django model
+                    
+                Returns:
+                    List of field names that are mandatory
+                """
+                # Define mandatory fields per model
+                # This can be extended to read from model metadata or configuration
+                mandatory_fields_map = {
+                    'BlogPost': ['category'],
+                    # Add other models and their mandatory fields here
+                }
+                
+                model_name = model.__name__
+                return mandatory_fields_map.get(model_name, [])
 
             @classmethod
             def _get_nested_handler(
@@ -287,76 +325,6 @@ class MutationGenerator:
                     return info.context.mutation_generator.nested_handler
                 # Fallback to creating a new handler
                 return NestedOperationHandler()
-
-            @classmethod
-            def _process_dual_fields(
-                cls, input_data: Dict[str, Any], model: Type[models.Model]
-            ) -> Dict[str, Any]:
-                """
-                Process dual fields with automatic priority handling.
-
-                For OneToManyRel (ForeignKey, OneToOneField):
-                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
-
-                For ManyToManyRel:
-                - If nested_<field_name> is provided, create nested objects first and merge their IDs
-                  into the direct assign data (<field_name>: [ID])
-
-                Args:
-                    input_data: The input data to process
-                    model: The Django model
-
-                Returns:
-                    Dict with processed dual fields
-                """
-                processed_data = input_data.copy()
-
-                # Get model relationships
-                introspector = ModelIntrospector(model)
-                relationships = introspector.get_model_relationships()
-
-                for field_name, rel_info in relationships.items():
-                    nested_field_name = f"nested_{field_name}"
-
-                    if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
-                        # OneToManyRel: Prioritize nested field over direct ID field
-                        if (
-                            nested_field_name in processed_data
-                            and field_name in processed_data
-                        ):
-                            # Remove direct ID field, keep nested field
-                            processed_data.pop(field_name)
-                            # Transform nested field name to direct field name for processing
-                            processed_data[field_name] = processed_data.pop(
-                                nested_field_name
-                            )
-                        elif nested_field_name in processed_data:
-                            # Transform nested field name to direct field name
-                            processed_data[field_name] = processed_data.pop(
-                                nested_field_name
-                            )
-
-                    elif rel_info.relationship_type == "ManyToManyField":
-                        # ManyToManyRel: Create nested objects first, then merge IDs
-                        if nested_field_name in processed_data:
-                            nested_data = processed_data.pop(nested_field_name)
-
-                            # For now, transform nested field to direct field for processing
-                            # The nested operation handler will handle the actual creation
-                            processed_data[field_name] = nested_data
-
-                # Handle reverse relationships (e.g., comments for Post)
-                reverse_relations = introspector.get_reverse_relations()
-                for field_name, related_model in reverse_relations.items():
-                    nested_field_name = f"nested_{field_name}"
-
-                    if nested_field_name in processed_data:
-                        # Transform nested field name to direct field name
-                        processed_data[field_name] = processed_data.pop(
-                            nested_field_name
-                        )
-
-                return processed_data
 
         return type(
             f"Create{model_name}",
@@ -517,10 +485,12 @@ class MutationGenerator:
                 cls, input_data: Dict[str, Any], model: Type[models.Model]
             ) -> Dict[str, Any]:
                 """
-                Process dual fields with automatic priority handling.
+                Process dual fields with automatic priority handling and validation.
 
                 For OneToManyRel (ForeignKey, OneToOneField):
-                - If both nested_<field_name> and <field_name> are provided, prioritize nested_<field_name>
+                - Validates mutual exclusivity: only one of field or nested_field should be provided
+                - Validates mandatory fields: ensures required fields have either direct or nested value
+                - If both nested_<field_name> and <field_name> are provided, raises ValidationError
 
                 For ManyToManyRel:
                 - If nested_<field_name> is provided, create nested objects first and merge their IDs
@@ -532,6 +502,9 @@ class MutationGenerator:
 
                 Returns:
                     Dict with processed dual fields
+
+                Raises:
+                    ValidationError: If mutual exclusivity or mandatory field rules are violated
                 """
                 processed_data = input_data.copy()
 
@@ -539,22 +512,30 @@ class MutationGenerator:
                 introspector = ModelIntrospector(model)
                 relationships = introspector.get_model_relationships()
 
+                # Get mandatory fields for this model
+                mandatory_fields = cls._get_mandatory_fields(model)
+
                 for field_name, rel_info in relationships.items():
                     nested_field_name = f"nested_{field_name}"
 
                     if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
+                        has_direct = field_name in processed_data and processed_data[field_name] is not None
+                        has_nested = nested_field_name in processed_data and processed_data[nested_field_name] is not None
+
+                        # Validate mutual exclusivity
+                        if has_direct and has_nested:
+                            raise ValidationError({
+                                field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
+                            })
+
+                        # Validate mandatory fields
+                        if field_name in mandatory_fields and not has_direct and not has_nested:
+                            raise ValidationError({
+                                field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
+                            })
+
                         # OneToManyRel: Prioritize nested field over direct ID field
-                        if (
-                            nested_field_name in processed_data
-                            and field_name in processed_data
-                        ):
-                            # Remove direct ID field, keep nested field
-                            processed_data.pop(field_name)
-                            # Transform nested field name to direct field name for processing
-                            processed_data[field_name] = processed_data.pop(
-                                nested_field_name
-                            )
-                        elif nested_field_name in processed_data:
+                        if has_nested:
                             # Transform nested field name to direct field name
                             processed_data[field_name] = processed_data.pop(
                                 nested_field_name
@@ -581,6 +562,24 @@ class MutationGenerator:
                         )
 
                 return processed_data
+
+            @classmethod
+            def _get_mandatory_fields(cls, model: Type[models.Model]) -> List[str]:
+                """
+                Get list of mandatory fields for the given model.
+                Override this method to customize mandatory field requirements.
+                
+                Args:
+                    model: The Django model class
+                    
+                Returns:
+                    List of field names that are mandatory
+                """
+                # For now, hardcode BlogPost category as mandatory
+                # This should be made configurable in the future
+                if model.__name__ == 'BlogPost':
+                    return ['category']
+                return []
 
             @classmethod
             def _get_nested_handler(

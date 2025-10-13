@@ -217,7 +217,10 @@ class TypeGenerator:
         return self.settings.include_fields.get(model.__name__, None)
 
     def _should_field_be_required_for_create(
-        self, field_info: "FieldInfo", field_name: str = None
+        self,
+        field_info: "FieldInfo",
+        field_name: str = None,
+        model: Type[models.Model] = None,
     ) -> bool:
         """
         Determine if a field should be required for create mutations based on:
@@ -226,7 +229,14 @@ class TypeGenerator:
         - fields with blank=True are not required (can be empty)
         - fields with blank=False AND no default ARE required
         - id/primary key fields are not required for create (auto-generated)
+        - mandatory fields defined by _get_mandatory_fields are always required
         """
+        # Check if this field is mandatory for this model
+        if model and field_name:
+            mandatory_fields = self._get_mandatory_fields(model)
+            if field_name in mandatory_fields:
+                return True
+
         # Primary key fields (id, pk) are not required for create
         if field_name and field_name in ("id", "pk"):
             return False
@@ -247,16 +257,39 @@ class TypeGenerator:
         return True
 
     def _should_field_be_required_for_update(
-        self, field_name: str, field_info: Any
+        self, field_name: str, field_info: Any, model: Type[models.Model] = None
     ) -> bool:
         """
         Determine if a field should be required for update mutations.
-        Only id is required for updates.
+        - id is required for updates
+        - mandatory fields defined by _get_mandatory_fields are always required
         """
+        # Check if this field is mandatory for this model
+        if model and field_name:
+            mandatory_fields = self._get_mandatory_fields(model)
+            if field_name in mandatory_fields:
+                return True
+
         return field_name == "id"
 
+    def _get_mandatory_fields(self, model: Type[models.Model]) -> List[str]:
+        """
+        Get list of mandatory fields for a specific model.
+        These fields are always required in input types regardless of Django field settings.
+
+        Args:
+            model: The Django model to get mandatory fields for
+
+        Returns:
+            List of field names that are mandatory for this model
+        """
+        # Define mandatory fields per model
+        if model.__name__ == "BlogPost":
+            return ["category"]
+
+        return []
+
     def _should_include_field(self, model: Type[models.Model], field_name: str) -> bool:
-        """Determine if a field should be included in the schema."""
         # Exclude polymorphic model internal fields
         # These fields are automatically managed by django-polymorphic and should not be exposed in mutations
         polymorphic_fields = {"polymorphic_ctype"}
@@ -693,19 +726,25 @@ class TypeGenerator:
             # Determine if field should be required based on mutation type
             if mutation_type == "create":
                 is_required = (
-                    self._should_field_be_required_for_create(field_info, field_name)
+                    self._should_field_be_required_for_create(
+                        field_info, field_name, model
+                    )
                     and not partial
                 )
             else:  # update
                 # For updates, only id is required regardless of partial flag
                 # All other fields are optional for partial updates
                 is_required = self._should_field_be_required_for_update(
-                    field_name, field_info
+                    field_name, field_info, model
                 )
 
-            input_fields[field_name] = field_type(
-                required=is_required, description=field_info.help_text
-            )
+            # Create the field with proper required handling
+            if is_required:
+                input_fields[field_name] = graphene.InputField(
+                    graphene.NonNull(field_type), description=field_info.help_text
+                )
+            else:
+                input_fields[field_name] = field_type(description=field_info.help_text)
 
         # Add forward relationship fields with automatic dual field generation
         for field_name, rel_info in relationships.items():
@@ -744,21 +783,32 @@ class TypeGenerator:
                 if mutation_type == "create":
                     is_required = (
                         self._should_field_be_required_for_create(
-                            rel_field_info, field_name
+                            rel_field_info, field_name, model
                         )
                         and not partial
                     )
                 else:  # update
                     is_required = self._should_field_be_required_for_update(
-                        field_name, rel_field_info
+                        field_name, rel_field_info, model
                     )
 
             # Always generate both nested and direct ID fields for all relationships
             if rel_info.relationship_type in ("ForeignKey", "OneToOneField"):
+                # Check if this field is part of a mandatory dual field pair
+                mandatory_fields = self._get_mandatory_fields(model)
+                is_mandatory_dual_field = field_name in mandatory_fields
+
                 # 1. Add direct ID field: <field_name>
-                if is_required:
-                    input_fields[field_name] = graphene.NonNull(graphene.ID)
+                # For mandatory dual fields, make the direct field optional in schema
+                # but enforce requirement in mutation logic
+                if is_required and is_mandatory_dual_field:
+                    # Make mandatory dual fields optional in GraphQL schema
+                    input_fields[field_name] = graphene.ID()
+                elif is_required:
+                    # Regular required fields remain NonNull
+                    input_fields[field_name] = graphene.InputField(graphene.ID)
                 else:
+                    # Optional fields remain optional
                     input_fields[field_name] = graphene.ID()
 
                 # 2. Add nested field: nested_<field_name>
@@ -766,7 +816,7 @@ class TypeGenerator:
                 nested_input_type = self._get_or_create_nested_input_type(
                     rel_info.related_model, mutation_type, exclude_parent_field=model
                 )
-                input_fields[nested_field_name] = nested_input_type
+                input_fields[nested_field_name] = graphene.InputField(nested_input_type)
 
             elif rel_info.relationship_type == "ManyToManyField":
                 # 1. Add direct ID list field: <field_name>
@@ -781,7 +831,9 @@ class TypeGenerator:
                 nested_input_type = self._get_or_create_nested_input_type(
                     rel_info.related_model, mutation_type, exclude_parent_field=model
                 )
-                input_fields[nested_field_name] = graphene.List(nested_input_type)
+                input_fields[nested_field_name] = graphene.InputField(
+                    graphene.List(nested_input_type)
+                )
 
         # Add reverse relationship fields with dual field generation for nested operations (e.g., comments for Post)
         if include_reverse_relations:
@@ -978,9 +1030,11 @@ class TypeGenerator:
             try:
                 for field in model._meta.get_fields():
                     # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
-                    if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                    if hasattr(field, "related_model") and hasattr(
+                        field, "get_accessor_name"
+                    ):
                         accessor_name = field.get_accessor_name()
-                        
+
                         if self._should_include_field(model, accessor_name):
                             reverse_relations[accessor_name] = field.related_model
             except AttributeError:
@@ -1055,7 +1109,7 @@ class TypeGenerator:
             is_required = False
             if mutation_type == "create":
                 is_required = self._should_field_be_required_for_create(
-                    field_info, field_name
+                    field_info, field_name, model
                 )
 
             input_fields[field_name] = field_type(

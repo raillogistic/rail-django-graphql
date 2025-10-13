@@ -5,6 +5,7 @@ This module provides advanced nested create/update operations with comprehensive
 validation, transaction management, and cascade handling for related objects.
 """
 
+import logging
 import re
 from typing import Any, Dict, List, Optional, Set, Type, Union
 
@@ -13,17 +14,19 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from django.db.models import Q
 
-from ..core.settings import MutationGeneratorSettings
-from ..core.security import get_authz_manager, get_input_validator
 from ..core.error_handling import get_error_handler
 from ..core.performance import get_query_optimizer
+from ..core.security import get_authz_manager, get_input_validator
+from ..core.settings import MutationGeneratorSettings
+
+logger = logging.getLogger(__name__)
 
 
 class NestedOperationHandler:
     """
     Handles complex nested operations for GraphQL mutations including
     nested creates, updates, and cascade operations with proper validation.
-    
+
     This class supports:
     - Hierarchical settings configuration
     - Security and authorization integration
@@ -44,21 +47,23 @@ class NestedOperationHandler:
         self._processed_objects: Set[str] = set()
         self._validation_errors: List[str] = []
         self.schema_name = schema_name
-        
+
         # Use hierarchical settings if no explicit settings provided
         if mutation_settings is None:
             self.mutation_settings = MutationGeneratorSettings.from_schema(schema_name)
         else:
             self.mutation_settings = mutation_settings
-            
+
         # Initialize security and performance components
         self.authorization_manager = get_authz_manager(schema_name)
         self.input_validator = get_input_validator(schema_name)
         self.error_handler = get_error_handler(schema_name)
         self.query_optimizer = get_query_optimizer(schema_name)
-        
+
         self.circular_reference_tracker = set()
-        self.max_depth = getattr(self.mutation_settings, 'max_nested_depth', 10)  # Prevent infinite recursion
+        self.max_depth = getattr(
+            self.mutation_settings, "max_nested_depth", 10
+        )  # Prevent infinite recursion
 
     def _should_use_nested_operations(self, model, field_name):
         """
@@ -116,6 +121,9 @@ class NestedOperationHandler:
             ValidationError: If validation fails or circular references detected
         """
         try:
+            # First, process nested_ prefixed fields and extract them
+            processed_input = self._process_nested_fields(input_data)
+
             # Separate regular fields from nested relationship fields
             regular_fields = {}
             nested_fields = {}
@@ -125,13 +133,16 @@ class NestedOperationHandler:
             # Get reverse relationships for this model
             reverse_relations = self._get_reverse_relations(model)
 
-            for field_name, value in input_data.items():
-                if not hasattr(model, field_name):
-                    continue
+            for field_name, value in processed_input.items():
+                if field_name == "id":
+                    continue  # Skip ID field
 
                 # Check if this is a reverse relationship field
                 if field_name in reverse_relations:
                     reverse_fields[field_name] = (reverse_relations[field_name], value)
+                    continue
+
+                if not hasattr(model, field_name):
                     continue
 
                 try:
@@ -378,6 +389,9 @@ class NestedOperationHandler:
             Updated model instance
         """
         try:
+            # First, process nested_ prefixed fields and extract them
+            processed_input = self._process_nested_fields(input_data)
+
             # Separate regular fields from nested relationship fields
             regular_fields = {}
             nested_fields = {}
@@ -387,7 +401,7 @@ class NestedOperationHandler:
             # Get reverse relationships for this model
             reverse_relations = self._get_reverse_relations(model)
 
-            for field_name, value in input_data.items():
+            for field_name, value in processed_input.items():
                 if field_name == "id":
                     continue  # Skip ID field
 
@@ -1181,7 +1195,9 @@ class NestedOperationHandler:
             try:
                 for field in model._meta.get_fields():
                     # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
-                    if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                    if hasattr(field, "related_model") and hasattr(
+                        field, "get_accessor_name"
+                    ):
                         if self._should_include_reverse_field(field):
                             accessor_name = field.get_accessor_name()
                             reverse_relations[accessor_name] = field
@@ -1225,3 +1241,38 @@ class NestedOperationHandler:
             return False
 
         return True
+
+    def _process_nested_fields(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Process nested_ prefixed fields and extract them to their corresponding model fields.
+
+        Args:
+            input_data: Raw input data containing nested_ prefixed fields
+
+        Returns:
+            Processed input data with nested_ fields extracted and mapped
+        """
+        processed_data = {}
+
+        for field_name, value in input_data.items():
+            if field_name.startswith("nested_"):
+                # Extract the actual field name (remove 'nested_' prefix)
+                actual_field_name = field_name[7:]  # Remove 'nested_' prefix
+
+                # If the actual field already exists in input, prioritize nested_ version
+                if actual_field_name in input_data:
+                    # Log warning about conflicting fields
+                    logger.warning(
+                        f"Both '{field_name}' and '{actual_field_name}' provided. "
+                        f"Using nested field '{field_name}'"
+                    )
+
+                # Map nested field to actual field name
+                processed_data[actual_field_name] = value
+            else:
+                # Only add non-nested field if no nested version exists
+                nested_field_name = f"nested_{field_name}"
+                if nested_field_name not in input_data:
+                    processed_data[field_name] = value
+
+        return processed_data

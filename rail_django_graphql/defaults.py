@@ -102,7 +102,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         # Enable bulk mutations
         "generate_bulk": False,
         # Enable create mutations (alias for generate_create)
-        "enable_create": False,
+        "enable_create": True,
         # Enable update mutations (alias for generate_update)
         "enable_update": True,
         # Enable delete mutations (alias for generate_delete)
