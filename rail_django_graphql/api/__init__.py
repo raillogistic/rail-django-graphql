@@ -22,7 +22,7 @@ from .views import (
 
 __all__ = [
     'SchemaManagementAPIView',
-    'SchemaListAPIView', 
+    'SchemaListAPIView',
     'SchemaDetailAPIView',
     'SchemaDiscoveryAPIView',
     'SchemaHealthAPIView',

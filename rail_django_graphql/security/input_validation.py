@@ -46,7 +46,7 @@ class InputValidator:
     """
     Validateur d'entrées avec sanitisation automatique.
     """
-    
+
     # Patterns dangereux à détecter
     DANGEROUS_PATTERNS = [
         r'<script[^>]*>.*?</script>',  # Scripts JavaScript
@@ -60,13 +60,13 @@ class InputValidator:
         r'<link[^>]*>',  # links externes
         r'<meta[^>]*>',  # meta tags
     ]
-    
+
     # Tags HTML autorisés pour le contenu riche
     ALLOWED_HTML_TAGS = [
         'p', 'br', 'strong', 'em', 'u', 'ol', 'ul', 'li',
         'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'
     ]
-    
+
     # Attributs HTML autorisés
     ALLOWED_HTML_ATTRIBUTES = {
         '*': ['class'],
@@ -77,26 +77,26 @@ class InputValidator:
     def __init__(self):
         """Initialise le validateur."""
         self.url_validator = URLValidator()
-        
-    def validate_string(self, value: str, max_length: int = None, 
-                       allow_html: bool = False, 
-                       strip_dangerous: bool = True) -> ValidationResult:
+
+    def validate_string(self, value: str, max_length: int = None,
+                        allow_html: bool = False,
+                        strip_dangerous: bool = True) -> ValidationResult:
         """
         Valide et sanitise une chaîne de caractères.
-        
+
         Args:
             value: Valeur à valider
             max_length: Longueur maximale autorisée
             allow_html: Autoriser le HTML sécurisé
             strip_dangerous: Supprimer les patterns dangereux
-            
+
         Returns:
             Résultat de la validation
         """
         violations = []
         severity = ValidationSeverity.LOW
         sanitized_value = value
-        
+
         if not isinstance(value, str):
             return ValidationResult(
                 is_valid=False,
@@ -105,13 +105,13 @@ class InputValidator:
                 severity=ValidationSeverity.HIGH,
                 original_value=value
             )
-        
+
         # Vérification de la longueur
         if max_length and len(value) > max_length:
             violations.append(f"Longueur maximale dépassée ({len(value)} > {max_length})")
             severity = ValidationSeverity.MEDIUM
             sanitized_value = value[:max_length]
-        
+
         # Détection de patterns dangereux
         if strip_dangerous:
             for pattern in self.DANGEROUS_PATTERNS:
@@ -119,7 +119,7 @@ class InputValidator:
                     violations.append(f"Pattern dangereux détecté: {pattern}")
                     severity = ValidationSeverity.CRITICAL
                     sanitized_value = re.sub(pattern, '', sanitized_value, flags=re.IGNORECASE)
-        
+
         # Sanitisation HTML
         if allow_html:
             sanitized_value = bleach.clean(
@@ -131,7 +131,7 @@ class InputValidator:
         else:
             # Échapper le HTML
             sanitized_value = html.escape(sanitized_value)
-        
+
         return ValidationResult(
             is_valid=len(violations) == 0 or severity.value in ['low', 'medium'],
             sanitized_value=sanitized_value,
@@ -139,23 +139,23 @@ class InputValidator:
             severity=severity,
             original_value=value
         )
-    
+
     def validate_email(self, email: str) -> ValidationResult:
         """
         Valide une adresse email.
-        
+
         Args:
             email: Adresse email à valider
-            
+
         Returns:
             Résultat de la validation
         """
         violations = []
-        
+
         try:
             validate_email(email)
             sanitized_email = email.lower().strip()
-            
+
             return ValidationResult(
                 is_valid=True,
                 sanitized_value=sanitized_email,
@@ -165,7 +165,7 @@ class InputValidator:
             )
         except ValidationError as e:
             violations.extend(e.messages)
-            
+
         return ValidationResult(
             is_valid=False,
             sanitized_value="",
@@ -173,22 +173,22 @@ class InputValidator:
             severity=ValidationSeverity.HIGH,
             original_value=email
         )
-    
+
     def validate_url(self, url: str) -> ValidationResult:
         """
         Valide une URL.
-        
+
         Args:
             url: URL à valider
-            
+
         Returns:
             Résultat de la validation
         """
         violations = []
-        
+
         try:
             self.url_validator(url)
-            
+
             # Vérifications de sécurité supplémentaires
             if url.startswith('javascript:'):
                 violations.append("URLs JavaScript non autorisées")
@@ -199,7 +199,7 @@ class InputValidator:
                     severity=ValidationSeverity.CRITICAL,
                     original_value=url
                 )
-            
+
             return ValidationResult(
                 is_valid=True,
                 sanitized_value=url,
@@ -209,7 +209,7 @@ class InputValidator:
             )
         except ValidationError as e:
             violations.extend(e.messages)
-            
+
         return ValidationResult(
             is_valid=False,
             sanitized_value="",
@@ -217,21 +217,21 @@ class InputValidator:
             severity=ValidationSeverity.HIGH,
             original_value=url
         )
-    
-    def validate_graphql_input(self, input_data: Dict[str, Any], 
-                              schema_definition: Dict[str, Any] = None) -> Dict[str, ValidationResult]:
+
+    def validate_graphql_input(self, input_data: Dict[str, Any],
+                               schema_definition: Dict[str, Any] = None) -> Dict[str, ValidationResult]:
         """
         Valide les données d'entrée GraphQL.
-        
+
         Args:
             input_data: Données d'entrée à valider
             schema_definition: Définition du schéma pour la validation
-            
+
         Returns:
             Dictionnaire des résultats de validation par champ
         """
         results = {}
-        
+
         for field_name, value in input_data.items():
             if isinstance(value, str):
                 results[field_name] = self.validate_string(value)
@@ -247,7 +247,7 @@ class InputValidator:
                     elif isinstance(item, dict):
                         list_results.append(self.validate_graphql_input(item, schema_definition))
                 results[field_name] = list_results
-        
+
         return results
 
 
@@ -255,28 +255,29 @@ class GraphQLInputSanitizer:
     """
     Sanitiseur spécialisé pour les entrées GraphQL.
     """
-    
+
     def __init__(self):
         """Initialise le sanitiseur."""
         self.validator = InputValidator()
-    
+
     def sanitize_mutation_input(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Sanitise les données d'entrée d'une mutation GraphQL.
-        
+
         Args:
             input_data: Données d'entrée à sanitiser
-            
+
         Returns:
             Données sanitisées
         """
         sanitized_data = {}
-        
+
         for field_name, value in input_data.items():
             if isinstance(value, str):
                 result = self.validator.validate_string(value, strip_dangerous=True)
                 if result.severity == ValidationSeverity.CRITICAL:
-                    logger.warning(f"Entrée dangereuse détectée pour le champ {field_name}: {result.violations}")
+                    logger.warning(
+                        f"Entrée dangereuse détectée pour le champ {field_name}: {result.violations}")
                     raise GraphQLError(f"Données d'entrée non valides pour le champ {field_name}")
                 sanitized_data[field_name] = result.sanitized_value
             elif isinstance(value, dict):
@@ -294,17 +295,17 @@ class GraphQLInputSanitizer:
                 sanitized_data[field_name] = sanitized_list
             else:
                 sanitized_data[field_name] = value
-        
+
         return sanitized_data
 
 
 def validate_input(validator_func: Callable = None):
     """
     Décorateur pour valider automatiquement les entrées GraphQL.
-    
+
     Args:
         validator_func: Fonction de validation personnalisée
-        
+
     Returns:
         Décorateur de validation
     """
@@ -314,11 +315,11 @@ def validate_input(validator_func: Callable = None):
             if 'input' in kwargs:
                 sanitizer = GraphQLInputSanitizer()
                 kwargs['input'] = sanitizer.sanitize_mutation_input(kwargs['input'])
-            
+
             # Validation personnalisée si fournie
             if validator_func:
                 validator_func(*args, **kwargs)
-            
+
             return func(*args, **kwargs)
         return wrapper
     return decorator

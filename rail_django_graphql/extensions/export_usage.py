@@ -27,7 +27,7 @@ from rail_django_graphql.extensions.exporting import (
 
 def example_csv_export():
     """Example: Export model data to CSV with mixed field formats."""
-    
+
     # Mixed field format example
     fields = [
         "title",  # String format - uses verbose_name as title
@@ -37,7 +37,7 @@ def example_csv_export():
         "is_published",
         {"accessor": "tags.count", "title": "Tag Count"}  # Method/property access
     ]
-    
+
     # GraphQL-style filtering
     filters = {
         "status": "published",
@@ -46,9 +46,9 @@ def example_csv_export():
         "has_tags": True,  # Custom filter
         "author__is_active": True  # Nested field filter
     }
-    
+
     ordering = ["-created_at", "title"]
-    
+
     # Export to CSV
     csv_content = export_model_to_csv(
         app_name="blog",
@@ -57,17 +57,17 @@ def example_csv_export():
         filters=filters,
         ordering=ordering
     )
-    
+
     # Save to file
     with open("posts_export.csv", "wb") as f:
         f.write(csv_content)
-    
+
     print("CSV export completed: posts_export.csv")
 
 
 def example_excel_export():
     """Example: Export model data to Excel with advanced filtering."""
-    
+
     fields = [
         "title",
         {"accessor": "author.username", "title": "Author Name"},
@@ -78,7 +78,7 @@ def example_excel_export():
         "view_count",
         {"accessor": "is_featured", "title": "Featured Post"}
     ]
-    
+
     # Advanced GraphQL filtering
     filters = {
         "category__name__in": ["Technology", "Programming"],
@@ -87,9 +87,9 @@ def example_excel_export():
         "author__profile__verified": True,
         "quick": "python django"
     }
-    
+
     ordering = ["-view_count", "-created_at"]
-    
+
     # Export to Excel
     excel_content = export_model_to_excel(
         app_name="blog",
@@ -98,20 +98,20 @@ def example_excel_export():
         filters=filters,
         ordering=ordering
     )
-    
+
     # Save to file
     with open("featured_posts_export.xlsx", "wb") as f:
         f.write(excel_content)
-    
+
     print("Excel export completed: featured_posts_export.xlsx")
 
 
 def example_model_exporter_usage():
     """Example: Direct ModelExporter class usage with enhanced features."""
-    
+
     # Initialize exporter
     exporter = ModelExporter("blog", "Post")
-    
+
     # Define fields with mixed formats
     fields = [
         "title",  # String format
@@ -121,7 +121,7 @@ def example_model_exporter_usage():
         {"accessor": "tags.all", "title": "All Tags"},  # Many-to-many field
         {"accessor": "comment_count", "title": "Comments"}  # Computed field
     ]
-    
+
     # GraphQL-style filters
     filters = {
         "status": "published",
@@ -130,25 +130,25 @@ def example_model_exporter_usage():
         "author__is_staff": False,
         "tags__name__icontains": "python"
     }
-    
+
     ordering = ["-created_at"]
-    
+
     # Export to CSV
     csv_data = exporter.export_to_csv(fields, filters, ordering)
     with open("direct_export.csv", "wb") as f:
         f.write(csv_data)
-    
+
     # Export to Excel
     excel_data = exporter.export_to_excel(fields, filters, ordering)
     with open("direct_export.xlsx", "wb") as f:
         f.write(excel_data)
-    
+
     print("Direct exporter usage completed")
 
 
 def example_http_api_excel():
     """Example: HTTP API usage for Excel export with enhanced field format."""
-    
+
     payload = {
         "app_name": "blog",
         "model_name": "Post",
@@ -171,14 +171,14 @@ def example_http_api_excel():
             "category__slug__in": ["tech", "programming"]
         }
     }
-    
+
     # Make HTTP request
     response = requests.post(
         "http://localhost:8000/api/export/",
         json=payload,
         headers={"Content-Type": "application/json"}
     )
-    
+
     if response.status_code == 200:
         # Save the Excel file
         with open("api_export.xlsx", "wb") as f:
@@ -190,7 +190,7 @@ def example_http_api_excel():
 
 def example_http_api_csv():
     """Example: HTTP API usage for CSV export with GraphQL filters."""
-    
+
     payload = {
         "app_name": "ecommerce",
         "model_name": "Product",
@@ -215,14 +215,14 @@ def example_http_api_csv():
             "created_date_last_month": True
         }
     }
-    
+
     # Make HTTP request
     response = requests.post(
         "http://localhost:8000/api/export/",
         json=payload,
         headers={"Content-Type": "application/json"}
     )
-    
+
     if response.status_code == 200:
         # Save the CSV file
         with open("products_report.csv", "wb") as f:
@@ -234,7 +234,7 @@ def example_http_api_csv():
 
 def example_complex_nested_fields():
     """Example: Complex nested field access and method calls."""
-    
+
     fields = [
         "title",
         {"accessor": "author.profile.full_name", "title": "Author Full Name"},
@@ -246,7 +246,7 @@ def example_complex_nested_fields():
         {"accessor": "word_count", "title": "Word Count"},  # Custom property
         {"accessor": "reading_time", "title": "Reading Time"}  # Custom method
     ]
-    
+
     # Advanced filtering with nested relationships
     filters = {
         "author__profile__is_verified": True,
@@ -257,20 +257,20 @@ def example_complex_nested_fields():
         "published_date_between": ["2024-01-01", "2024-12-31"],
         "quick": "advanced tutorial"
     }
-    
+
     ordering = ["-published_at", "author.profile.full_name"]
-    
+
     # Export using ModelExporter
     exporter = ModelExporter("blog", "Article")
-    
+
     csv_content = exporter.export_to_csv(fields, filters, ordering)
     with open("complex_export.csv", "wb") as f:
         f.write(csv_content)
-    
+
     excel_content = exporter.export_to_excel(fields, filters, ordering)
     with open("complex_export.xlsx", "wb") as f:
         f.write(excel_content)
-    
+
     print("Complex nested fields export completed")
 
 
@@ -335,15 +335,15 @@ class Command(BaseCommand):
 
 if __name__ == "__main__":
     print("Running Django Model Export Examples...")
-    
+
     # Run examples (comment out as needed)
     example_csv_export()
     example_excel_export()
     example_model_exporter_usage()
     example_complex_nested_fields()
-    
+
     # HTTP API examples (requires running Django server)
     # example_http_api_excel()
     # example_http_api_csv()
-    
+
     print("All examples completed!")

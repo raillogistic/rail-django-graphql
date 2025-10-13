@@ -20,6 +20,8 @@ def read_readme():
     return "Automatic GraphQL schema generation for Django with advanced features"
 
 # Read version from __init__.py
+
+
 def get_version():
     """Extract version from rail_django_graphql/__init__.py."""
     version_file = os.path.join(os.path.dirname(__file__), 'rail_django_graphql', '__init__.py')
@@ -29,6 +31,7 @@ def get_version():
                 if line.startswith('__version__'):
                     return line.split('=')[1].strip().strip('"\'')
     return "1.0.0"
+
 
 setup(
     name="rail-django-graphql",

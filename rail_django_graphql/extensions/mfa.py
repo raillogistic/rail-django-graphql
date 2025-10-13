@@ -38,10 +38,12 @@ def get_mfa_device_model():
     from apps.core.models import MFADevice
     return MFADevice
 
+
 def get_mfa_backup_code_model():
     """Lazy import for MFABackupCode to avoid AppRegistryNotReady errors."""
     from apps.core.models import MFABackupCode
     return MFABackupCode
+
 
 def get_trusted_device_model():
     """Lazy import for TrustedDevice to avoid AppRegistryNotReady errors."""
@@ -463,7 +465,7 @@ mfa_manager = MFAManager()
 
 def get_mfa_device_type():
     """Factory function to create MFADeviceType with proper model reference."""
-    
+
     class MFADeviceType(DjangoObjectType):
         """Type GraphQL pour les appareils MFA."""
 
@@ -478,13 +480,13 @@ def get_mfa_device_type():
                 "created_at",
                 "last_used",
             )
-    
+
     return MFADeviceType
 
 
 def get_trusted_device_type():
     """Factory function to create TrustedDeviceType with proper model reference."""
-    
+
     class TrustedDeviceType(DjangoObjectType):
         """Type GraphQL pour les appareils de confiance."""
 
@@ -498,7 +500,7 @@ def get_trusted_device_type():
                 "expires_at",
                 "is_active",
             )
-    
+
     return TrustedDeviceType
 
 
@@ -506,12 +508,14 @@ def get_trusted_device_type():
 _mfa_device_type = None
 _trusted_device_type = None
 
+
 def MFADeviceType():
     """Lazy MFADeviceType that resolves the model when Django apps are ready."""
     global _mfa_device_type
     if _mfa_device_type is None:
         _mfa_device_type = get_mfa_device_type()
     return _mfa_device_type
+
 
 def TrustedDeviceType():
     """Lazy TrustedDeviceType that resolves the model when Django apps are ready."""

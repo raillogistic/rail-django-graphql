@@ -17,12 +17,12 @@ class SecurityConfig:
     """
     Gestionnaire de configuration de sécurité centralisé.
     """
-    
+
     @staticmethod
     def get_middleware_config() -> Dict[str, Any]:
         """
         Retourne la configuration des middlewares de sécurité.
-        
+
         Returns:
             Configuration des middlewares
         """
@@ -31,30 +31,30 @@ class SecurityConfig:
             'jwt_header_prefix': getattr(settings, 'JWT_AUTH_HEADER_PREFIX', 'Bearer'),
             'jwt_header_name': getattr(settings, 'JWT_AUTH_HEADER_NAME', 'HTTP_AUTHORIZATION'),
             'jwt_user_cache_timeout': getattr(settings, 'JWT_USER_CACHE_TIMEOUT', 300),
-            
+
             # Configuration d'audit
             'enable_audit_logging': getattr(settings, 'GRAPHQL_ENABLE_AUDIT_LOGGING', True),
             'audit_store_in_database': getattr(settings, 'AUDIT_STORE_IN_DATABASE', True),
             'audit_store_in_file': getattr(settings, 'AUDIT_STORE_IN_FILE', True),
             'audit_webhook_url': getattr(settings, 'AUDIT_WEBHOOK_URL', None),
             'audit_retention_days': getattr(settings, 'AUDIT_RETENTION_DAYS', 90),
-            
+
             # Configuration de limitation de débit
             'enable_rate_limiting': getattr(settings, 'GRAPHQL_ENABLE_AUTH_RATE_LIMITING', True),
             'login_attempts_limit': getattr(settings, 'AUTH_LOGIN_ATTEMPTS_LIMIT', 5),
             'login_attempts_window': getattr(settings, 'AUTH_LOGIN_ATTEMPTS_WINDOW', 900),
             'graphql_requests_limit': getattr(settings, 'GRAPHQL_REQUESTS_LIMIT', 100),
             'graphql_requests_window': getattr(settings, 'GRAPHQL_REQUESTS_WINDOW', 3600),
-            
+
             # Endpoints GraphQL
             'graphql_endpoints': getattr(settings, 'GRAPHQL_ENDPOINTS', ['/graphql/', '/graphql']),
         }
-    
+
     @staticmethod
     def get_audit_config() -> Dict[str, Any]:
         """
         Retourne la configuration d'audit.
-        
+
         Returns:
             Configuration d'audit
         """
@@ -70,12 +70,12 @@ class SecurityConfig:
                 'suspicious_activity_window': 300,
             }),
         }
-    
+
     @staticmethod
     def get_mfa_config() -> Dict[str, Any]:
         """
         Retourne la configuration MFA.
-        
+
         Returns:
             Configuration MFA
         """
@@ -88,18 +88,18 @@ class SecurityConfig:
             'sms_token_length': getattr(settings, 'MFA_SMS_TOKEN_LENGTH', 6),
             'sms_token_validity': getattr(settings, 'MFA_SMS_TOKEN_VALIDITY', 300),
             'sms_provider': getattr(settings, 'MFA_SMS_PROVIDER', None),
-            
+
             # Configuration Twilio
             'twilio_account_sid': getattr(settings, 'TWILIO_ACCOUNT_SID', ''),
             'twilio_auth_token': getattr(settings, 'TWILIO_AUTH_TOKEN', ''),
             'twilio_from_number': getattr(settings, 'TWILIO_FROM_NUMBER', ''),
         }
-    
+
     @staticmethod
     def get_security_headers() -> Dict[str, str]:
         """
         Retourne les headers de sécurité recommandés.
-        
+
         Returns:
             Headers de sécurité
         """
@@ -111,26 +111,26 @@ class SecurityConfig:
             'Content-Security-Policy': "default-src 'self'",
             'Referrer-Policy': 'strict-origin-when-cross-origin',
         }
-    
+
     @staticmethod
     def validate_security_settings() -> List[str]:
         """
         Valide les paramètres de sécurité et retourne les avertissements.
-        
+
         Returns:
             Liste des avertissements de sécurité
         """
         warnings = []
-        
+
         # Vérifier la configuration JWT
         if not hasattr(settings, 'SECRET_KEY') or len(settings.SECRET_KEY) < 32:
             warnings.append("SECRET_KEY trop courte ou manquante")
-        
+
         # Vérifier la configuration d'audit
         if getattr(settings, 'GRAPHQL_ENABLE_AUDIT_LOGGING', True):
             if not getattr(settings, 'AUDIT_STORE_IN_DATABASE', True) and not getattr(settings, 'AUDIT_STORE_IN_FILE', True):
                 warnings.append("Aucun stockage d'audit configuré")
-        
+
         # Vérifier la configuration MFA
         if getattr(settings, 'MFA_ENABLED', False):
             sms_provider = getattr(settings, 'MFA_SMS_PROVIDER', None)
@@ -139,19 +139,19 @@ class SecurityConfig:
                     warnings.append("TWILIO_ACCOUNT_SID manquant pour MFA SMS")
                 if not getattr(settings, 'TWILIO_AUTH_TOKEN', ''):
                     warnings.append("TWILIO_AUTH_TOKEN manquant pour MFA SMS")
-        
+
         # Vérifier la configuration de limitation de débit
         if getattr(settings, 'GRAPHQL_ENABLE_AUTH_RATE_LIMITING', True):
             if not hasattr(settings, 'CACHES') or 'default' not in settings.CACHES:
                 warnings.append("Configuration de cache manquante pour la limitation de débit")
-        
+
         return warnings
-    
+
     @staticmethod
     def get_recommended_django_settings() -> Dict[str, Any]:
         """
         Retourne les paramètres Django recommandés pour la sécurité.
-        
+
         Returns:
             Paramètres Django recommandés
         """
@@ -164,21 +164,21 @@ class SecurityConfig:
             'SECURE_HSTS_INCLUDE_SUBDOMAINS': True,
             'SECURE_HSTS_PRELOAD': True,
             'X_FRAME_OPTIONS': 'DENY',
-            
+
             # HTTPS
             'SECURE_SSL_REDIRECT': True,
             'SESSION_COOKIE_SECURE': True,
             'CSRF_COOKIE_SECURE': True,
-            
+
             # Sessions
             'SESSION_COOKIE_HTTPONLY': True,
             'SESSION_COOKIE_SAMESITE': 'Strict',
             'SESSION_EXPIRE_AT_BROWSER_CLOSE': True,
-            
+
             # CSRF
             'CSRF_COOKIE_HTTPONLY': True,
             'CSRF_COOKIE_SAMESITE': 'Strict',
-            
+
             # Logging
             'LOGGING': {
                 'version': 1,
@@ -198,7 +198,7 @@ class SecurityConfig:
                         'level': 'INFO',
                         'class': 'logging.handlers.RotatingFileHandler',
                         'filename': 'logs/security.log',
-                        'maxBytes': 1024*1024*10,  # 10MB
+                        'maxBytes': 1024 * 1024 * 10,  # 10MB
                         'backupCount': 5,
                         'formatter': 'verbose',
                     },
@@ -206,7 +206,7 @@ class SecurityConfig:
                         'level': 'INFO',
                         'class': 'logging.handlers.RotatingFileHandler',
                         'filename': 'logs/audit.log',
-                        'maxBytes': 1024*1024*10,  # 10MB
+                        'maxBytes': 1024 * 1024 * 10,  # 10MB
                         'backupCount': 10,
                         'formatter': 'audit',
                     },
@@ -230,31 +230,31 @@ class SecurityConfig:
 def setup_security_middleware() -> List[str]:
     """
     Retourne la liste des middlewares de sécurité à ajouter à MIDDLEWARE.
-    
+
     Returns:
         Liste des middlewares de sécurité
     """
     security_middleware = []
-    
+
     # Middleware d'authentification (doit être avant les middlewares GraphQL)
     security_middleware.append('rail_django_graphql.middleware.GraphQLAuthenticationMiddleware')
-    
+
     # Middleware de limitation de débit
     if getattr(settings, 'GRAPHQL_ENABLE_AUTH_RATE_LIMITING', True):
         security_middleware.append('rail_django_graphql.middleware.GraphQLRateLimitMiddleware')
-    
+
     return security_middleware
 
 
 def get_security_status() -> Dict[str, Any]:
     """
     Retourne le statut de sécurité actuel.
-    
+
     Returns:
         Statut de sécurité
     """
     config = SecurityConfig()
-    
+
     return {
         'middleware_configured': True,
         'audit_enabled': config.get_audit_config()['enabled'],

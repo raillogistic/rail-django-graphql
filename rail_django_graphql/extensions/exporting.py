@@ -729,8 +729,9 @@ class ExportView(View):
         """
         # Log authenticated user for audit purposes
         if hasattr(request, 'user') and request.user.is_authenticated:
-            logger.info(f"Export request from user: {request.user.username} (ID: {request.user.id})")
-        
+            logger.info(
+                f"Export request from user: {request.user.username} (ID: {request.user.id})")
+
         try:
             # Parse JSON payload
             try:
@@ -834,7 +835,7 @@ class ExportView(View):
         # Log authenticated user for audit purposes
         if hasattr(request, 'user') and request.user.is_authenticated:
             logger.info(f"Export API documentation request from user: {request.user.username}")
-        
+
         documentation = {
             "endpoint": "/export",
             "method": "POST",

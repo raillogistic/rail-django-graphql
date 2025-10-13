@@ -5,6 +5,14 @@ This module provides the MutationGenerator class, which is responsible for creat
 GraphQL mutations for Django models, including CRUD operations and custom method mutations.
 """
 
+from .types import TypeGenerator
+from .nested_operations import NestedOperationHandler
+from .introspector import MethodInfo, ModelIntrospector
+from ..core.settings import MutationGeneratorSettings
+from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
+from ..core.performance import get_query_optimizer
+from ..core.error_handling import get_error_handler
+from ..conf import get_mutation_generator_settings
 import inspect
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
@@ -28,16 +36,6 @@ class MutationError(graphene.ObjectType):
         required=True,
         description="Le message d'erreur décrivant ce qui s'est mal passé",
     )
-
-
-from ..conf import get_mutation_generator_settings
-from ..core.error_handling import get_error_handler
-from ..core.performance import get_query_optimizer
-from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
-from ..core.settings import MutationGeneratorSettings
-from .introspector import MethodInfo, ModelIntrospector
-from .nested_operations import NestedOperationHandler
-from .types import TypeGenerator
 
 
 class MutationGenerator:
@@ -298,10 +296,10 @@ class MutationGenerator:
             def _get_mandatory_fields(cls, model: Type[models.Model]) -> List[str]:
                 """
                 Get list of mandatory fields for the given model.
-                
+
                 Args:
                     model: The Django model
-                    
+
                 Returns:
                     List of field names that are mandatory
                 """
@@ -311,7 +309,7 @@ class MutationGenerator:
                     'BlogPost': ['category'],
                     # Add other models and their mandatory fields here
                 }
-                
+
                 model_name = model.__name__
                 return mandatory_fields_map.get(model_name, [])
 
@@ -520,7 +518,8 @@ class MutationGenerator:
 
                     if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
                         has_direct = field_name in processed_data and processed_data[field_name] is not None
-                        has_nested = nested_field_name in processed_data and processed_data[nested_field_name] is not None
+                        has_nested = nested_field_name in processed_data and processed_data[
+                            nested_field_name] is not None
 
                         # Validate mutual exclusivity
                         if has_direct and has_nested:
@@ -568,10 +567,10 @@ class MutationGenerator:
                 """
                 Get list of mandatory fields for the given model.
                 Override this method to customize mandatory field requirements.
-                
+
                 Args:
                     model: The Django model class
-                    
+
                 Returns:
                     List of field names that are mandatory
                 """

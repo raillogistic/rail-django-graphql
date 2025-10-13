@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 class SchemaRegistryError(Exception):
     """Base exception for schema registry operations."""
-    
+
     def __init__(self, message: str, error_code: str = None, details: Dict[str, Any] = None):
         super().__init__(message)
         self.message = message
@@ -24,7 +24,7 @@ class SchemaRegistryError(Exception):
 
 class SchemaValidationError(SchemaRegistryError):
     """Schema validation failed."""
-    
+
     def __init__(self, message: str, field: str = None, validation_errors: List[str] = None):
         super().__init__(message, 'SCHEMA_VALIDATION_ERROR')
         self.field = field
@@ -33,7 +33,7 @@ class SchemaValidationError(SchemaRegistryError):
 
 class SchemaConflictError(SchemaRegistryError):
     """Schema conflict detected."""
-    
+
     def __init__(self, message: str, conflicting_schema: str = None, conflict_type: str = None):
         super().__init__(message, 'SCHEMA_CONFLICT_ERROR')
         self.conflicting_schema = conflicting_schema
@@ -42,7 +42,7 @@ class SchemaConflictError(SchemaRegistryError):
 
 class SchemaNotFoundError(SchemaRegistryError):
     """Schema not found."""
-    
+
     def __init__(self, schema_name: str):
         message = f"Schema '{schema_name}' not found"
         super().__init__(message, 'SCHEMA_NOT_FOUND')
@@ -51,7 +51,7 @@ class SchemaNotFoundError(SchemaRegistryError):
 
 class InvalidSchemaConfigError(SchemaRegistryError):
     """Invalid schema configuration."""
-    
+
     def __init__(self, message: str, config_field: str = None):
         super().__init__(message, 'INVALID_SCHEMA_CONFIG')
         self.config_field = config_field
@@ -68,36 +68,36 @@ class ValidationError:
 
 class ValidationErrorHandler:
     """Handles and formats validation errors."""
-    
+
     def __init__(self):
         self.errors: List[ValidationError] = []
         self.warnings: List[ValidationError] = []
-    
+
     def add_error(self, field: str, message: str, code: str = 'VALIDATION_ERROR'):
         """Add a validation error."""
         error = ValidationError(field=field, message=message, code=code, severity='error')
         self.errors.append(error)
         logger.error(f"Validation error in field '{field}': {message}")
-    
+
     def add_warning(self, field: str, message: str, code: str = 'VALIDATION_WARNING'):
         """Add a validation warning."""
         warning = ValidationError(field=field, message=message, code=code, severity='warning')
         self.warnings.append(warning)
         logger.warning(f"Validation warning in field '{field}': {message}")
-    
+
     def add_info(self, field: str, message: str, code: str = 'VALIDATION_INFO'):
         """Add a validation info message."""
         info = ValidationError(field=field, message=message, code=code, severity='info')
         logger.info(f"Validation info for field '{field}': {message}")
-    
+
     def has_errors(self) -> bool:
         """Check if there are any validation errors."""
         return len(self.errors) > 0
-    
+
     def has_warnings(self) -> bool:
         """Check if there are any validation warnings."""
         return len(self.warnings) > 0
-    
+
     def get_error_summary(self) -> Dict[str, Any]:
         """Get a summary of all validation issues."""
         return {
@@ -122,12 +122,12 @@ class ValidationErrorHandler:
                 for warning in self.warnings
             ]
         }
-    
+
     def clear(self):
         """Clear all errors and warnings."""
         self.errors.clear()
         self.warnings.clear()
-    
+
     def raise_if_errors(self):
         """Raise SchemaValidationError if there are any errors."""
         if self.has_errors():

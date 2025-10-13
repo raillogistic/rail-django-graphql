@@ -171,8 +171,6 @@ class TestModelIntrospector(TestCase):
         self.assertEqual(auteur_rel.related_model, IntrospectorTestAuthor)
         self.assertEqual(auteur_rel.from_field, "auteur_principal")
 
-
-
     def test_get_model_methods(self):
         """Test l'extraction des méthodes du modèle."""
         methods = self.introspector.methods
@@ -185,10 +183,6 @@ class TestModelIntrospector(TestCase):
         method_info = methods["obtenir_nom_complet"]
         self.assertEqual(method_info.name, "obtenir_nom_complet")
         self.assertIsNotNone(method_info.method)
-
-
-
-
 
     def test_field_validation(self):
         """Test la validation des champs extraits."""
@@ -224,8 +218,6 @@ class TestModelIntrospector(TestCase):
         """Test la détection des choix de champs."""
         # Skip this test as get_model_fields method doesn't exist in current implementation
         self.skipTest("get_model_fields method not found in current ModelIntrospector implementation")
-
-
 
 
 class TestFieldInfo(TestCase):

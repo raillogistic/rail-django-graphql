@@ -52,11 +52,12 @@ class Company(models.Model):
     name = models.CharField(max_length=200, verbose_name="Nom de l'entreprise")
     email = models.EmailField(verbose_name="Email de contact")
     phone = models.CharField(max_length=20, verbose_name="Téléphone")
-    revenue = models.DecimalField(max_digits=15, decimal_places=2, verbose_name="Chiffre d'affaires")
+    revenue = models.DecimalField(max_digits=15, decimal_places=2,
+                                  verbose_name="Chiffre d'affaires")
     tax_id = models.CharField(max_length=50, verbose_name="Numéro fiscal")
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, verbose_name="Créé par")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Date de création")
-    
+
     class Meta:
         verbose_name = "Entreprise"
         verbose_name_plural = "Entreprises"
@@ -70,8 +71,9 @@ class Employee(models.Model):
     salary = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Salaire")
     ssn = models.CharField(max_length=11, verbose_name="Numéro de sécurité sociale")
     bank_account = models.CharField(max_length=30, verbose_name="Compte bancaire")
-    manager = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, verbose_name="Manager")
-    
+    manager = models.ForeignKey('self', null=True, blank=True,
+                                on_delete=models.SET_NULL, verbose_name="Manager")
+
     class Meta:
         verbose_name = "Employé"
         verbose_name_plural = "Employés"
@@ -83,13 +85,13 @@ class Employee(models.Model):
 
 def setup_security_system():
     """Configure le système de sécurité complet."""
-    
+
     # 1. Configuration des rôles RBAC
     setup_rbac_roles()
-    
+
     # 2. Configuration des permissions de champs
     setup_field_permissions()
-    
+
     # 3. Configuration de la sécurité GraphQL
     security_config = SecurityConfig(
         max_query_complexity=500,
@@ -100,13 +102,13 @@ def setup_security_system():
         query_timeout=15,
         rate_limit_per_minute=30
     )
-    
+
     return security_config
 
 
 def setup_rbac_roles():
     """Configure les rôles et permissions RBAC."""
-    
+
     # Rôles métier personnalisés
     hr_manager_role = RoleDefinition(
         name='hr_manager',
@@ -119,7 +121,7 @@ def setup_rbac_roles():
             'user.read', 'user.update'
         ]
     )
-    
+
     finance_manager_role = RoleDefinition(
         name='finance_manager',
         description='Gestionnaire financier',
@@ -130,7 +132,7 @@ def setup_rbac_roles():
             'financial_report.create', 'financial_report.read'
         ]
     )
-    
+
     team_lead_role = RoleDefinition(
         name='team_lead',
         description='Chef d\'équipe',
@@ -141,7 +143,7 @@ def setup_rbac_roles():
             'task.assign', 'task.review'
         ]
     )
-    
+
     # Enregistrer les rôles
     role_manager.register_role(hr_manager_role)
     role_manager.register_role(finance_manager_role)
@@ -150,7 +152,7 @@ def setup_rbac_roles():
 
 def setup_field_permissions():
     """Configure les permissions au niveau des champs."""
-    
+
     # Permissions pour les données financières
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="salary",
@@ -159,16 +161,17 @@ def setup_field_permissions():
         visibility=FieldVisibility.VISIBLE,
         roles=["hr_manager", "finance_manager", "admin"]
     ))
-    
+
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="salary",
         model_name="Employee",
         access_level=FieldAccessLevel.READ,
         visibility=FieldVisibility.MASKED,
         mask_value="***CONFIDENTIEL***",
-        condition=lambda ctx: ctx.instance.manager == ctx.user.employee if hasattr(ctx.user, 'employee') else False
+        condition=lambda ctx: ctx.instance.manager == ctx.user.employee if hasattr(
+            ctx.user, 'employee') else False
     ))
-    
+
     # Permissions pour les données personnelles sensibles
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="ssn",
@@ -177,7 +180,7 @@ def setup_field_permissions():
         visibility=FieldVisibility.REDACTED,
         roles=["hr_manager", "admin"]
     ))
-    
+
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="bank_account",
         model_name="Employee",
@@ -186,7 +189,7 @@ def setup_field_permissions():
         mask_value="***MASQUÉ***",
         roles=["hr_manager", "finance_manager", "admin"]
     ))
-    
+
     # Permissions pour les données d'entreprise
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="revenue",
@@ -195,7 +198,7 @@ def setup_field_permissions():
         visibility=FieldVisibility.VISIBLE,
         roles=["finance_manager", "admin"]
     ))
-    
+
     field_permission_manager.register_field_rule(FieldPermissionRule(
         field_name="tax_id",
         model_name="Company",
@@ -211,11 +214,11 @@ def setup_field_permissions():
 
 class UserType(DjangoObjectType):
     """Type GraphQL pour les utilisateurs avec sécurité."""
-    
+
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 'is_active')
-    
+
     @field_permission_required('email', FieldAccessLevel.READ)
     def resolve_email(self, info):
         """Résolveur sécurisé pour l'email."""
@@ -224,16 +227,16 @@ class UserType(DjangoObjectType):
 
 class CompanyType(DjangoObjectType):
     """Type GraphQL pour les entreprises avec sécurité."""
-    
+
     class Meta:
         model = Company
         fields = '__all__'
-    
+
     @field_permission_required('revenue', FieldAccessLevel.READ)
     def resolve_revenue(self, info):
         """Résolveur sécurisé pour le chiffre d'affaires."""
         return self.revenue
-    
+
     @field_permission_required('tax_id', FieldAccessLevel.READ)
     def resolve_tax_id(self, info):
         """Résolveur sécurisé pour le numéro fiscal."""
@@ -242,21 +245,21 @@ class CompanyType(DjangoObjectType):
 
 class EmployeeType(DjangoObjectType):
     """Type GraphQL pour les employés avec sécurité."""
-    
+
     class Meta:
         model = Employee
         fields = '__all__'
-    
+
     @field_permission_required('salary', FieldAccessLevel.READ)
     def resolve_salary(self, info):
         """Résolveur sécurisé pour le salaire."""
         return self.salary
-    
+
     @field_permission_required('ssn', FieldAccessLevel.READ)
     def resolve_ssn(self, info):
         """Résolveur sécurisé pour le SSN."""
         return self.ssn
-    
+
     @field_permission_required('bank_account', FieldAccessLevel.READ)
     def resolve_bank_account(self, info):
         """Résolveur sécurisé pour le compte bancaire."""
@@ -269,21 +272,21 @@ class EmployeeType(DjangoObjectType):
 
 class Query(graphene.ObjectType):
     """Requêtes GraphQL avec sécurité."""
-    
+
     # Requêtes utilisateur
     me = graphene.Field(UserType)
     users = graphene.List(UserType)
     user = graphene.Field(UserType, id=graphene.ID(required=True))
-    
+
     # Requêtes entreprise
     companies = graphene.List(CompanyType)
     company = graphene.Field(CompanyType, id=graphene.ID(required=True))
-    
+
     # Requêtes employé
     employees = graphene.List(EmployeeType)
     employee = graphene.Field(EmployeeType, id=graphene.ID(required=True))
     my_team = graphene.List(EmployeeType)
-    
+
     @audit_graphql_operation("query")
     def resolve_me(self, info):
         """Récupère l'utilisateur actuel."""
@@ -291,43 +294,43 @@ class Query(graphene.ObjectType):
         if not user.is_authenticated:
             raise Exception("Authentification requise")
         return user
-    
+
     @require_role(['admin', 'hr_manager'])
     @audit_graphql_operation("query")
     def resolve_users(self, info):
         """Liste tous les utilisateurs (admin/RH seulement)."""
         return User.objects.all()
-    
+
     @require_permission('user.read')
     @audit_graphql_operation("query")
     def resolve_user(self, info, id):
         """Récupère un utilisateur spécifique."""
         return User.objects.get(pk=id)
-    
+
     @require_permission('company.read')
     @audit_graphql_operation("query")
     def resolve_companies(self, info):
         """Liste toutes les entreprises."""
         return Company.objects.all()
-    
+
     @require_permission('company.read')
     @audit_graphql_operation("query")
     def resolve_company(self, info, id):
         """Récupère une entreprise spécifique."""
         return Company.objects.get(pk=id)
-    
+
     @require_role(['admin', 'hr_manager', 'finance_manager'])
     @audit_graphql_operation("query")
     def resolve_employees(self, info):
         """Liste tous les employés."""
         return Employee.objects.all()
-    
+
     @require_permission('employee.read')
     @audit_graphql_operation("query")
     def resolve_employee(self, info, id):
         """Récupère un employé spécifique."""
         return Employee.objects.get(pk=id)
-    
+
     @require_role(['team_lead', 'manager'])
     @audit_graphql_operation("query")
     def resolve_my_team(self, info):
@@ -344,7 +347,7 @@ class Query(graphene.ObjectType):
 
 class CreateEmployee(graphene.Mutation):
     """Mutation pour créer un employé avec validation et audit."""
-    
+
     class Arguments:
         user_id = graphene.ID(required=True)
         company_id = graphene.ID(required=True)
@@ -352,9 +355,9 @@ class CreateEmployee(graphene.Mutation):
         salary = graphene.Decimal(required=True)
         ssn = graphene.String(required=True)
         bank_account = graphene.String(required=True)
-    
+
     employee = graphene.Field(EmployeeType)
-    
+
     @require_role(['admin', 'hr_manager'])
     @validate_input({
         'employee_id': {'type': 'string', 'min_length': 3, 'max_length': 20},
@@ -367,7 +370,7 @@ class CreateEmployee(graphene.Mutation):
         """Crée un nouvel employé."""
         user = User.objects.get(pk=kwargs['user_id'])
         company = Company.objects.get(pk=kwargs['company_id'])
-        
+
         employee = Employee.objects.create(
             user=user,
             company=company,
@@ -376,19 +379,19 @@ class CreateEmployee(graphene.Mutation):
             ssn=kwargs['ssn'],
             bank_account=kwargs['bank_account']
         )
-        
+
         return CreateEmployee(employee=employee)
 
 
 class UpdateEmployeeSalary(graphene.Mutation):
     """Mutation pour mettre à jour le salaire d'un employé."""
-    
+
     class Arguments:
         employee_id = graphene.ID(required=True)
         new_salary = graphene.Decimal(required=True)
-    
+
     employee = graphene.Field(EmployeeType)
-    
+
     @require_permission('employee.salary.update')
     @validate_input({
         'new_salary': {'type': 'decimal', 'min_value': 0, 'max_value': 1000000}
@@ -399,13 +402,13 @@ class UpdateEmployeeSalary(graphene.Mutation):
         employee = Employee.objects.get(pk=employee_id)
         employee.salary = new_salary
         employee.save()
-        
+
         return UpdateEmployeeSalary(employee=employee)
 
 
 class Mutation(graphene.ObjectType):
     """Mutations GraphQL avec sécurité."""
-    
+
     create_employee = CreateEmployee.Field()
     update_employee_salary = UpdateEmployeeSalary.Field()
 
@@ -416,19 +419,19 @@ class Mutation(graphene.ObjectType):
 
 def create_secure_schema():
     """Crée un schéma GraphQL avec toutes les sécurités activées."""
-    
+
     # Configuration de la sécurité
     security_config = setup_security_system()
-    
+
     # Middleware de sécurité
     security_middleware = create_security_middleware(security_config)
-    
+
     # Création du schéma
     schema = graphene.Schema(
         query=Query,
         mutation=Mutation
     )
-    
+
     return schema, security_middleware
 
 
@@ -562,13 +565,13 @@ class SecureGraphQLView(GraphQLView):
 if __name__ == "__main__":
     # Exemple d'initialisation du système de sécurité
     print("Configuration du système de sécurité Django GraphQL...")
-    
+
     # Configurer le système
     security_config = setup_security_system()
-    
+
     # Créer le schéma sécurisé
     schema, middleware = create_secure_schema()
-    
+
     print("✅ Système de sécurité configuré avec succès!")
     print(f"✅ Configuration: {security_config}")
     print("✅ Schéma GraphQL créé avec middleware de sécurité")

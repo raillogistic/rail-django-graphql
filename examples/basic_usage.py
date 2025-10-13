@@ -11,6 +11,8 @@ to create a GraphQL API from Django models.
 # pip install git+https://github.com/raillogistic/rail-django-graphql.git
 
 # 1. Django Settings Configuration
+from rail_django_graphql import MutationGenerator, QueryGenerator, SchemaBuilder, TypeGenerator
+import graphene
 DJANGO_SETTINGS_EXAMPLE = """
 # settings.py
 INSTALLED_APPS = [
@@ -100,9 +102,7 @@ class Comment(models.Model):
 """
 
 # 3. GraphQL Schema Creation
-import graphene
 
-from rail_django_graphql import MutationGenerator, QueryGenerator, SchemaBuilder, TypeGenerator
 
 # Assuming we have the models imported
 # from blog.models import Category, Post, Comment

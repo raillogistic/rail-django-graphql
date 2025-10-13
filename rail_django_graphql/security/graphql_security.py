@@ -75,12 +75,12 @@ class SecurityConfig:
     enable_field_suggestions: bool = False
     rate_limit_per_minute: int = 60
     complexity_multipliers: Dict[str, float] = None
-    
+
     def __post_init__(self):
         """Initialise les valeurs par défaut."""
         if self.introspection_roles is None:
             self.introspection_roles = ['admin', 'developer']
-        
+
         if self.complexity_multipliers is None:
             self.complexity_multipliers = {
                 'connection': 2.0,  # Les connexions sont plus coûteuses
@@ -94,18 +94,18 @@ class GraphQLSecurityAnalyzer:
     """
     Analyseur de sécurité pour les requêtes GraphQL.
     """
-    
+
     def __init__(self, config: SecurityConfig = None):
         """
         Initialise l'analyseur de sécurité.
-        
+
         Args:
             config: Configuration de sécurité
         """
         self.config = config or SecurityConfig()
         self._field_costs = {}
         self._type_costs = {}
-        
+
         # Coûts par défaut pour certains types de champs
         self._default_field_costs = {
             'id': 1,
@@ -118,23 +118,23 @@ class GraphQLSecurityAnalyzer:
             'email': 2,
             'phone': 2,
         }
-    
+
     def analyze_query(self, document: DocumentNode, schema: GraphQLSchema,
-                     user=None, variables: Dict = None) -> QueryAnalysisResult:
+                      user=None, variables: Dict = None) -> QueryAnalysisResult:
         """
         Analyse une requête GraphQL pour détecter les problèmes de sécurité.
-        
+
         Args:
             document: Document GraphQL à analyser
             schema: Schéma GraphQL
             user: Utilisateur effectuant la requête
             variables: Variables de la requête
-            
+
         Returns:
             Résultat de l'analyse de sécurité
         """
         start_time = time.time()
-        
+
         # Initialiser le résultat
         result = QueryAnalysisResult(
             complexity=0,
@@ -148,16 +148,16 @@ class GraphQLSecurityAnalyzer:
             warnings=[],
             blocked_reasons=[]
         )
-        
+
         # Analyser chaque opération
         for definition in document.definitions:
             if isinstance(definition, OperationDefinitionNode):
                 result.operation_count += 1
-                
+
                 # Analyser le type d'opération
                 if definition.operation.value == 'mutation':
                     result.has_mutations = True
-                
+
                 # Analyser la sélection
                 self._analyze_selection_set(
                     definition.selection_set,
@@ -166,24 +166,24 @@ class GraphQLSecurityAnalyzer:
                     depth=1,
                     parent_type=schema.query_type if definition.operation.value == 'query' else schema.mutation_type
                 )
-        
+
         # Calculer le temps d'exécution estimé
         result.execution_time_estimate = time.time() - start_time
-        
+
         # Déterminer le niveau de menace
         result.threat_level = self._calculate_threat_level(result)
-        
+
         # Vérifier les limites de sécurité
         self._check_security_limits(result, user)
-        
+
         return result
-    
+
     def _analyze_selection_set(self, selection_set, schema: GraphQLSchema,
-                              result: QueryAnalysisResult, depth: int,
-                              parent_type=None):
+                               result: QueryAnalysisResult, depth: int,
+                               parent_type=None):
         """
         Analyse un ensemble de sélections GraphQL.
-        
+
         Args:
             selection_set: Ensemble de sélections à analyser
             schema: Schéma GraphQL
@@ -193,24 +193,24 @@ class GraphQLSecurityAnalyzer:
         """
         if not selection_set or not selection_set.selections:
             return
-        
+
         # Mettre à jour la profondeur maximale
         result.depth = max(result.depth, depth)
-        
+
         for selection in selection_set.selections:
             if isinstance(selection, FieldNode):
                 result.field_count += 1
-                
+
                 # Vérifier l'introspection
                 if selection.name.value in ['__schema', '__type', '__typename']:
                     result.has_introspection = True
-                
+
                 # Calculer la complexité du champ
                 field_complexity = self._calculate_field_complexity(
                     selection, parent_type, depth
                 )
                 result.complexity += field_complexity
-                
+
                 # Analyser les sous-sélections
                 if selection.selection_set:
                     field_type = self._get_field_type(selection, parent_type, schema)
@@ -221,7 +221,7 @@ class GraphQLSecurityAnalyzer:
                         depth + 1,
                         field_type
                     )
-            
+
             elif isinstance(selection, InlineFragmentNode):
                 self._analyze_selection_set(
                     selection.selection_set,
@@ -230,7 +230,7 @@ class GraphQLSecurityAnalyzer:
                     depth,
                     parent_type
                 )
-            
+
             elif isinstance(selection, FragmentDefinitionNode):
                 self._analyze_selection_set(
                     selection.selection_set,
@@ -239,33 +239,33 @@ class GraphQLSecurityAnalyzer:
                     depth,
                     parent_type
                 )
-    
+
     def _calculate_field_complexity(self, field: FieldNode, parent_type, depth: int) -> int:
         """
         Calcule la complexité d'un champ.
-        
+
         Args:
             field: Nœud de champ GraphQL
             parent_type: Type parent
             depth: Profondeur du champ
-            
+
         Returns:
             Complexité calculée du champ
         """
         base_complexity = 1
         field_name = field.name.value
-        
+
         # Coût de base du champ
         if field_name in self._default_field_costs:
             base_complexity = self._default_field_costs[field_name]
-        
+
         # Multiplicateurs basés sur le type de champ
         multiplier = 1.0
-        
+
         # Champs de connexion (pagination)
         if 'connection' in field_name.lower() or 'edges' in field_name.lower():
             multiplier *= self.config.complexity_multipliers.get('connection', 2.0)
-        
+
         # Champs de liste
         if field.arguments:
             for arg in field.arguments:
@@ -276,50 +276,50 @@ class GraphQLSecurityAnalyzer:
                         multiplier *= min(limit_value / 10, 10)  # Cap à 10x
                     except (ValueError, AttributeError):
                         multiplier *= 2.0
-        
+
         # Pénalité de profondeur
         depth_penalty = 1 + (depth * 0.1)
-        
+
         # Champs imbriqués
         if field.selection_set:
             multiplier *= self.config.complexity_multipliers.get('nested_object', 1.5)
-        
+
         return int(base_complexity * multiplier * depth_penalty)
-    
+
     def _get_field_type(self, field: FieldNode, parent_type, schema: GraphQLSchema):
         """
         Récupère le type d'un champ.
-        
+
         Args:
             field: Nœud de champ
             parent_type: Type parent
             schema: Schéma GraphQL
-            
+
         Returns:
             Type du champ
         """
         if not parent_type or not hasattr(parent_type, 'fields'):
             return None
-        
+
         field_name = field.name.value
         if field_name in parent_type.fields:
             field_def = parent_type.fields[field_name]
             return field_def.type
-        
+
         return None
-    
+
     def _calculate_threat_level(self, result: QueryAnalysisResult) -> SecurityThreatLevel:
         """
         Calcule le niveau de menace d'une requête.
-        
+
         Args:
             result: Résultat de l'analyse
-            
+
         Returns:
             Niveau de menace calculé
         """
         score = 0
-        
+
         # Complexité
         if result.complexity > self.config.max_query_complexity * 0.8:
             score += 3
@@ -327,27 +327,27 @@ class GraphQLSecurityAnalyzer:
             score += 2
         elif result.complexity > self.config.max_query_complexity * 0.3:
             score += 1
-        
+
         # Profondeur
         if result.depth > self.config.max_query_depth * 0.8:
             score += 3
         elif result.depth > self.config.max_query_depth * 0.5:
             score += 2
-        
+
         # Nombre de champs
         if result.field_count > self.config.max_field_count * 0.8:
             score += 2
         elif result.field_count > self.config.max_field_count * 0.5:
             score += 1
-        
+
         # Introspection
         if result.has_introspection:
             score += 2
-        
+
         # Mutations
         if result.has_mutations:
             score += 1
-        
+
         # Déterminer le niveau
         if score >= 8:
             return SecurityThreatLevel.CRITICAL
@@ -357,11 +357,11 @@ class GraphQLSecurityAnalyzer:
             return SecurityThreatLevel.MEDIUM
         else:
             return SecurityThreatLevel.LOW
-    
+
     def _check_security_limits(self, result: QueryAnalysisResult, user=None):
         """
         Vérifie les limites de sécurité et ajoute des avertissements/blocages.
-        
+
         Args:
             result: Résultat de l'analyse à mettre à jour
             user: Utilisateur effectuant la requête
@@ -375,7 +375,7 @@ class GraphQLSecurityAnalyzer:
             result.warnings.append(
                 f"Complexité de requête élevée: {result.complexity}"
             )
-        
+
         # Vérifier la profondeur
         if result.depth > self.config.max_query_depth:
             result.blocked_reasons.append(
@@ -385,13 +385,13 @@ class GraphQLSecurityAnalyzer:
             result.warnings.append(
                 f"Profondeur de requête élevée: {result.depth}"
             )
-        
+
         # Vérifier le nombre de champs
         if result.field_count > self.config.max_field_count:
             result.blocked_reasons.append(
                 f"Trop de champs demandés: {result.field_count} > {self.config.max_field_count}"
             )
-        
+
         # Vérifier l'introspection
         if result.has_introspection and not self.config.enable_introspection:
             if user:
@@ -405,7 +405,7 @@ class GraphQLSecurityAnalyzer:
                 result.blocked_reasons.append(
                     "Introspection non autorisée"
                 )
-        
+
         # Vérifier le nombre d'opérations
         if result.operation_count > self.config.max_operation_count:
             result.blocked_reasons.append(
@@ -417,43 +417,43 @@ class QueryComplexityValidationRule(ValidationRule):
     """
     Règle de validation pour la complexité des requêtes.
     """
-    
+
     def __init__(self, analyzer: GraphQLSecurityAnalyzer):
         """
         Initialise la règle de validation.
-        
+
         Args:
             analyzer: Analyseur de sécurité
         """
         super().__init__()
         self.analyzer = analyzer
-    
+
     def enter_document(self, node: DocumentNode, *args):
         """
         Valide le document lors de l'entrée.
-        
+
         Args:
             node: Nœud du document
         """
         context = args[0] if args else None
         if not isinstance(context, ValidationContext):
             return
-        
+
         schema = context.schema
         user = getattr(context, 'user', None)
-        
+
         try:
             result = self.analyzer.analyze_query(node, schema, user)
-            
+
             # Bloquer si nécessaire
             if result.blocked_reasons:
                 for reason in result.blocked_reasons:
                     context.report_error(GraphQLError(reason))
-            
+
             # Logger les avertissements
             for warning in result.warnings:
                 logger.warning(f"Avertissement de sécurité GraphQL: {warning}")
-            
+
         except Exception as e:
             logger.error(f"Erreur lors de l'analyse de sécurité: {e}")
             context.report_error(GraphQLError("Erreur d'analyse de sécurité"))
@@ -462,25 +462,25 @@ class QueryComplexityValidationRule(ValidationRule):
 def create_security_middleware(config: SecurityConfig = None):
     """
     Crée un middleware de sécurité GraphQL.
-    
+
     Args:
         config: Configuration de sécurité
-        
+
     Returns:
         Fonction middleware
     """
     analyzer = GraphQLSecurityAnalyzer(config)
-    
+
     def security_middleware(next_middleware, root, info: GraphQLResolveInfo, **args):
         """
         Middleware de sécurité pour GraphQL.
-        
+
         Args:
             next_middleware: Middleware suivant
             root: Objet racine
             info: Informations de résolution GraphQL
             **args: Arguments supplémentaires
-            
+
         Returns:
             Résultat du middleware suivant
         """
@@ -489,12 +489,12 @@ def create_security_middleware(config: SecurityConfig = None):
         if user and user.is_authenticated:
             cache_key = f"graphql_rate_limit:{user.id}"
             current_count = cache.get(cache_key, 0)
-            
+
             if current_count >= config.rate_limit_per_minute:
                 raise GraphQLError("Limite de taux dépassée")
-            
+
             cache.set(cache_key, current_count + 1, 60)  # 1 minute
-        
+
         # Analyser la requête si c'est le champ racine
         if info.path.key == info.operation.selection_set.selections[0].name.value:
             try:
@@ -504,28 +504,28 @@ def create_security_middleware(config: SecurityConfig = None):
                     user,
                     info.variable_values
                 )
-                
+
                 if result.blocked_reasons:
                     raise GraphQLError(f"Requête bloquée: {'; '.join(result.blocked_reasons)}")
-                
+
                 # Ajouter les métriques au contexte
                 info.context.security_analysis = result
-                
+
             except Exception as e:
                 logger.error(f"Erreur d'analyse de sécurité: {e}")
-        
+
         return next_middleware(root, info, **args)
-    
+
     return security_middleware
 
 
 def require_introspection_permission(func):
     """
     Décorateur pour protéger les champs d'introspection.
-    
+
     Args:
         func: Fonction à protéger
-        
+
     Returns:
         Fonction décorée
     """
@@ -537,14 +537,14 @@ def require_introspection_permission(func):
             if hasattr(arg, 'context'):
                 info = arg
                 break
-        
+
         if not info:
             raise GraphQLError("Contexte GraphQL non disponible")
-        
+
         user = getattr(info.context, 'user', None)
         if not user or not user.is_authenticated:
             raise GraphQLError("Authentification requise pour l'introspection")
-        
+
         # Vérifier les permissions d'introspection
         config = getattr(info.context, 'security_config', SecurityConfig())
         if not config.enable_introspection:
@@ -552,9 +552,9 @@ def require_introspection_permission(func):
             user_roles = role_manager.get_user_roles(user)
             if not any(role in config.introspection_roles for role in user_roles):
                 raise GraphQLError("Permission d'introspection requise")
-        
+
         return func(*args, **kwargs)
-    
+
     return wrapper
 
 

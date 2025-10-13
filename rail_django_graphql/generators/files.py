@@ -28,11 +28,12 @@ from .types import TypeGenerator
 
 logger = logging.getLogger(__name__)
 
+
 class FileGenerator:
     """
     Generates and manages GraphQL schema files for Django apps and models.
     Handles file creation, updates, and versioning.
-    
+
     This class supports:
     - Multi-schema file generation
     - Code formatting and validation
@@ -50,18 +51,18 @@ class FileGenerator:
             schema_name: Name of the schema for multi-schema support
         """
         self.schema_name = schema_name
-        
+
         # Use hierarchical settings if no explicit settings provided
         if settings is None:
             self.settings = SchemaSettings.from_schema(schema_name)
         else:
             self.settings = settings
-            
+
         # Initialize components with schema-specific settings
         self.type_generator = TypeGenerator(schema_name=schema_name)
         self.query_generator = QueryGenerator(self.type_generator, schema_name=schema_name)
         self.mutation_generator = MutationGenerator(self.type_generator, schema_name=schema_name)
-        
+
         # Initialize performance and security components
         self.query_optimizer = get_query_optimizer(schema_name)
         self.authorization_manager = get_authz_manager(schema_name)
@@ -70,10 +71,10 @@ class FileGenerator:
     def _should_include_model(self, model: Type[models.Model]) -> bool:
         """
         Check if a model should be included based on settings.
-        
+
         Args:
             model: Django model to check
-            
+
         Returns:
             bool: True if model should be included
         """
@@ -81,18 +82,18 @@ class FileGenerator:
         if hasattr(self.settings, 'excluded_models') and self.settings.excluded_models:
             if model.__name__ in self.settings.excluded_models:
                 return False
-                
+
         # Check excluded apps
         if hasattr(self.settings, 'excluded_apps') and self.settings.excluded_apps:
             if model._meta.app_label in self.settings.excluded_apps:
                 return False
-                
+
         return True
 
     def _should_enable_filtering(self) -> bool:
         """
         Check if filtering should be enabled based on settings.
-        
+
         Returns:
             bool: True if filtering should be enabled
         """
@@ -101,7 +102,7 @@ class FileGenerator:
     def _should_enable_ordering(self) -> bool:
         """
         Check if ordering should be enabled based on settings.
-        
+
         Returns:
             bool: True if ordering should be enabled
         """
@@ -153,7 +154,7 @@ from django_filters import FilterSet, OrderingFilter
         types_file = output_dir / 'types.py'
 
         code = [self._generate_header(app_config.name)]
-        
+
         # Add imports for related models from other apps
         related_models = set()
         for model in models:
@@ -173,14 +174,14 @@ from django_filters import FilterSet, OrderingFilter
             code.append(f"\n\nclass {model.__name__}Type(DjangoObjectType):")
             code.append("    class Meta:")
             code.append(f"        model = {model.__name__}")
-            
+
             # Add filter fields if enabled
             if self.settings.enable_filtering:
                 filter_fields = self.type_generator.get_filterable_fields(model)
                 if filter_fields:
                     fields_str = ", ".join(f"'{field}'" for field in filter_fields)
                     code.append(f"        filter_fields = [{fields_str}]")
-            
+
             # Add interfaces if any
             interfaces = self.type_generator.get_interfaces(model)
             if interfaces:
@@ -205,18 +206,18 @@ from django_filters import FilterSet, OrderingFilter
 
         # Generate Query class
         code.append("\n\nclass Query(graphene.ObjectType):")
-        
+
         for model in sorted(models, key=lambda m: m.__name__):
             model_name = model.__name__
             type_name = f"{model_name}Type"
-            
+
             # Single object query
             code.append(f"\n    {model_name.lower()} = graphene.Field(")
             code.append(f"        {type_name},")
             code.append("        id=graphene.ID(required=True),")
             code.append("        description=f'Get a specific {model_name} by ID'")
             code.append("    )")
-            
+
             # List query
             code.append(f"\n    {model_name.lower()}s = graphene.List(")
             code.append(f"        {type_name},")
@@ -226,11 +227,11 @@ from django_filters import FilterSet, OrderingFilter
                 code.append("        order_by=graphene.String(),")
             code.append(f"        description=f'Get a list of {model_name} objects'")
             code.append("    )")
-            
+
             # Add resolvers
             code.append(f"\n    def resolve_{model_name.lower()}(self, info, id):")
             code.append(f"        return {model_name}.objects.get(pk=id)")
-            
+
             code.append(f"\n    def resolve_{model_name.lower()}s(self, info, **kwargs):")
             code.append(f"        queryset = {model_name}.objects.all()")
             if self.settings.enable_filtering:
@@ -262,7 +263,7 @@ from django_filters import FilterSet, OrderingFilter
         # Generate mutations for each model
         for model in sorted(models, key=lambda m: m.__name__):
             model_name = model.__name__
-            
+
             # Create mutation
             code.append(f"\n\nclass Create{model_name}(graphene.Mutation):")
             code.append("    class Arguments:")
@@ -272,14 +273,14 @@ from django_filters import FilterSet, OrderingFilter
                         type(field), "graphene.String"
                     )
                     code.append(f"        {field.name} = {field_type}(required=True)")
-            
+
             code.append(f"\n    {model_name.lower()} = graphene.Field({model_name}Type)")
-            
+
             code.append("\n    @classmethod")
             code.append("    def mutate(cls, root, info, **kwargs):")
             code.append(f"        instance = {model_name}.objects.create(**kwargs)")
             code.append("        return cls(" + f"{model_name.lower()}=instance)")
-            
+
             # Update mutation
             code.append(f"\n\nclass Update{model_name}(graphene.Mutation):")
             code.append("    class Arguments:")
@@ -290,9 +291,9 @@ from django_filters import FilterSet, OrderingFilter
                         type(field), "graphene.String"
                     )
                     code.append(f"        {field.name} = {field_type}()")
-            
+
             code.append(f"\n    {model_name.lower()} = graphene.Field({model_name}Type)")
-            
+
             code.append("\n    @classmethod")
             code.append("    def mutate(cls, root, info, id, **kwargs):")
             code.append(f"        instance = {model_name}.objects.get(pk=id)")
@@ -300,14 +301,14 @@ from django_filters import FilterSet, OrderingFilter
             code.append("            setattr(instance, key, value)")
             code.append("        instance.save()")
             code.append("        return cls(" + f"{model_name.lower()}=instance)")
-            
+
             # Delete mutation
             code.append(f"\n\nclass Delete{model_name}(graphene.Mutation):")
             code.append("    class Arguments:")
             code.append("        id = graphene.ID(required=True)")
-            
+
             code.append("\n    success = graphene.Boolean()")
-            
+
             code.append("\n    @classmethod")
             code.append("    def mutate(cls, root, info, id):")
             code.append(f"        instance = {model_name}.objects.get(pk=id)")
@@ -339,7 +340,7 @@ from django_filters import FilterSet, OrderingFilter
         code.append("from .types import *")
         code.append("from .queries import Query")
         code.append("from .mutations import Mutation")
-        
+
         code.append("\n\nschema = graphene.Schema(")
         code.append("    query=Query,")
         code.append("    mutation=Mutation,")
@@ -359,7 +360,7 @@ from django_filters import FilterSet, OrderingFilter
             app_config = apps.get_app_config(app_label)
             if not output_dir:
                 output_dir = Path(app_config.path) / 'schema'
-            
+
             # Get all models for the app
             models = [
                 model for model in app_config.get_models()
@@ -382,7 +383,8 @@ from django_filters import FilterSet, OrderingFilter
             return generated_files
 
         except Exception as e:
-            logger.error(f"Failed to generate schema for app '{app_label}': {str(e)}", exc_info=True)
+            logger.error(
+                f"Failed to generate schema for app '{app_label}': {str(e)}", exc_info=True)
             raise
 
     def generate_all_schemas(self, output_base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Dict[str, Path]]:
@@ -393,7 +395,8 @@ from django_filters import FilterSet, OrderingFilter
 
         for app_config in apps.get_app_configs():
             if app_config.name not in self.settings.excluded_apps:
-                app_output_dir = Path(output_base_dir) / app_config.name if output_base_dir else None
+                app_output_dir = Path(output_base_dir) / \
+                    app_config.name if output_base_dir else None
                 try:
                     app_files = self.generate_app_schema(app_config.name, app_output_dir)
                     if app_files:
@@ -427,7 +430,7 @@ from django_filters import FilterSet, OrderingFilter
 
             # Update each schema file
             updated_files = {}
-            
+
             # Update types.py
             types_file = output_dir / 'types.py'
             if types_file.exists():
@@ -436,12 +439,14 @@ from django_filters import FilterSet, OrderingFilter
             # Update queries.py
             queries_file = output_dir / 'queries.py'
             if queries_file.exists():
-                updated_files['queries'] = self.generate_queries_file(app_config, models, output_dir)
+                updated_files['queries'] = self.generate_queries_file(
+                    app_config, models, output_dir)
 
             # Update mutations.py
             mutations_file = output_dir / 'mutations.py'
             if mutations_file.exists():
-                updated_files['mutations'] = self.generate_mutations_file(app_config, models, output_dir)
+                updated_files['mutations'] = self.generate_mutations_file(
+                    app_config, models, output_dir)
 
             # Update schema.py
             schema_file = output_dir / 'schema.py'

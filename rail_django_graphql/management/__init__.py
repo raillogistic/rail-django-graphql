@@ -11,7 +11,7 @@ from .schema_manager import SchemaLifecycleEvent, SchemaManager, SchemaOperation
 
 __all__ = [
     'SchemaManager',
-    'SchemaLifecycleEvent', 
+    'SchemaLifecycleEvent',
     'SchemaOperation',
     'MigrationManager',
     'SchemaMigration',

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     'TypeGenerator',
-    'QueryGenerator', 
+    'QueryGenerator',
     'MutationGenerator',
     'ModelIntrospector',
     'get_type_generator',
@@ -38,11 +38,11 @@ __all__ = [
 def get_type_generator(settings=None, schema_name: str = "default"):
     """
     Get a TypeGenerator instance with optional settings.
-    
+
     Args:
         settings: Type generator settings or None for defaults
         schema_name: Name of the schema (for multi-schema support)
-        
+
     Returns:
         TypeGenerator: Type generator instance
     """
@@ -53,12 +53,12 @@ def get_type_generator(settings=None, schema_name: str = "default"):
 def get_query_generator(type_generator=None, settings=None, schema_name: str = "default"):
     """
     Get a QueryGenerator instance with optional settings.
-    
+
     Args:
         type_generator: TypeGenerator instance or None for default
         settings: Query generator settings or None for defaults
         schema_name: Name of the schema (for multi-schema support)
-        
+
     Returns:
         QueryGenerator: Query generator instance
     """
@@ -71,12 +71,12 @@ def get_query_generator(type_generator=None, settings=None, schema_name: str = "
 def get_mutation_generator(type_generator=None, settings=None, schema_name: str = "default"):
     """
     Get a MutationGenerator instance with optional settings.
-    
+
     Args:
         type_generator: TypeGenerator instance or None for default
         settings: Mutation generator settings or None for defaults
         schema_name: Name of the schema (for multi-schema support)
-        
+
     Returns:
         MutationGenerator: Mutation generator instance
     """
@@ -89,7 +89,7 @@ def get_mutation_generator(type_generator=None, settings=None, schema_name: str 
 def get_model_introspector():
     """
     Get a ModelIntrospector instance.
-    
+
     Returns:
         ModelIntrospector: Model introspector instance
     """

@@ -21,7 +21,7 @@ class JSONScalar(Scalar):
     """
     Custom scalar for JSON data that can handle complex nested structures.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize Python object to JSON string."""
@@ -35,7 +35,7 @@ class JSONScalar(Scalar):
             except (json.JSONDecodeError, TypeError):
                 return json.dumps(value)
         return json.dumps(value, default=str)
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse GraphQL literal to Python object."""
@@ -45,7 +45,7 @@ class JSONScalar(Scalar):
             except (json.JSONDecodeError, TypeError):
                 return node.value
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse GraphQL variable to Python object."""
@@ -61,14 +61,14 @@ class DateTimeScalar(Scalar):
     """
     Custom scalar for DateTime with timezone support.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize datetime to ISO string."""
         if isinstance(value, datetime):
             return value.isoformat()
         return value
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse GraphQL literal to datetime."""
@@ -78,7 +78,7 @@ class DateTimeScalar(Scalar):
             except ValueError:
                 return None
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse GraphQL variable to datetime."""
@@ -94,14 +94,14 @@ class DecimalScalar(Scalar):
     """
     Custom scalar for high-precision decimal numbers.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize Decimal to string."""
         if isinstance(value, Decimal):
             return str(value)
         return value
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse GraphQL literal to Decimal."""
@@ -111,7 +111,7 @@ class DecimalScalar(Scalar):
             except (ValueError, TypeError):
                 return None
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse GraphQL variable to Decimal."""
@@ -127,14 +127,14 @@ class UUIDScalar(Scalar):
     """
     Custom scalar for UUID values.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize UUID to string."""
         if isinstance(value, UUID):
             return str(value)
         return value
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse GraphQL literal to UUID."""
@@ -144,7 +144,7 @@ class UUIDScalar(Scalar):
             except ValueError:
                 return None
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse GraphQL variable to UUID."""
@@ -160,14 +160,14 @@ class DurationScalar(Scalar):
     """
     Custom scalar for time duration values.
     """
-    
+
     @staticmethod
     def serialize(value):
         """Serialize timedelta to total seconds."""
         if isinstance(value, timedelta):
             return value.total_seconds()
         return value
-    
+
     @staticmethod
     def parse_literal(node):
         """Parse GraphQL literal to timedelta."""
@@ -177,7 +177,7 @@ class DurationScalar(Scalar):
             except (ValueError, TypeError):
                 return None
         return None
-    
+
     @staticmethod
     def parse_value(value):
         """Parse GraphQL variable to timedelta."""
@@ -193,7 +193,7 @@ class CustomScalarRegistry:
     """
     Registry for managing custom scalar types and their mappings.
     """
-    
+
     def __init__(self):
         self._scalars: Dict[Type, Type[Scalar]] = {
             # Built-in Python types
@@ -201,21 +201,21 @@ class CustomScalarRegistry:
             list: JSONScalar,
             tuple: JSONScalar,
             set: JSONScalar,
-            
+
             # Date/time types
             datetime: DateTimeScalar,
             date: graphene.Date,
             time: graphene.Time,
             timedelta: DurationScalar,
-            
+
             # Numeric types
             Decimal: DecimalScalar,
-            
+
             # Other types
             UUID: UUIDScalar,
             bytes: graphene.String,  # Serialize as base64 string
         }
-        
+
         # Django field mappings
         self._django_field_mappings: Dict[Type[models.Field], Type[Scalar]] = {
             models.JSONField: JSONScalar,
@@ -223,24 +223,24 @@ class CustomScalarRegistry:
             models.DecimalField: DecimalScalar,
             models.DurationField: DurationScalar,
         }
-    
+
     def register_scalar(self, python_type: Type, scalar_type: Type[Scalar]):
         """Register a custom scalar for a Python type."""
         self._scalars[python_type] = scalar_type
-    
+
     def register_django_field_scalar(self, field_type: Type[models.Field], scalar_type: Type[Scalar]):
         """Register a custom scalar for a Django field type."""
         self._django_field_mappings[field_type] = scalar_type
-    
+
     def get_scalar_for_type(self, python_type: Type) -> Optional[Type[Scalar]]:
         """Get the appropriate scalar type for a Python type."""
         return self._scalars.get(python_type)
-    
+
     def get_scalar_for_django_field(self, field: models.Field) -> Optional[Type[Scalar]]:
         """Get the appropriate scalar type for a Django field."""
         field_type = type(field)
         return self._django_field_mappings.get(field_type)
-    
+
     def get_graphene_type_for_python_type(self, python_type: Type) -> Type:
         """
         Get the appropriate GraphQL type for a Python type.
@@ -250,7 +250,7 @@ class CustomScalarRegistry:
         scalar_type = self.get_scalar_for_type(python_type)
         if scalar_type:
             return scalar_type
-        
+
         # Built-in type mappings
         type_mappings = {
             str: graphene.String,
@@ -259,7 +259,7 @@ class CustomScalarRegistry:
             bool: graphene.Boolean,
             type(None): graphene.String,  # Fallback for None type
         }
-        
+
         return type_mappings.get(python_type, graphene.String)
 
 
@@ -267,17 +267,17 @@ class MethodReturnTypeAnalyzer:
     """
     Analyzes method return types to determine appropriate GraphQL types.
     """
-    
+
     def __init__(self, scalar_registry: Optional[CustomScalarRegistry] = None):
         self.scalar_registry = scalar_registry or CustomScalarRegistry()
-    
+
     def analyze_method_return_type(self, method: callable) -> Dict[str, Any]:
         """
         Analyze a method's return type and determine the appropriate GraphQL type.
-        
+
         Args:
             method: The method to analyze
-            
+
         Returns:
             Dictionary containing type information:
             - 'graphql_type': The GraphQL type to use
@@ -289,16 +289,16 @@ class MethodReturnTypeAnalyzer:
             # Get type hints
             type_hints = get_type_hints(method)
             return_type = type_hints.get('return', type(None))
-            
+
             # Analyze the return type
             analysis = self._analyze_type(return_type)
-            
+
             # Add method-specific information
             analysis['method_name'] = method.__name__
             analysis['method_doc'] = inspect.getdoc(method)
-            
+
             return analysis
-            
+
         except Exception as e:
             # Fallback for methods without type hints
             return {
@@ -310,7 +310,7 @@ class MethodReturnTypeAnalyzer:
                 'method_doc': inspect.getdoc(method),
                 'analysis_error': str(e)
             }
-    
+
     def _analyze_type(self, python_type: Type) -> Dict[str, Any]:
         """
         Analyze a Python type and return GraphQL type information.
@@ -332,7 +332,7 @@ class MethodReturnTypeAnalyzer:
                     'is_optional': True,
                     'python_type': python_type
                 }
-        
+
         # Handle List types
         if hasattr(python_type, '__origin__') and python_type.__origin__ in (list, List):
             if hasattr(python_type, '__args__') and python_type.__args__:
@@ -352,7 +352,7 @@ class MethodReturnTypeAnalyzer:
                     'is_optional': False,
                     'python_type': python_type
                 }
-        
+
         # Handle Dict types
         if hasattr(python_type, '__origin__') and python_type.__origin__ in (dict, Dict):
             return {
@@ -361,41 +361,41 @@ class MethodReturnTypeAnalyzer:
                 'is_optional': False,
                 'python_type': python_type
             }
-        
+
         # Handle basic types
         graphql_type = self.scalar_registry.get_graphene_type_for_python_type(python_type)
-        
+
         return {
             'graphql_type': graphql_type,
             'is_list': False,
             'is_optional': False,
             'python_type': python_type
         }
-    
+
     def create_method_field(self, method: callable, model_instance: Any = None) -> graphene.Field:
         """
         Create a GraphQL field for a method based on its return type analysis.
-        
+
         Args:
             method: The method to create a field for
             model_instance: Optional model instance for context
-            
+
         Returns:
             GraphQL field configured for the method
         """
         analysis = self.analyze_method_return_type(method)
-        
+
         def resolver(root, info, **kwargs):
             """Dynamic resolver for method-based fields."""
             try:
                 if root is None:
                     return None
-                
+
                 # Get the method from the instance
                 instance_method = getattr(root, analysis['method_name'], None)
                 if instance_method is None:
                     return None
-                
+
                 # Call the method
                 if callable(instance_method):
                     # Check if method accepts arguments
@@ -409,11 +409,11 @@ class MethodReturnTypeAnalyzer:
                 else:
                     # It's a property
                     return instance_method
-                    
+
             except Exception as e:
                 # Log error and return None
                 return None
-        
+
         # Create the field with appropriate type
         field_type = analysis['graphql_type']
         if analysis['is_optional']:

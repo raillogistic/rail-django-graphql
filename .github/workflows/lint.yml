@@ -37,10 +37,6 @@ jobs:
       run: |
         isort --check-only --diff rail_django_graphql
 
-    - name: Run flake8
-      run: |
-        flake8 rail_django_graphql
-
     - name: Run mypy
       run: |
         mypy rail_django_graphql

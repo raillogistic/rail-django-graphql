@@ -448,7 +448,6 @@ class ModelIntrospector:
             return method._is_mutation
 
         # Check for business logic decorator
-        
 
         if hasattr(method, "_is_business_logic"):
             return method._is_business_logic

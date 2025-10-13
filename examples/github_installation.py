@@ -6,6 +6,11 @@ and set up a development environment.
 """
 
 # Installation from GitHub
+from django.db import models
+from django.contrib.auth.models import User
+from django.conf import settings
+import django
+import os
 GITHUB_INSTALLATION = """
 # Install from GitHub (latest development version)
 pip install git+https://github.com/raillogistic/rail-django-graphql.git
@@ -60,10 +65,7 @@ make html
 """
 
 # Example Django Project Setup with GitHub Version
-import os
 
-import django
-from django.conf import settings
 
 # Configure Django settings for testing
 if not settings.configured:
@@ -162,8 +164,6 @@ if not settings.configured:
 django.setup()
 
 # Example models for testing
-from django.contrib.auth.models import User
-from django.db import models
 
 
 class Category(models.Model):

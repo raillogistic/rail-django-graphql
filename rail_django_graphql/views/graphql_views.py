@@ -80,15 +80,15 @@ class MultiSchemaGraphQLView(GraphQLView):
     def get_context(self, request):
         """
         Override get_context to inject authenticated user from JWT token.
-        
+
         Args:
             request: HTTP request object
-            
+
         Returns:
             Context object with authenticated user
         """
         context = super().get_context(request)
-        
+
         # Check for JWT token authentication (case-insensitive, robust parsing)
         raw_auth = request.META.get("HTTP_AUTHORIZATION", "")
         auth_header = raw_auth.strip()
@@ -102,18 +102,18 @@ class MultiSchemaGraphQLView(GraphQLView):
                     return context
                 else:
                     return context
-                
+
                 # Validate JWT token using JWTManager
                 from ..extensions.auth import JWTManager
                 payload = JWTManager.verify_token(token)
-                
+
                 if payload:
                     # Get user from payload, support standard 'sub' claim fallback
                     user_id = payload.get('user_id') or payload.get('sub')
                     if user_id:
                         from django.contrib.auth import get_user_model
                         User = get_user_model()
-                        
+
                         try:
                             user = User.objects.get(id=user_id)
                             if user.is_active:
@@ -123,16 +123,16 @@ class MultiSchemaGraphQLView(GraphQLView):
                                 request.user = user
                         except User.DoesNotExist:
                             pass
-                            
+
             except Exception as e:
                 # Log the error for debugging but don't expose details
                 logger.warning(f"JWT authentication failed: {str(e)}")
-        
+
         # Add schema name to context for metadata hierarchy
         schema_match = getattr(request, 'resolver_match', None)
         schema_name = getattr(schema_match, 'kwargs', {}).get('schema_name', 'default')
         context.schema_name = schema_name
-        
+
         return context
 
     def _get_schema_info(self, schema_name: str) -> Optional[Dict[str, Any]]:
@@ -256,28 +256,28 @@ class MultiSchemaGraphQLView(GraphQLView):
                 token = auth_header.split(" ")[1]
             else:
                 return False
-            
+
             # Validate JWT token using JWTManager
             from ..extensions.auth import JWTManager
             payload = JWTManager.verify_token(token)
-            
+
             if not payload:
                 return False
-                
+
             # Check if user exists and is active
             user_id = payload.get('user_id')
             if not user_id:
                 return False
-                
+
             from django.contrib.auth import get_user_model
             User = get_user_model()
-            
+
             try:
                 user = User.objects.get(id=user_id)
                 return user.is_active
             except User.DoesNotExist:
                 return False
-                
+
         except Exception as e:
             # Log the error for debugging but don't expose details
             import logging

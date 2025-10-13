@@ -35,7 +35,7 @@ class TestDatabaseOperationsIntegration(TransactionTestCase):
         """Configuration des tests d'opérations de base de données."""
         # Initialiser les générateurs avec des paramètres appropriés
         from rail_django_graphql.core.settings import TypeGeneratorSettings
-        
+
         self.introspector = ModelIntrospector(Category)
         self.type_generator = TypeGenerator(settings=TypeGeneratorSettings())
         self.query_generator = QueryGenerator(self.type_generator, None)

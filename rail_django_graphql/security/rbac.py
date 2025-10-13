@@ -70,13 +70,13 @@ class RoleManager:
     """
     Gestionnaire des rôles et permissions.
     """
-    
+
     def __init__(self):
         """Initialise le gestionnaire de rôles."""
         self._roles_cache = {}
         self._permissions_cache = {}
         self._role_hierarchy = {}
-        
+
         # Rôles système prédéfinis
         self.system_roles = {
             'superadmin': RoleDefinition(
@@ -130,116 +130,116 @@ class RoleManager:
                 ]
             )
         }
-    
+
     def register_role(self, role_definition: RoleDefinition):
         """
         Enregistre une nouvelle définition de rôle.
-        
+
         Args:
             role_definition: Définition du rôle à enregistrer
         """
         self._roles_cache[role_definition.name] = role_definition
-        
+
         # Construire la hiérarchie
         if role_definition.parent_roles:
             self._role_hierarchy[role_definition.name] = role_definition.parent_roles
-        
+
         logger.info(f"Rôle '{role_definition.name}' enregistré")
-    
+
     def get_role_definition(self, role_name: str) -> Optional[RoleDefinition]:
         """
         Récupère la définition d'un rôle.
-        
+
         Args:
             role_name: Nom du rôle
-            
+
         Returns:
             Définition du rôle ou None
         """
         # Vérifier d'abord les rôles système
         if role_name in self.system_roles:
             return self.system_roles[role_name]
-        
+
         return self._roles_cache.get(role_name)
-    
+
     def get_user_roles(self, user: "AbstractUser") -> List[str]:
         """
         Récupère les rôles d'un utilisateur.
-        
+
         Args:
             user: Utilisateur
-            
+
         Returns:
             Liste des noms de rôles
         """
         cache_key = f"user_roles:{user.id}"
         roles = cache.get(cache_key)
-        
+
         if roles is None:
             # Récupérer depuis les groupes Django
             roles = list(user.groups.values_list('name', flat=True))
-            
+
             # Ajouter les rôles système si applicable
             if user.is_superuser:
                 roles.append('superadmin')
             elif user.is_staff:
                 roles.append('admin')
-            
+
             cache.set(cache_key, roles, 300)  # Cache 5 minutes
-        
+
         return roles
-    
-    def get_effective_permissions(self, user: "AbstractUser", 
-                                context: PermissionContext = None) -> Set[str]:
+
+    def get_effective_permissions(self, user: "AbstractUser",
+                                  context: PermissionContext = None) -> Set[str]:
         """
         Récupère les permissions effectives d'un utilisateur.
-        
+
         Args:
             user: Utilisateur
             context: Contexte de la permission
-            
+
         Returns:
             Ensemble des permissions effectives
         """
         cache_key = f"user_permissions:{user.id}"
         if context:
             cache_key += f":{hash(str(context))}"
-        
+
         permissions = cache.get(cache_key)
-        
+
         if permissions is None:
             permissions = set()
             user_roles = self.get_user_roles(user)
-            
+
             for role_name in user_roles:
                 role_def = self.get_role_definition(role_name)
                 if role_def:
                     permissions.update(role_def.permissions)
-                    
+
                     # Ajouter les permissions des rôles parents
                     parent_permissions = self._get_inherited_permissions(role_name)
                     permissions.update(parent_permissions)
-            
+
             # Permissions Django natives
             django_permissions = user.get_all_permissions()
             permissions.update(django_permissions)
-            
+
             cache.set(cache_key, permissions, 300)  # Cache 5 minutes
-        
+
         return permissions
-    
+
     def _get_inherited_permissions(self, role_name: str) -> Set[str]:
         """
         Récupère les permissions héritées des rôles parents.
-        
+
         Args:
             role_name: Nom du rôle
-            
+
         Returns:
             Ensemble des permissions héritées
         """
         permissions = set()
-        
+
         if role_name in self._role_hierarchy:
             for parent_role in self._role_hierarchy[role_name]:
                 parent_def = self.get_role_definition(parent_role)
@@ -247,62 +247,62 @@ class RoleManager:
                     permissions.update(parent_def.permissions)
                     # Récursion pour les rôles grands-parents
                     permissions.update(self._get_inherited_permissions(parent_role))
-        
+
         return permissions
-    
-    def has_permission(self, user: "AbstractUser", permission: str, 
-                      context: PermissionContext = None) -> bool:
+
+    def has_permission(self, user: "AbstractUser", permission: str,
+                       context: PermissionContext = None) -> bool:
         """
         Vérifie si un utilisateur a une permission spécifique.
-        
+
         Args:
             user: Utilisateur
             permission: Permission à vérifier
             context: Contexte de la permission
-            
+
         Returns:
             True si l'utilisateur a la permission
         """
         if not user or not user.is_authenticated:
             return False
-        
+
         # Super utilisateur a toutes les permissions
         if user.is_superuser:
             return True
-        
+
         effective_permissions = self.get_effective_permissions(user, context)
-        
+
         # Vérifier la permission exacte
         if permission in effective_permissions:
             return True
-        
+
         # Vérifier les permissions génériques (*)
         if '*' in effective_permissions:
             return True
-        
+
         # Vérifier les permissions avec wildcards
         for perm in effective_permissions:
             if perm.endswith('*'):
                 prefix = perm[:-1]
                 if permission.startswith(prefix):
                     return True
-        
+
         # Vérifier les permissions contextuelles
         if context:
             return self._check_contextual_permission(user, permission, context)
-        
+
         return False
-    
-    def _check_contextual_permission(self, user: "AbstractUser", 
-                                   permission: str, context: PermissionContext) -> bool:
+
+    def _check_contextual_permission(self, user: "AbstractUser",
+                                     permission: str, context: PermissionContext) -> bool:
         """
         Vérifie les permissions contextuelles.
-        
+
         Args:
             user: Utilisateur
             permission: Permission à vérifier
             context: Contexte de la permission
-            
+
         Returns:
             True si l'utilisateur a la permission dans ce contexte
         """
@@ -312,23 +312,23 @@ class RoleManager:
             if context.object_id:
                 # Vérifier si l'utilisateur est propriétaire de l'objet
                 return self._is_object_owner(user, context.object_id)
-        
+
         # Permissions sur les objets assignés
         if permission.endswith('_assigned'):
             base_permission = permission[:-9]
             if context.object_id:
                 return self._is_object_assigned(user, context.object_id)
-        
+
         return False
-    
+
     def _is_object_owner(self, user: "AbstractUser", object_id: str) -> bool:
         """
         Vérifie si l'utilisateur est propriétaire de l'objet.
-        
+
         Args:
             user: Utilisateur
             object_id: ID de l'objet
-            
+
         Returns:
             True si l'utilisateur est propriétaire
         """
@@ -347,17 +347,17 @@ class RoleManager:
                         continue
         except Exception as e:
             logger.error(f"Erreur lors de la vérification de propriété: {e}")
-        
+
         return False
-    
+
     def _is_object_assigned(self, user: "AbstractUser", object_id: str) -> bool:
         """
         Vérifie si l'objet est assigné à l'utilisateur.
-        
+
         Args:
             user: Utilisateur
             object_id: ID de l'objet
-            
+
         Returns:
             True si l'objet est assigné à l'utilisateur
         """
@@ -377,13 +377,13 @@ class RoleManager:
                         continue
         except Exception as e:
             logger.error(f"Erreur lors de la vérification d'assignation: {e}")
-        
+
         return False
-    
+
     def assign_role_to_user(self, user: "AbstractUser", role_name: str):
         """
         Assigne un rôle à un utilisateur.
-        
+
         Args:
             user: Utilisateur
             role_name: Nom du rôle à assigner
@@ -391,29 +391,29 @@ class RoleManager:
         role_def = self.get_role_definition(role_name)
         if not role_def:
             raise ValueError(f"Rôle '{role_name}' non trouvé")
-        
+
         # Vérifier les limites de rôle
         if role_def.max_users:
             current_count = Group.objects.get(name=role_name).user_set.count()
             if current_count >= role_def.max_users:
                 raise ValueError(f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'")
-        
+
         # Créer le groupe Django si nécessaire
         group, created = Group.objects.get_or_create(name=role_name)
         user.groups.add(group)
-        
+
         # Invalider le cache
         cache_key = f"user_roles:{user.id}"
         cache.delete(cache_key)
         cache_key = f"user_permissions:{user.id}"
         cache.delete(cache_key)
-        
+
         logger.info(f"Rôle '{role_name}' assigné à l'utilisateur {user.username}")
-    
+
     def remove_role_from_user(self, user: "AbstractUser", role_name: str):
         """
         Retire un rôle d'un utilisateur.
-        
+
         Args:
             user: Utilisateur
             role_name: Nom du rôle à retirer
@@ -421,13 +421,13 @@ class RoleManager:
         try:
             group = Group.objects.get(name=role_name)
             user.groups.remove(group)
-            
+
             # Invalider le cache
             cache_key = f"user_roles:{user.id}"
             cache.delete(cache_key)
             cache_key = f"user_permissions:{user.id}"
             cache.delete(cache_key)
-            
+
             logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user.username}")
         except Group.DoesNotExist:
             logger.warning(f"Groupe '{role_name}' non trouvé")
@@ -436,16 +436,16 @@ class RoleManager:
 def require_role(required_roles: Union[str, List[str]]):
     """
     Décorateur pour exiger des rôles spécifiques.
-    
+
     Args:
         required_roles: Rôle(s) requis
-        
+
     Returns:
         Décorateur de vérification de rôle
     """
     if isinstance(required_roles, str):
         required_roles = [required_roles]
-    
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -455,20 +455,20 @@ def require_role(required_roles: Union[str, List[str]]):
                 if hasattr(arg, 'context'):
                     info = arg
                     break
-            
+
             if not info or not hasattr(info.context, 'user'):
                 raise GraphQLError("Contexte utilisateur non disponible")
-            
+
             user = info.context.user
             if not user or not user.is_authenticated:
                 raise GraphQLError("Authentification requise")
-            
+
             user_roles = role_manager.get_user_roles(user)
-            
+
             # Vérifier si l'utilisateur a au moins un des rôles requis
             if not any(role in user_roles for role in required_roles):
                 raise GraphQLError(f"Rôles requis: {', '.join(required_roles)}")
-            
+
             return func(*args, **kwargs)
         return wrapper
     return decorator
@@ -477,11 +477,11 @@ def require_role(required_roles: Union[str, List[str]]):
 def require_permission(permission: str, context_func: callable = None):
     """
     Décorateur pour exiger une permission spécifique.
-    
+
     Args:
         permission: Permission requise
         context_func: Fonction pour extraire le contexte
-        
+
     Returns:
         Décorateur de vérification de permission
     """
@@ -494,22 +494,22 @@ def require_permission(permission: str, context_func: callable = None):
                 if hasattr(arg, 'context'):
                     info = arg
                     break
-            
+
             if not info or not hasattr(info.context, 'user'):
                 raise GraphQLError("Contexte utilisateur non disponible")
-            
+
             user = info.context.user
             if not user or not user.is_authenticated:
                 raise GraphQLError("Authentification requise")
-            
+
             # Construire le contexte si une fonction est fournie
             context = None
             if context_func:
                 context = context_func(*args, **kwargs)
-            
+
             if not role_manager.has_permission(user, permission, context):
                 raise GraphQLError(f"Permission requise: {permission}")
-            
+
             return func(*args, **kwargs)
         return wrapper
     return decorator

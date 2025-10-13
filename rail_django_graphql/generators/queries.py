@@ -122,7 +122,7 @@ class QueryGenerator:
         Generate a single object query for a model using the specified manager.
         For polymorphic models, uses the base model type with polymorphic_type field
         to identify the specific subclass instead of union types.
-        
+
         Args:
             model: Django model class
             manager_name: Name of the manager to use (defaults to "objects")
@@ -153,7 +153,7 @@ class QueryGenerator:
         Generates a query field for retrieving a list of model instances using the specified manager.
         For polymorphic models, returns the base model type to allow querying all instances.
         Supports advanced filtering, pagination, and ordering.
-        
+
         Args:
             model: Django model class
             manager_name: Name of the manager to use (defaults to "objects")
@@ -291,7 +291,7 @@ class QueryGenerator:
         """
         Generates a query field with advanced pagination support using the specified manager.
         Returns both the paginated results and pagination metadata.
-        
+
         Args:
             model: Django model class
             manager_name: Name of the manager to use (defaults to "objects")

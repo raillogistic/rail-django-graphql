@@ -17,38 +17,38 @@ logger = logging.getLogger(__name__)
 
 class RailDjangoGraphQLConfig(AppConfig):
     """Django app configuration for rail-django-graphql library."""
-    
+
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'rail_django_graphql'
     verbose_name = 'Rail Django GraphQL'
     label = 'rail_django_graphql'
-    
+
     def ready(self):
         """Initialize the application after Django has loaded."""
         try:
             # Setup performance monitoring if enabled
             self._setup_performance_monitoring()
-            
+
             # Setup Django signals
             self._setup_signals()
-            
+
             # Validate library configuration
             self._validate_configuration()
-            
+
             # Initialize schema registry
             self._initialize_schema_registry()
-            
+
             # Invalidate metadata cache on startup
             self._invalidate_cache_on_startup()
-            
+
             logger.info("Rail Django GraphQL library initialized successfully")
-            
+
         except Exception as e:
             logger.error(f"Error initializing Rail Django GraphQL library: {e}")
             # Don't raise in production to avoid breaking the app
             if self._is_debug_mode():
                 raise
-    
+
     def _setup_performance_monitoring(self):
         """Setup performance monitoring if enabled."""
         try:
@@ -61,7 +61,7 @@ class RailDjangoGraphQLConfig(AppConfig):
             logger.warning(f"Could not setup performance monitoring: {e}")
         except Exception as e:
             logger.error(f"Error setting up performance monitoring: {e}")
-    
+
     def _setup_signals(self):
         """Configure Django signals for automatic schema generation."""
         try:
@@ -74,7 +74,7 @@ class RailDjangoGraphQLConfig(AppConfig):
             logger.debug(f"Signals module not found, skipping: {e}")
         except Exception as e:
             logger.warning(f"Could not setup signals: {e}")
-    
+
     def _validate_configuration(self):
         """Validate library configuration."""
         try:
@@ -85,7 +85,7 @@ class RailDjangoGraphQLConfig(AppConfig):
             logger.warning(f"Configuration validation failed: {e}")
             if self._is_debug_mode():
                 raise
-    
+
     def _initialize_schema_registry(self):
         """Initialize the schema registry."""
         try:
@@ -98,7 +98,7 @@ class RailDjangoGraphQLConfig(AppConfig):
             logger.debug(f"Schema registry not available: {e}")
         except Exception as e:
             logger.warning(f"Could not initialize schema registry: {e}")
-    
+
     def _is_debug_mode(self):
         """Check if we're in debug mode."""
         try:
@@ -106,7 +106,6 @@ class RailDjangoGraphQLConfig(AppConfig):
             return getattr(django_settings, 'DEBUG', False)
         except:
             return False
-
 
     def _configure_environment(self):
         """Configure l'environnement pour l'application."""

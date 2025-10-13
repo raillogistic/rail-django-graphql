@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 class HealthMonitor:
     """
     Continuous health monitoring system with alerting capabilities.
-    
+
     Features:
     - Continuous health monitoring with configurable intervals
     - Alert system for degraded/unhealthy components
@@ -63,38 +63,38 @@ class HealthMonitor:
     def start_monitoring(self, duration_minutes: Optional[int] = None):
         """
         Start continuous health monitoring.
-        
+
         Args:
             duration_minutes: How long to monitor (None for indefinite)
         """
         logger.info("Starting health monitoring system...")
-        
+
         start_time = time.time()
         end_time = start_time + (duration_minutes * 60) if duration_minutes else None
-        
+
         try:
             while True:
                 # Perform health check
                 health_report = self._perform_health_check()
-                
+
                 # Store in history
                 self._store_health_data(health_report)
-                
+
                 # Check for alerts
                 self._check_and_send_alerts(health_report)
-                
+
                 # Log status
                 if self.config["enable_logging"]:
                     self._log_health_status(health_report)
-                
+
                 # Check if we should stop
                 if end_time and time.time() >= end_time:
                     logger.info("Monitoring duration completed")
                     break
-                
+
                 # Wait for next check
                 time.sleep(self.config["check_interval_seconds"])
-                
+
         except KeyboardInterrupt:
             logger.info("Health monitoring stopped by user")
         except Exception as e:
@@ -126,7 +126,7 @@ class HealthMonitor:
             "system_metrics": health_report.get("system_metrics", {}),
             "response_times": self._extract_response_times(health_report)
         })
-        
+
         # Limit history size
         if len(self.health_history) > self.config["max_history_entries"]:
             self.health_history = self.health_history[-self.config["max_history_entries"]:]
@@ -134,30 +134,31 @@ class HealthMonitor:
     def _extract_response_times(self, health_report: Dict[str, Any]) -> Dict[str, float]:
         """Extract response times from health report."""
         response_times = {}
-        
+
         # Schema response time
         if "schema" in health_report.get("components", {}):
-            response_times["schema"] = health_report["components"]["schema"].get("response_time_ms", 0)
-        
+            response_times["schema"] = health_report["components"]["schema"].get(
+                "response_time_ms", 0)
+
         # Database response times
         for db_status in health_report.get("components", {}).get("databases", []):
             component = db_status.get("component", "unknown")
             response_times[component] = db_status.get("response_time_ms", 0)
-        
+
         # Cache response times
         for cache_status in health_report.get("components", {}).get("caches", []):
             component = cache_status.get("component", "unknown")
             response_times[component] = cache_status.get("response_time_ms", 0)
-        
+
         return response_times
 
     def _check_and_send_alerts(self, health_report: Dict[str, Any]):
         """Check health status and send alerts if necessary."""
         current_time = datetime.now(timezone.utc)
-        
+
         # Check overall system status
         overall_status = health_report["overall_status"]
-        
+
         if overall_status == "unhealthy":
             self._send_alert("system_critical", {
                 "level": "CRITICAL",
@@ -172,17 +173,17 @@ class HealthMonitor:
                 "details": health_report["summary"],
                 "recommendations": health_report.get("recommendations", [])
             })
-        
+
         # Check individual components
         self._check_component_alerts(health_report)
-        
+
         # Check performance thresholds
         self._check_performance_alerts(health_report)
 
     def _check_component_alerts(self, health_report: Dict[str, Any]):
         """Check individual component health and send alerts."""
         components = health_report.get("components", {})
-        
+
         # Check schema
         if "schema" in components:
             schema_status = components["schema"]
@@ -192,7 +193,7 @@ class HealthMonitor:
                     "message": f"GraphQL schema is unhealthy: {schema_status['message']}",
                     "component": "schema"
                 })
-        
+
         # Check databases
         for db_status in components.get("databases", []):
             if db_status["status"] == "unhealthy":
@@ -201,7 +202,7 @@ class HealthMonitor:
                     "message": f"Database {db_status['component']} is unhealthy: {db_status['message']}",
                     "component": db_status["component"]
                 })
-        
+
         # Check caches
         for cache_status in components.get("caches", []):
             if cache_status["status"] == "unhealthy":
@@ -215,7 +216,7 @@ class HealthMonitor:
         """Check performance metrics against thresholds."""
         metrics = health_report.get("system_metrics", {})
         thresholds = self.config["performance_thresholds"]
-        
+
         # CPU usage
         cpu_usage = metrics.get("cpu_usage_percent", 0)
         if cpu_usage > thresholds["cpu_usage_percent"]:
@@ -226,7 +227,7 @@ class HealthMonitor:
                 "value": cpu_usage,
                 "threshold": thresholds["cpu_usage_percent"]
             })
-        
+
         # Memory usage
         memory_usage = metrics.get("memory_usage_percent", 0)
         if memory_usage > thresholds["memory_usage_percent"]:
@@ -237,7 +238,7 @@ class HealthMonitor:
                 "value": memory_usage,
                 "threshold": thresholds["memory_usage_percent"]
             })
-        
+
         # Disk usage
         disk_usage = metrics.get("disk_usage_percent", 0)
         if disk_usage > thresholds["disk_usage_percent"]:
@@ -248,7 +249,7 @@ class HealthMonitor:
                 "value": disk_usage,
                 "threshold": thresholds["disk_usage_percent"]
             })
-        
+
         # Cache hit rate
         cache_hit_rate = metrics.get("cache_hit_rate", 100)
         if cache_hit_rate < thresholds["cache_hit_rate"]:
@@ -263,15 +264,15 @@ class HealthMonitor:
     def _send_alert(self, alert_key: str, alert_data: Dict[str, Any]):
         """Send alert if not in cooldown period."""
         current_time = datetime.now(timezone.utc)
-        
+
         # Check cooldown
         if alert_key in self.last_alert_times:
             time_since_last = current_time - self.last_alert_times[alert_key]
             cooldown_period = timedelta(minutes=self.config["alert_cooldown_minutes"])
-            
+
             if time_since_last < cooldown_period:
                 return  # Still in cooldown
-        
+
         # Send alert
         alert_message = {
             "timestamp": current_time.isoformat(),
@@ -280,17 +281,17 @@ class HealthMonitor:
             "message": alert_data["message"],
             "details": alert_data
         }
-        
+
         # Log alert
         logger.warning(f"ALERT [{alert_data['level']}]: {alert_data['message']}")
-        
+
         # Store in history
         self.alert_history.append(alert_message)
-        
+
         # Send email if configured
         if self.config["enable_email_alerts"] and self.config["email_recipients"]:
             self._send_email_alert(alert_message)
-        
+
         # Update last alert time
         self.last_alert_times[alert_key] = current_time
 
@@ -298,7 +299,7 @@ class HealthMonitor:
         """Send email alert."""
         try:
             subject = f"GraphQL System Alert - {alert_message['level']}: {alert_message['message']}"
-            
+
             body = f"""
 GraphQL System Health Alert
 
@@ -311,7 +312,7 @@ Details:
 
 This is an automated alert from the GraphQL health monitoring system.
             """
-            
+
             send_mail(
                 subject=subject,
                 message=body,
@@ -319,9 +320,9 @@ This is an automated alert from the GraphQL health monitoring system.
                 recipient_list=self.config["email_recipients"],
                 fail_silently=False
             )
-            
+
             logger.info(f"Email alert sent for: {alert_message['message']}")
-            
+
         except Exception as e:
             logger.error(f"Failed to send email alert: {e}")
 
@@ -329,14 +330,14 @@ This is an automated alert from the GraphQL health monitoring system.
         """Log current health status."""
         status = health_report["overall_status"]
         summary = health_report["summary"]
-        
+
         log_message = (
             f"Health Check - Status: {status.upper()} | "
             f"Healthy: {summary['healthy']} | "
             f"Degraded: {summary['degraded']} | "
             f"Unhealthy: {summary['unhealthy']}"
         )
-        
+
         if status == "healthy":
             logger.info(log_message)
         elif status == "degraded":
@@ -348,18 +349,20 @@ This is an automated alert from the GraphQL health monitoring system.
         """Get summary of recent health data."""
         if not self.health_history:
             return {"message": "No health data available"}
-        
+
         recent_checks = self.health_history[-10:]  # Last 10 checks
-        
+
         # Calculate averages
         total_healthy = sum(check["summary"]["healthy"] for check in recent_checks)
         total_degraded = sum(check["summary"]["degraded"] for check in recent_checks)
         total_unhealthy = sum(check["summary"]["unhealthy"] for check in recent_checks)
-        
+
         # Get system metrics averages
-        cpu_values = [check["system_metrics"].get("cpu_usage_percent", 0) for check in recent_checks]
-        memory_values = [check["system_metrics"].get("memory_usage_percent", 0) for check in recent_checks]
-        
+        cpu_values = [check["system_metrics"].get(
+            "cpu_usage_percent", 0) for check in recent_checks]
+        memory_values = [check["system_metrics"].get(
+            "memory_usage_percent", 0) for check in recent_checks]
+
         return {
             "monitoring_duration_minutes": len(self.health_history) * (self.config["check_interval_seconds"] / 60),
             "total_checks": len(self.health_history),
@@ -370,15 +373,15 @@ This is an automated alert from the GraphQL health monitoring system.
             "average_cpu_usage": sum(cpu_values) / len(cpu_values) if cpu_values else 0,
             "average_memory_usage": sum(memory_values) / len(memory_values) if memory_values else 0,
             "total_alerts": len(self.alert_history),
-            "recent_alerts": len([a for a in self.alert_history if 
-                                datetime.fromisoformat(a["timestamp"].replace('Z', '+00:00')) > 
-                                datetime.now(timezone.utc) - timedelta(hours=1)])
+            "recent_alerts": len([a for a in self.alert_history if
+                                  datetime.fromisoformat(a["timestamp"].replace('Z', '+00:00')) >
+                                  datetime.now(timezone.utc) - timedelta(hours=1)])
         }
 
 
 class Command(BaseCommand):
     """Django management command for health monitoring."""
-    
+
     help = 'Monitor GraphQL system health with continuous checks and alerting'
 
     def add_arguments(self, parser):
@@ -420,34 +423,34 @@ class Command(BaseCommand):
         try:
             # Load configuration
             config = self._load_config(options)
-            
+
             # Create monitor
             monitor = HealthMonitor(config)
-            
+
             if options['summary_only']:
                 # Just show a quick health check
                 health_report = health_checker.get_comprehensive_health_report()
                 self._display_health_report(health_report)
                 return
-            
+
             # Start monitoring
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Starting health monitoring (interval: {config['check_interval_seconds']}s)"
                 )
             )
-            
+
             if options['duration']:
                 self.stdout.write(f"Monitoring for {options['duration']} minutes...")
             else:
                 self.stdout.write("Monitoring indefinitely (Ctrl+C to stop)...")
-            
+
             monitor.start_monitoring(options['duration'])
-            
+
             # Show summary
             summary = monitor.get_health_summary()
             self._display_summary(summary)
-            
+
         except KeyboardInterrupt:
             self.stdout.write(self.style.WARNING("\nMonitoring stopped by user"))
         except Exception as e:
@@ -456,17 +459,17 @@ class Command(BaseCommand):
     def _load_config(self, options: Dict[str, Any]) -> Dict[str, Any]:
         """Load monitoring configuration."""
         config = HealthMonitor()._get_default_config()
-        
+
         # Override with command line options
         if options['interval']:
             config['check_interval_seconds'] = options['interval']
-        
+
         if options['enable_alerts']:
             config['enable_email_alerts'] = True
-        
+
         if options['alert_recipients']:
             config['email_recipients'] = options['alert_recipients']
-        
+
         # Load from config file if provided
         if options['config_file']:
             try:
@@ -475,13 +478,13 @@ class Command(BaseCommand):
                     config.update(file_config)
             except Exception as e:
                 raise CommandError(f"Failed to load config file: {e}")
-        
+
         return config
 
     def _display_health_report(self, health_report: Dict[str, Any]):
         """Display health report in a formatted way."""
         status = health_report["overall_status"]
-        
+
         # Status with color
         if status == "healthy":
             status_display = self.style.SUCCESS(status.upper())
@@ -489,17 +492,17 @@ class Command(BaseCommand):
             status_display = self.style.WARNING(status.upper())
         else:
             status_display = self.style.ERROR(status.upper())
-        
+
         self.stdout.write(f"\nSystem Health Status: {status_display}")
         self.stdout.write(f"Timestamp: {health_report['timestamp']}")
-        
+
         # Summary
         summary = health_report["summary"]
         self.stdout.write(f"\nComponent Summary:")
         self.stdout.write(f"  Healthy: {summary['healthy']}")
         self.stdout.write(f"  Degraded: {summary['degraded']}")
         self.stdout.write(f"  Unhealthy: {summary['unhealthy']}")
-        
+
         # System metrics
         if "system_metrics" in health_report:
             metrics = health_report["system_metrics"]
@@ -508,7 +511,7 @@ class Command(BaseCommand):
             self.stdout.write(f"  Memory Usage: {metrics.get('memory_usage_percent', 0):.1f}%")
             self.stdout.write(f"  Disk Usage: {metrics.get('disk_usage_percent', 0):.1f}%")
             self.stdout.write(f"  Cache Hit Rate: {metrics.get('cache_hit_rate', 0):.1f}%")
-        
+
         # Recommendations
         if health_report.get("recommendations"):
             self.stdout.write(f"\nRecommendations:")
@@ -520,7 +523,8 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("\n=== Monitoring Summary ==="))
         self.stdout.write(f"Duration: {summary['monitoring_duration_minutes']:.1f} minutes")
         self.stdout.write(f"Total Checks: {summary['total_checks']}")
-        self.stdout.write(f"Average Healthy Components: {summary['average_healthy_components']:.1f}")
+        self.stdout.write(
+            f"Average Healthy Components: {summary['average_healthy_components']:.1f}")
         self.stdout.write(f"Average CPU Usage: {summary['average_cpu_usage']:.1f}%")
         self.stdout.write(f"Average Memory Usage: {summary['average_memory_usage']:.1f}%")
         self.stdout.write(f"Total Alerts: {summary['total_alerts']}")

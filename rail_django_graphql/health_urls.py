@@ -16,6 +16,7 @@ def simple_health_dashboard(request):
     from django.shortcuts import render
     return render(request, 'health_dashboard.html')
 
+
 def simple_health_api(request):
     """Simple health API endpoint."""
     return JsonResponse({
@@ -28,19 +29,21 @@ def simple_health_api(request):
         }
     })
 
+
 def simple_health_check(request):
     """Simple health check endpoint."""
     return JsonResponse({'status': 'ok'})
+
 
 # Health URL patterns
 health_urlpatterns = [
     # Tableau de bord principal
     path('health/', simple_health_dashboard, name='health_dashboard'),
     path('health/dashboard/', simple_health_dashboard, name='health_dashboard_explicit'),
-    
+
     # API endpoints pour les données de santé
     path('health/api/', simple_health_api, name='health_api'),
-    
+
     # Endpoints de vérification simple
     path('health/check/', simple_health_check, name='health_check'),
     path('health/ping/', simple_health_check, name='health_ping'),
