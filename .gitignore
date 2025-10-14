@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-dist/*
 # C extensions
 *.so
 .venv
@@ -20,7 +19,6 @@ env/*
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
