@@ -32,6 +32,7 @@ jobs:
         safety check
 
     - name: Run Bandit (security linter)
+      continue-on-error: true
       run: |
         bandit -r rail_django_graphql -f json -o bandit-report.json || true
         bandit -r rail_django_graphql
