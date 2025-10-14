@@ -1,6 +1,57 @@
 # Rail Django GraphQL - Automation Guide
 
-This guide explains how to use the automated upload and build script (`upload_and_build.ps1`) for releasing new versions of the `rail-django-graphql` package.
+This guide explains the automated release system for the `rail-django-graphql` package, including both the manual upload script and the new auto-tagging workflow.
+
+## 🚀 Auto-Tagging Workflow (Recommended)
+
+The auto-tagging workflow automatically creates Git tags and triggers releases when you update the version in `pyproject.toml`. This is the **recommended approach** for most releases.
+
+### How It Works
+
+1. **Update Version**: Modify the version in `pyproject.toml`
+2. **Commit & Push**: Push changes to the `main` branch
+3. **Auto-Tag**: Workflow detects version change and creates a tag
+4. **Auto-Release**: Release workflow builds and publishes to PyPI
+
+### Quick Start
+
+```bash
+# 1. Update version in pyproject.toml
+sed -i 's/version = "1.1.3"/version = "1.2.0"/' pyproject.toml
+
+# 2. Commit and push
+git add pyproject.toml
+git commit -m "Bump version to 1.2.0"
+git push origin main
+
+# 3. Auto-tagging workflow runs automatically
+# 4. Release workflow publishes to PyPI
+```
+
+### Auto-Tagging Features
+
+- ✅ **Semantic Version Validation**: Ensures versions follow semver format
+- ✅ **Version Comparison**: Only creates tags for version increases
+- ✅ **Duplicate Prevention**: Skips if tag already exists
+- ✅ **Draft Releases**: Creates GitHub draft releases for review
+- ✅ **Detailed Logging**: Provides comprehensive workflow summaries
+
+### Workflow Triggers
+
+The auto-tagging workflow triggers on:
+- Changes to `pyproject.toml` on the `main` branch
+- Changes to `rail_django_graphql/__init__.py` on the `main` branch
+
+### Workflow Outputs
+
+When successful, the workflow:
+1. Creates an annotated Git tag (e.g., `v1.2.0`)
+2. Creates a GitHub draft release with auto-generated notes
+3. Triggers the release workflow for PyPI publishing
+
+## 📦 Manual Upload Script (Legacy)
+
+The `upload_and_build.ps1` script provides manual control over the release process. Use this for complex releases or when you need custom control.
 
 ## Overview
 
@@ -221,7 +272,55 @@ Continue anyway? (y/N)
 
 ## Troubleshooting
 
-### Script Won't Run
+### Auto-Tagging Workflow Issues
+
+#### Workflow Not Triggering
+1. **Check file paths**: Ensure changes are made to `pyproject.toml` or `rail_django_graphql/__init__.py`
+2. **Verify branch**: Auto-tagging only works on the `main` branch
+3. **Check workflow status**: Visit GitHub Actions tab to see workflow runs
+
+#### Version Not Detected
+```bash
+# Verify version format in pyproject.toml
+grep "version" pyproject.toml
+
+# Should show: version = "1.2.3" (semantic versioning)
+```
+
+#### Tag Already Exists Error
+```bash
+# Check existing tags
+git tag -l "v*"
+
+# Delete local tag if needed
+git tag -d v1.2.3
+
+# Delete remote tag if needed (use with caution)
+git push origin --delete v1.2.3
+```
+
+#### Semantic Versioning Validation Fails
+- Ensure version follows format: `MAJOR.MINOR.PATCH` (e.g., `1.2.3`)
+- Pre-release versions: `1.2.3-alpha.1`
+- Build metadata: `1.2.3+build.1`
+- Invalid formats: `v1.2.3`, `1.2`, `1.2.3.4`
+
+#### Version Comparison Issues
+The workflow only creates tags when version increases:
+```bash
+# ✅ Valid increases
+1.0.0 → 1.0.1 (patch)
+1.0.1 → 1.1.0 (minor)
+1.1.0 → 2.0.0 (major)
+
+# ❌ Invalid (no tag created)
+1.1.0 → 1.1.0 (unchanged)
+1.1.0 → 1.0.9 (decrease)
+```
+
+### Manual Script Issues
+
+#### Script Won't Run
 ```powershell
 # Check execution policy
 Get-ExecutionPolicy
@@ -288,6 +387,36 @@ git checkout main
 git pull origin main
 .\upload_and_build.ps1 -Version "1.2.0" -Message "Add new GraphQL features"
 ```
+
+## Workflow Comparison
+
+### Auto-Tagging vs Manual Script
+
+| Feature | Auto-Tagging Workflow | Manual Script |
+|---------|----------------------|---------------|
+| **Ease of Use** | ✅ Simple version bump + push | ⚠️ Requires script execution |
+| **Automation** | ✅ Fully automated | ⚠️ Semi-automated |
+| **Error Prevention** | ✅ Built-in validation | ⚠️ Manual validation needed |
+| **Rollback** | ✅ Easy (delete tag) | ❌ Complex |
+| **Customization** | ❌ Limited | ✅ Highly customizable |
+| **Local Testing** | ❌ Not available | ✅ Dry-run mode |
+| **Complex Releases** | ❌ Basic releases only | ✅ Full control |
+
+### When to Use Each Approach
+
+**Use Auto-Tagging When:**
+- Standard version releases (patch, minor, major)
+- Following semantic versioning
+- Want maximum automation
+- Team-based development
+- Regular release cadence
+
+**Use Manual Script When:**
+- Complex release requirements
+- Custom release notes needed
+- Local testing required
+- Emergency hotfixes
+- Pre-release versions
 
 ## Monitoring and Verification
 
