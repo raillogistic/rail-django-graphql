@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2024-12-20
+
+### Fixed
+- **Critical Bug Fix**: Fixed dual field logic in GraphQL mutations where mandatory dual fields (e.g., `category`/`nested_category`) were incorrectly required
+- Corrected inverted logic in `rail_django_graphql/generators/types.py` that made required fields NonNull instead of making mandatory dual fields optional
+- Enhanced mutual exclusivity handling between direct ID fields and nested object fields in GraphQL input types
+
+### Improved
+- Better error handling and validation for dual field scenarios
+- Comprehensive test coverage for dual field functionality
+- Production-ready dual field implementation with runtime validation
+
+### Technical Details
+- Modified `_should_be_required` method in TypeGenerator to properly handle mandatory dual fields
+- Ensured mandatory dual fields are made optional in GraphQL schema while maintaining runtime validation
+- Added extensive debugging and testing infrastructure for dual field logic
+
+## [1.1.1] - 2024-12-19
+
 ### Added
 - Initial library structure and packaging
 - GitHub Actions CI/CD pipeline
