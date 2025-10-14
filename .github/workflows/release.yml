@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      HAS_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN != '' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -47,5 +49,4 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          HAS_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN != '' && 'true' || 'false' }}
         run: twine upload dist/*
