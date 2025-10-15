@@ -31,9 +31,15 @@ $PackageName = "rail-django-graphql"
 
 Write-Info "Starting automated upload and build process for $PackageName v$Version"
 
+# Normalize version format (remove 'v' prefix if present)
+if ($Version.StartsWith('v')) {
+    $Version = $Version.Substring(1)
+    Write-Info "Normalized version from v$Version to $Version"
+}
+
 # Validate version format
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
-    Write-Error "Invalid version format. Use semantic versioning (e.g. 1.2.3)"
+    Write-Error "Invalid version format. Use semantic versioning (e.g. 1.2.3 or v1.2.3)"
     exit 1
 }
 

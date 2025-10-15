@@ -115,6 +115,7 @@ include-package-data = true
 rail_django_graphql = [
     "templates/**/*",
     "static/**/*",
+    "*/**/*",
     "management/commands/*",
 ]
 

@@ -18,6 +18,30 @@
 - Automated version bump and build
 
 
+## [1.1.5] - 2025-10-14
+
+### Changed
+- Automated version bump and build
+
+
+## [1.1.4] - 2025-10-14
+
+### Changed
+- Automated version bump and build
+
+
+## [1.1.4] - 2025-10-14
+
+### Changed
+- Automated version bump and build
+
+
+## [1.1.4] - 2025-10-14
+
+### Changed
+- Automated version bump and build
+
+
 ## [1.1.4] - 2025-10-14
 
 ### Changed
