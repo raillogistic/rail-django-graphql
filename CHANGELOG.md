@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.4] - 2025-10-15
+
+### Changed
+- Automated version bump and build
+
+
 ## [1.1.4] - 2025-10-14
 
 ### Changed

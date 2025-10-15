@@ -5,6 +5,8 @@ __pycache__/
 # C extensions
 *.so
 .venv
+dist/*
+dist/
 venv/*
 env/*
 *.pyc
@@ -26,6 +28,7 @@ lib/
 lib64/
 parts/
 sdist/
+
 var/
 wheels/
 pip-wheel-metadata/
