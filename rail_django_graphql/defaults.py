@@ -108,7 +108,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         # Enable delete mutations (alias for generate_delete)
         "enable_delete": True,
         # Enable bulk operations
-        "enable_bulk_operations": False,
+        "enable_bulk_operations": True,
         # Enable method mutations
         "enable_method_mutations": True,
         # Maximum number of items in bulk operations
@@ -1183,7 +1183,11 @@ def merge_settings(*settings_dicts: Dict[str, Any]) -> Dict[str, Any]:
 
     for settings_dict in settings_dicts:
         for key, value in settings_dict.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
                 # Deep merge nested dictionaries
                 result[key] = merge_settings(result[key], value)
             else:
@@ -1256,7 +1260,10 @@ def validate_settings(settings: Dict[str, Any]) -> List[str]:
     if "query_settings" in settings:
         query_settings = settings["query_settings"]
 
-        if "default_page_size" in query_settings and query_settings["default_page_size"] <= 0:
+        if (
+            "default_page_size" in query_settings
+            and query_settings["default_page_size"] <= 0
+        ):
             errors.append("default_page_size must be greater than 0")
 
         if "max_page_size" in query_settings and query_settings["max_page_size"] <= 0:

@@ -22,7 +22,11 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
 from django.db.models import Prefetch, QuerySet
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
-from django.db.models.fields.reverse_related import ManyToManyRel, ManyToOneRel, OneToOneRel
+from django.db.models.fields.reverse_related import (
+    ManyToManyRel,
+    ManyToOneRel,
+    OneToOneRel,
+)
 from graphql import GraphQLResolveInfo
 from graphql.execution.collect_fields import collect_fields
 
@@ -184,21 +188,29 @@ class QueryAnalyzer:
             except FieldDoesNotExist:
                 # Check for reverse relationships
                 # For modern Django versions, use related_objects
-                if hasattr(model._meta, 'related_objects'):
+                if hasattr(model._meta, "related_objects"):
                     for rel in model._meta.related_objects:
                         if rel.get_accessor_name() == field_name:
                             if isinstance(rel, (ManyToOneRel, ManyToManyRel)):
                                 prefetch_related.append(field_name)
                             break
                 # Fallback for Django versions that use get_fields() with related fields
-                elif hasattr(model._meta, 'get_fields'):
+                elif hasattr(model._meta, "get_fields"):
                     try:
                         for field in model._meta.get_fields():
-                            if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                            if hasattr(field, "related_model") and hasattr(
+                                field, "get_accessor_name"
+                            ):
                                 if field.get_accessor_name() == field_name:
-                                    if hasattr(field, 'many_to_many') and field.many_to_many:
+                                    if (
+                                        hasattr(field, "many_to_many")
+                                        and field.many_to_many
+                                    ):
                                         prefetch_related.append(field_name)
-                                    elif hasattr(field, 'one_to_many') and field.one_to_many:
+                                    elif (
+                                        hasattr(field, "one_to_many")
+                                        and field.one_to_many
+                                    ):
                                         prefetch_related.append(field_name)
                                     break
                     except AttributeError:
@@ -274,16 +286,18 @@ class QueryAnalyzer:
             except FieldDoesNotExist:
                 # Reverse relationships also add queries
                 # For modern Django versions, use related_objects
-                if hasattr(model._meta, 'related_objects'):
+                if hasattr(model._meta, "related_objects"):
                     for rel in model._meta.related_objects:
                         if rel.get_accessor_name() == field_name:
                             query_count += 1
                             break
                 # Fallback for Django versions that use get_fields() with related fields
-                elif hasattr(model._meta, 'get_fields'):
+                elif hasattr(model._meta, "get_fields"):
                     try:
                         for field in model._meta.get_fields():
-                            if hasattr(field, 'related_model') and hasattr(field, 'get_accessor_name'):
+                            if hasattr(field, "related_model") and hasattr(
+                                field, "get_accessor_name"
+                            ):
                                 if field.get_accessor_name() == field_name:
                                     query_count += 1
                                     break
@@ -594,7 +608,7 @@ class PerformanceMonitor:
 
         # Log errors
         if error:
-            logger.error(f"xQuery error in {query_name}: {error}")
+            logger.error(f"xQuery error in {query_name}: {error}", exc_info=True)
 
     def get_performance_stats(self, query_name: str = None) -> Dict[str, Any]:
         """Get performance statistics."""

@@ -105,13 +105,15 @@ class MultiSchemaGraphQLView(GraphQLView):
 
                 # Validate JWT token using JWTManager
                 from ..extensions.auth import JWTManager
+
                 payload = JWTManager.verify_token(token)
 
                 if payload:
                     # Get user from payload, support standard 'sub' claim fallback
-                    user_id = payload.get('user_id') or payload.get('sub')
+                    user_id = payload.get("user_id") or payload.get("sub")
                     if user_id:
                         from django.contrib.auth import get_user_model
+
                         User = get_user_model()
 
                         try:
@@ -129,8 +131,8 @@ class MultiSchemaGraphQLView(GraphQLView):
                 logger.warning(f"JWT authentication failed: {str(e)}")
 
         # Add schema name to context for metadata hierarchy
-        schema_match = getattr(request, 'resolver_match', None)
-        schema_name = getattr(schema_match, 'kwargs', {}).get('schema_name', 'default')
+        schema_match = getattr(request, "resolver_match", None)
+        schema_name = getattr(schema_match, "kwargs", {}).get("schema_name", "default")
         context.schema_name = schema_name
 
         return context
@@ -259,17 +261,19 @@ class MultiSchemaGraphQLView(GraphQLView):
 
             # Validate JWT token using JWTManager
             from ..extensions.auth import JWTManager
+
             payload = JWTManager.verify_token(token)
 
             if not payload:
                 return False
 
             # Check if user exists and is active
-            user_id = payload.get('user_id')
+            user_id = payload.get("user_id")
             if not user_id:
                 return False
 
             from django.contrib.auth import get_user_model
+
             User = get_user_model()
 
             try:
@@ -281,6 +285,7 @@ class MultiSchemaGraphQLView(GraphQLView):
         except Exception as e:
             # Log the error for debugging but don't expose details
             import logging
+
             logger = logging.getLogger(__name__)
             logger.warning(f"Token validation failed: {str(e)}")
             return False

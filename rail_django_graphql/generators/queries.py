@@ -117,7 +117,9 @@ class QueryGenerator:
         """Access to the filter generator instance."""
         return self._filter_generator
 
-    def generate_single_query(self, model: Type[models.Model], manager_name: str = "objects") -> graphene.Field:
+    def generate_single_query(
+        self, model: Type[models.Model], manager_name: str = "objects"
+    ) -> graphene.Field:
         """
         Generate a single object query for a model using the specified manager.
         For polymorphic models, uses the base model type with polymorphic_type field
@@ -287,7 +289,9 @@ class QueryGenerator:
                 description=f"Retrieve a list of {model_name} instances using {manager_name} manager",
             )
 
-    def generate_paginated_query(self, model: Type[models.Model], manager_name: str = "objects") -> graphene.Field:
+    def generate_paginated_query(
+        self, model: Type[models.Model], manager_name: str = "objects"
+    ) -> graphene.Field:
         """
         Generates a query field with advanced pagination support using the specified manager.
         Returns both the paginated results and pagination metadata.
