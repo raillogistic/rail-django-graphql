@@ -25,7 +25,6 @@ from django.urls import reverse
 from graphene import Schema
 from graphene.test import Client
 from graphene_django.views import GraphQLView
-
 from rail_django_graphql.core.schema import SchemaBuilder
 from rail_django_graphql.middleware import GraphQLPerformanceMiddleware
 
@@ -39,7 +38,7 @@ TEST_GRAPHQL_SETTINGS = {
     },
     "RAIL_DJANGO_GRAPHQL": {
         "schema_settings": {
-            "authentication_required": False,
+            "authentication_required": True,
             "permission_classes": [],
         },
         "SECURITY": {

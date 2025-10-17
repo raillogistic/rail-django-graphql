@@ -96,36 +96,28 @@ class MultiSchemaGraphQLView(GraphQLView):
         if header_lower.startswith("bearer ") or header_lower.startswith("token "):
             try:
                 # Extract token from header
-                parts = auth_header.split(" ")
-                token = parts[1] if len(parts) >= 2 else None
-                if not token:
-                    return context
-                else:
-                    return context
+                parts = auth_header.split(" ", 1)
+                token = parts[1] if len(parts) == 2 else None
+                if token:
+                    # Validate JWT token using JWTManager
+                    from ..extensions.auth import JWTManager
 
-                # Validate JWT token using JWTManager
-                from ..extensions.auth import JWTManager
+                    payload = JWTManager.verify_token(token)
 
-                payload = JWTManager.verify_token(token)
+                    if payload:
+                        # Get user from payload, support standard 'sub' claim fallback
+                        user_id = payload.get("user_id") or payload.get("sub")
+                        if user_id:
+                            from django.contrib.auth import get_user_model
 
-                if payload:
-                    # Get user from payload, support standard 'sub' claim fallback
-                    user_id = payload.get("user_id") or payload.get("sub")
-                    if user_id:
-                        from django.contrib.auth import get_user_model
+                            User = get_user_model()
 
-                        User = get_user_model()
-
-                        try:
-                            user = User.objects.get(id=user_id)
-                            if user.is_active:
+                            user = User.objects.filter(id=user_id, is_active=True).first()
+                            if user:
                                 # Inject authenticated user into context
                                 context.user = user
                                 # Also set on request for compatibility
                                 request.user = user
-                        except User.DoesNotExist:
-                            pass
-
             except Exception as e:
                 # Log the error for debugging but don't expose details
                 logger.warning(f"JWT authentication failed: {str(e)}")

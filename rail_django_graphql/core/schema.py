@@ -407,25 +407,50 @@ class SchemaBuilder:
                 query_attrs = {"debug": graphene.Field(DjangoDebug, name="_debug")}
                 query_attrs.update(self._query_fields)
 
-                # Add security-related queries
+                # Add security-related queries with proper resolver binding
                 try:
                     from ..extensions.auth import MeQuery
                     from ..extensions.permissions import PermissionQuery
                     from ..extensions.rate_limiting import SecurityQuery
                     from ..extensions.validation import ValidationQuery
 
-                    # Merge security queries
+                    # Merge security queries and bind their resolvers to the root Query
                     for query_class in [
                         MeQuery,
                         PermissionQuery,
                         ValidationQuery,
                         SecurityQuery,
                     ]:
+                        # Create an instance to access bound resolver methods
+                        query_instance = query_class()
+
                         for field_name, field in query_class._meta.fields.items():
-                            query_attrs[field_name] = field
+                            resolver_method_name = f"resolve_{field_name}"
+                            if hasattr(query_instance, resolver_method_name):
+                                resolver_method = getattr(
+                                    query_instance, resolver_method_name
+                                )
+
+                                # Create a wrapper that adapts (root, info, **kwargs) to (info, **kwargs)
+                                def create_resolver_wrapper(method):
+                                    def wrapper(root, info, **kwargs):
+                                        return method(info, **kwargs)
+
+                                    return wrapper
+
+                                # Recreate the field on the root Query with the bound resolver
+                                query_attrs[field_name] = graphene.Field(
+                                    field.type,
+                                    description=field.description,
+                                    resolver=create_resolver_wrapper(resolver_method),
+                                    **field.args,
+                                )
+                            else:
+                                # Fallback: copy field if no resolver method is defined
+                                query_attrs[field_name] = field
 
                     logger.info(
-                        f"Security extensions integrated into schema '{self.schema_name}'"
+                        f"Security extensions integrated into schema '{self.schema_name}' with resolver binding"
                     )
                 except ImportError as e:
                     logger.warning(

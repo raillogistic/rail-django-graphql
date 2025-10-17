@@ -34,8 +34,16 @@ def get_user_type():
 
         class Meta:
             model = get_user_model()
-            fields = ('id', 'username', 'email', 'first_name', 'last_name',
-                      'is_active', 'date_joined', 'last_login')
+            fields = (
+                "id",
+                "username",
+                "email",
+                "first_name",
+                "last_name",
+                "is_active",
+                "date_joined",
+                "last_login",
+            )
 
     return UserType
 
@@ -60,7 +68,9 @@ class AuthPayload(graphene.ObjectType):
     token = graphene.String(description="Token JWT d'authentification")
     refresh_token = graphene.String(description="Token de rafraîchissement")
     expires_at = graphene.DateTime(description="Date d'expiration du token")
-    errors = graphene.List(graphene.String, required=True, description="Liste des erreurs")
+    errors = graphene.List(
+        graphene.String, required=True, description="Liste des erreurs"
+    )
 
 
 class JWTManager:
@@ -69,7 +79,7 @@ class JWTManager:
     @staticmethod
     def get_jwt_secret() -> str:
         """Récupère la clé secrète JWT depuis les paramètres Django."""
-        return getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+        return getattr(settings, "JWT_SECRET_KEY", settings.SECRET_KEY)
 
     @staticmethod
     def get_jwt_expiration() -> int:
@@ -80,9 +90,9 @@ class JWTManager:
         `JWT_ACCESS_TOKEN_LIFETIME` setting (in seconds).
         """
         # Prefer explicit access token lifetime if present
-        lifetime = getattr(settings, 'JWT_ACCESS_TOKEN_LIFETIME', None)
+        lifetime = getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", None)
         if lifetime is None:
-            lifetime = getattr(settings, 'JWT_EXPIRATION_DELTA', 3600 * 72)
+            lifetime = getattr(settings, "JWT_EXPIRATION_DELTA", 3600 * 72)
         # Normalize types that might be timedelta
         if isinstance(lifetime, timedelta):
             lifetime_seconds = int(lifetime.total_seconds())
@@ -97,9 +107,9 @@ class JWTManager:
         Accepts either legacy `JWT_REFRESH_EXPIRATION_DELTA` or new
         `JWT_REFRESH_TOKEN_LIFETIME` setting (in seconds).
         """
-        lifetime = getattr(settings, 'JWT_REFRESH_TOKEN_LIFETIME', None)
+        lifetime = getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", None)
         if lifetime is None:
-            lifetime = getattr(settings, 'JWT_REFRESH_EXPIRATION_DELTA', 604800)
+            lifetime = getattr(settings, "JWT_REFRESH_EXPIRATION_DELTA", 604800)
         if isinstance(lifetime, timedelta):
             lifetime_seconds = int(lifetime.total_seconds())
         else:
@@ -121,33 +131,37 @@ class JWTManager:
         access_lifetime = cls.get_jwt_expiration()
         refresh_lifetime = cls.get_refresh_expiration()
         # If access_lifetime is 0 or negative, treat as non-expiring (no 'exp')
-        expiration = None if access_lifetime <= 0 else now + timedelta(seconds=access_lifetime)
+        expiration = (
+            None if access_lifetime <= 0 else now + timedelta(seconds=access_lifetime)
+        )
         refresh_expiration = now + timedelta(seconds=refresh_lifetime)
 
         payload = {
-            'user_id': user.id,
-            'username': user.username,
-            'iat': now,
-            'type': 'access'
+            "user_id": user.id,
+            "username": user.username,
+            "iat": now,
+            "type": "access",
         }
         # Only include 'exp' if token should expire
         if expiration is not None:
-            payload['exp'] = expiration
+            payload["exp"] = expiration
 
         refresh_payload = {
-            'user_id': user.id,
-            'exp': refresh_expiration,
-            'iat': now,
-            'type': 'refresh'
+            "user_id": user.id,
+            "exp": refresh_expiration,
+            "iat": now,
+            "type": "refresh",
         }
 
-        token = jwt.encode(payload, cls.get_jwt_secret(), algorithm='HS256')
-        refresh_token = jwt.encode(refresh_payload, cls.get_jwt_secret(), algorithm='HS256')
+        token = jwt.encode(payload, cls.get_jwt_secret(), algorithm="HS256")
+        refresh_token = jwt.encode(
+            refresh_payload, cls.get_jwt_secret(), algorithm="HS256"
+        )
 
         return {
-            'token': token,
-            'refresh_token': refresh_token,
-            'expires_at': expiration
+            "token": token,
+            "refresh_token": refresh_token,
+            "expires_at": expiration,
         }
 
     @classmethod
@@ -162,7 +176,7 @@ class JWTManager:
             Payload décodé ou None si le token est invalide
         """
         try:
-            payload = jwt.decode(token, cls.get_jwt_secret(), algorithms=['HS256'])
+            payload = jwt.decode(token, cls.get_jwt_secret(), algorithms=["HS256"])
             return payload
         except jwt.ExpiredSignatureError:
             logger.warning("Token JWT expiré")
@@ -183,16 +197,17 @@ class JWTManager:
             Nouveau token d'accès ou None si le refresh token est invalide
         """
         payload = cls.verify_token(refresh_token)
-        if not payload or payload.get('type') != 'refresh':
+        if not payload or payload.get("type") != "refresh":
             return None
 
         try:
             User = get_user_model()
-            user = User.objects.get(id=payload['user_id'])
+            user = User.objects.get(id=payload["user_id"])
             return cls.generate_token(user)
         except User.DoesNotExist:
             logger.warning(
-                f"Utilisateur introuvable pour le refresh token: {payload.get('user_id')}")
+                f"Utilisateur introuvable pour le refresh token: {payload.get('user_id')}"
+            )
             return None
 
 
@@ -222,40 +237,33 @@ class LoginMutation(graphene.Mutation):
 
             if not user:
                 return AuthPayload(
-                    ok=False,
-                    errors=["Nom d'utilisateur ou mot de passe incorrect"]
+                    ok=False, errors=["Nom d'utilisateur ou mot de passe incorrect"]
                 )
 
             if not user.is_active:
-                return AuthPayload(
-                    ok=False,
-                    errors=["Compte utilisateur désactivé"]
-                )
+                return AuthPayload(ok=False, errors=["Compte utilisateur désactivé"])
 
             # Génération du token JWT
             token_data = JWTManager.generate_token(user)
 
             # Mise à jour de la dernière connexion
             user.last_login = timezone.now()
-            user.save(update_fields=['last_login'])
+            user.save(update_fields=["last_login"])
 
             logger.info(f"Connexion réussie pour l'utilisateur: {username}")
 
             return AuthPayload(
                 ok=True,
                 user=user,
-                token=token_data['token'],
-                refresh_token=token_data['refresh_token'],
-                expires_at=token_data['expires_at'],
-                errors=[]
+                token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
+                expires_at=token_data["expires_at"],
+                errors=[],
             )
 
         except Exception as e:
             logger.error(f"Erreur lors de la connexion: {e}")
-            return AuthPayload(
-                ok=False,
-                errors=["Erreur interne lors de la connexion"]
-            )
+            return AuthPayload(ok=False, errors=["Erreur interne lors de la connexion"])
 
 
 class RegisterMutation(graphene.Mutation):
@@ -270,8 +278,15 @@ class RegisterMutation(graphene.Mutation):
 
     Output = AuthPayload
 
-    def mutate(self, info, username: str, email: str, password: str,
-               first_name: str = "", last_name: str = ""):
+    def mutate(
+        self,
+        info,
+        username: str,
+        email: str,
+        password: str,
+        first_name: str = "",
+        last_name: str = "",
+    ):
         """
         Crée un nouvel utilisateur et retourne un token JWT.
 
@@ -315,7 +330,7 @@ class RegisterMutation(graphene.Mutation):
                 email=email,
                 password=password,
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
             )
 
             # Génération du token JWT
@@ -326,17 +341,16 @@ class RegisterMutation(graphene.Mutation):
             return AuthPayload(
                 ok=True,
                 user=user,
-                token=token_data['token'],
-                refresh_token=token_data['refresh_token'],
-                expires_at=token_data['expires_at'],
-                errors=[]
+                token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
+                expires_at=token_data["expires_at"],
+                errors=[],
             )
 
         except Exception as e:
             logger.error(f"Erreur lors de l'inscription: {e}")
             return AuthPayload(
-                ok=False,
-                errors=["Erreur interne lors de l'inscription"]
+                ok=False, errors=["Erreur interne lors de l'inscription"]
             )
 
 
@@ -344,7 +358,9 @@ class RefreshTokenMutation(graphene.Mutation):
     """Mutation de rafraîchissement de token."""
 
     class Arguments:
-        refresh_token = graphene.String(required=True, description="Token de rafraîchissement")
+        refresh_token = graphene.String(
+            required=True, description="Token de rafraîchissement"
+        )
 
     Output = AuthPayload
 
@@ -363,29 +379,27 @@ class RefreshTokenMutation(graphene.Mutation):
 
             if not token_data:
                 return AuthPayload(
-                    ok=False,
-                    errors=["Token de rafraîchissement invalide ou expiré"]
+                    ok=False, errors=["Token de rafraîchissement invalide ou expiré"]
                 )
 
             # Récupération de l'utilisateur pour le retourner
-            payload = JWTManager.verify_token(token_data['token'])
+            payload = JWTManager.verify_token(token_data["token"])
             User = get_user_model()
-            user = User.objects.get(id=payload['user_id'])
+            user = User.objects.get(id=payload["user_id"])
 
             return AuthPayload(
                 ok=True,
                 user=user,
-                token=token_data['token'],
-                refresh_token=token_data['refresh_token'],
-                expires_at=token_data['expires_at'],
-                errors=[]
+                token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
+                expires_at=token_data["expires_at"],
+                errors=[],
             )
 
         except Exception as e:
             logger.error(f"Erreur lors du rafraîchissement du token: {e}")
             return AuthPayload(
-                ok=False,
-                errors=["Erreur interne lors du rafraîchissement du token"]
+                ok=False, errors=["Erreur interne lors du rafraîchissement du token"]
             )
 
 
@@ -417,15 +431,16 @@ class LogoutMutation(graphene.Mutation):
         except Exception as e:
             logger.error(f"Erreur lors de la déconnexion: {e}")
             return LogoutMutation(
-                ok=False,
-                errors=["Erreur interne lors de la déconnexion"]
+                ok=False, errors=["Erreur interne lors de la déconnexion"]
             )
 
 
 class MeQuery(graphene.ObjectType):
     """Query pour récupérer les informations de l'utilisateur connecté."""
 
-    me = graphene.Field(lambda: UserType(), description="Informations de l'utilisateur connecté")
+    me = graphene.Field(
+        lambda: UserType(), description="Informations de l'utilisateur connecté"
+    )
 
     def resolve_me(self, info):
         """
@@ -434,9 +449,21 @@ class MeQuery(graphene.ObjectType):
         Returns:
             User instance ou None si non authentifié
         """
-        user = info.context.user
-        if user and user.is_authenticated:
+        # Try the user injected in the request/context first
+        user = getattr(info.context, "user", None)
+        if user and getattr(user, "is_authenticated", False):
             return user
+
+        # Fallback: authenticate via JWT from Authorization header
+        try:
+            from .auth import authenticate_request
+
+            user_from_jwt = authenticate_request(info)
+            if user_from_jwt and getattr(user_from_jwt, "is_authenticated", False):
+                return user_from_jwt
+        except Exception:
+            # Silently ignore and return None if auth fails
+            pass
         return None
 
 
@@ -465,7 +492,7 @@ def get_user_from_token(token: str) -> Optional["AbstractUser"]:
 
     try:
         User = get_user_model()
-        return User.objects.get(id=payload['user_id'])
+        return User.objects.get(id=payload["user_id"])
     except User.DoesNotExist:
         return None
 
@@ -483,9 +510,9 @@ def authenticate_request(info) -> Optional["AbstractUser"]:
     request = info.context
 
     # Récupération du token depuis les headers
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    if not auth_header.startswith('Bearer '):
+    auth_header = request.META.get("HTTP_AUTHORIZATION", "")
+    if not auth_header.startswith("Bearer "):
         return None
 
-    token = auth_header.split(' ')[1]
+    token = auth_header.split(" ")[1]
     return get_user_from_token(token)

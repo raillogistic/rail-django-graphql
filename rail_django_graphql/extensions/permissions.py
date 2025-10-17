@@ -451,7 +451,15 @@ class PermissionQuery(graphene.ObjectType):
     def resolve_my_permissions(self, info, model_name: str = None):
         """Retourne les permissions de l'utilisateur connecté."""
         user = getattr(info.context, 'user', None)
-        if not user or not user.is_authenticated:
+        # Fallback: authenticate via JWT from Authorization header when context user is missing
+        if not user or not getattr(user, 'is_authenticated', False):
+            try:
+                from .auth import authenticate_request
+                user = authenticate_request(info)
+            except Exception:
+                user = None
+
+        if not user or not getattr(user, 'is_authenticated', False):
             return []
 
         from django.apps import apps
