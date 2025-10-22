@@ -109,7 +109,7 @@ class JWTManager:
         """
         lifetime = getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", None)
         if lifetime is None:
-            lifetime = getattr(settings, "JWT_REFRESH_EXPIRATION_DELTA", 604800)
+            lifetime = getattr(settings, "JWT_REFRESH_EXPIRATION_DELTA", 86400)
         if isinstance(lifetime, timedelta):
             lifetime_seconds = int(lifetime.total_seconds())
         else:
@@ -451,6 +451,7 @@ class MeQuery(graphene.ObjectType):
         """
         # Try the user injected in the request/context first
         user = getattr(info.context, "user", None)
+
         if user and getattr(user, "is_authenticated", False):
             return user
 
