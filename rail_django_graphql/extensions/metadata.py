@@ -381,6 +381,103 @@ class ModelMetadata:
     mutations: List["MutationMetadata"]
 
 
+@dataclass
+class FormFieldMetadata:
+    """Metadata for form fields with Django-specific attributes."""
+
+    name: str
+    field_type: str
+    is_required: bool
+    verbose_name: str
+    help_text: str
+    widget_type: str
+    placeholder: Optional[str] = None
+    default_value: Any = None
+    choices: Optional[List[Dict[str, str]]] = None
+    # Django CharField attributes
+    max_length: Optional[int] = None
+    min_length: Optional[int] = None
+    # Django DecimalField attributes
+    decimal_places: Optional[int] = None
+    max_digits: Optional[int] = None
+    # Django IntegerField/FloatField attributes
+    min_value: Optional[Union[int, float]] = None
+    max_value: Optional[Union[int, float]] = None
+    # Django DateField/DateTimeField attributes
+    auto_now: bool = False
+    auto_now_add: bool = False
+    # Common field attributes
+    blank: bool = False
+    null: bool = False
+    unique: bool = False
+    editable: bool = True
+    # Validation attributes
+    validators: Optional[List[str]] = None
+    error_messages: Optional[Dict[str, str]] = None
+    # Form-specific attributes
+    disabled: bool = False
+    readonly: bool = False
+    css_classes: Optional[str] = None
+    data_attributes: Optional[Dict[str, str]] = None
+    has_permission:bool = True,
+
+@dataclass
+class FormRelationshipMetadata:
+    """Metadata for form relationship fields with nested model information."""
+
+    name: str
+    relationship_type: str
+    verbose_name: str
+    help_text: str
+    widget_type: str
+    is_required: bool
+    # Related model information
+    related_model: "ModelFormMetadata"
+    related_app: str
+    to_field: Optional[str] = None
+    from_field: str = ""
+    # Relationship characteristics
+    many_to_many: bool = False
+    one_to_one: bool = False
+    foreign_key: bool = False
+    is_reverse: bool = False
+    # Form-specific attributes
+    multiple: bool = False
+    queryset_filters: Optional[Dict[str, Any]] = None
+    empty_label: Optional[str] = None
+    limit_choices_to: Optional[Dict[str, Any]] = None
+    # UI attributes
+    disabled: bool = False
+    readonly: bool = False
+    css_classes: Optional[str] = None
+    data_attributes: Optional[Dict[str, str]] = None
+
+
+@dataclass
+class ModelFormMetadata:
+    """Complete metadata for Django model forms."""
+
+    app_name: str
+    model_name: str
+    verbose_name: str
+    verbose_name_plural: str
+    form_title: str
+    form_description: Optional[str]
+    fields: List[FormFieldMetadata]
+    relationships: List[FormRelationshipMetadata]
+    # Form configuration
+    field_order: Optional[List[str]] = None
+    exclude_fields: List[str] = field(default_factory=list)
+    readonly_fields: List[str] = field(default_factory=list)
+    # Validation and permissions
+    required_permissions: List[str] = field(default_factory=list)
+    form_validation_rules: Optional[Dict[str, Any]] = None
+    # UI configuration
+    form_layout: Optional[Dict[str, Any]] = None
+    css_classes: Optional[str] = None
+    form_attributes: Optional[Dict[str, str]] = None
+
+
 class FieldMetadataType(graphene.ObjectType):
     """GraphQL type for field metadata."""
 
@@ -505,6 +602,150 @@ class ModelMetadataType(graphene.ObjectType):
     )
 
 
+class FormFieldMetadataType(graphene.ObjectType):
+    """GraphQL type for form field metadata."""
+
+    name = graphene.String(required=True, description="Field name")
+    field_type = graphene.String(required=True, description="Django field type")
+    is_required = graphene.Boolean(
+        required=True, description="Whether field is required"
+    )
+    verbose_name = graphene.String(required=True, description="Field verbose name")
+    help_text = graphene.String(description="Field help text")
+    widget_type = graphene.String(
+        required=True, description="Recommended UI widget type"
+    )
+    placeholder = graphene.String(description="Placeholder text for input")
+    default_value = graphene.JSONString(description="Default value for the field")
+    choices = graphene.List(ChoiceType, description="Field choices")
+    # Django CharField attributes
+    max_length = graphene.Int(description="Maximum length for string fields")
+    min_length = graphene.Int(description="Minimum length for string fields")
+    # Django DecimalField attributes
+    decimal_places = graphene.Int(description="Number of decimal places")
+    max_digits = graphene.Int(description="Maximum number of digits")
+    # Django IntegerField/FloatField attributes
+    min_value = graphene.Float(description="Minimum value for numeric fields")
+    max_value = graphene.Float(description="Maximum value for numeric fields")
+    # Django DateField/DateTimeField attributes
+    auto_now = graphene.Boolean(required=True, description="Whether field has auto_now")
+    auto_now_add = graphene.Boolean(
+        required=True, description="Whether field has auto_now_add"
+    )
+    # Common field attributes
+    blank = graphene.Boolean(required=True, description="Whether field can be blank")
+    null = graphene.Boolean(required=True, description="Whether field can be null")
+    unique = graphene.Boolean(
+        required=True, description="Whether field has unique constraint"
+    )
+    editable = graphene.Boolean(required=True, description="Whether field is editable")
+    # Validation attributes
+    validators = graphene.List(graphene.String, description="Field validators")
+    error_messages = graphene.JSONString(description="Custom error messages")
+    # Form-specific attributes
+    disabled = graphene.Boolean(
+        required=True, description="Whether field is disabled in form"
+    )
+    readonly = graphene.Boolean(
+        required=True, description="Whether field is readonly in form"
+    )
+    css_classes = graphene.String(description="CSS classes for form field")
+    data_attributes = graphene.JSONString(description="Data attributes for form field")
+
+
+class FormRelationshipMetadataType(graphene.ObjectType):
+    """GraphQL type for form relationship metadata."""
+
+    name = graphene.String(required=True, description="Relationship field name")
+    relationship_type = graphene.String(
+        required=True, description="Type of relationship"
+    )
+    verbose_name = graphene.String(required=True, description="Field verbose name")
+    help_text = graphene.String(description="Field help text")
+    widget_type = graphene.String(
+        required=True, description="Recommended UI widget type"
+    )
+    is_required = graphene.Boolean(
+        required=True, description="Whether field is required"
+    )
+    # Related model information
+    related_model = graphene.Field(
+        lambda: ModelFormMetadataType,
+        required=True,
+        description="Related model form metadata",
+    )
+    related_app = graphene.String(required=True, description="Related model app")
+    to_field = graphene.String(description="Target field name")
+    from_field = graphene.String(required=True, description="Source field name")
+    # Relationship characteristics
+    many_to_many = graphene.Boolean(
+        required=True, description="Whether this is many-to-many"
+    )
+    one_to_one = graphene.Boolean(
+        required=True, description="Whether this is one-to-one"
+    )
+    foreign_key = graphene.Boolean(
+        required=True, description="Whether this is foreign key"
+    )
+    is_reverse = graphene.Boolean(
+        required=True, description="Whether this is a reverse relationship"
+    )
+    # Form-specific attributes
+    multiple = graphene.Boolean(
+        required=True, description="Whether field accepts multiple values"
+    )
+    queryset_filters = graphene.JSONString(description="Queryset filters for choices")
+    empty_label = graphene.String(description="Empty choice label")
+    limit_choices_to = graphene.JSONString(
+        description="Limit choices to specific criteria"
+    )
+    # UI attributes
+    disabled = graphene.Boolean(
+        required=True, description="Whether field is disabled in form"
+    )
+    readonly = graphene.Boolean(
+        required=True, description="Whether field is readonly in form"
+    )
+    css_classes = graphene.String(description="CSS classes for form field")
+    data_attributes = graphene.JSONString(description="Data attributes for form field")
+
+
+class ModelFormMetadataType(graphene.ObjectType):
+    """GraphQL type for complete model form metadata."""
+
+    app_name = graphene.String(required=True, description="Django app name")
+    model_name = graphene.String(required=True, description="Model class name")
+    verbose_name = graphene.String(required=True, description="Model verbose name")
+    verbose_name_plural = graphene.String(
+        required=True, description="Model verbose name plural"
+    )
+    form_title = graphene.String(required=True, description="Form title")
+    form_description = graphene.String(description="Form description")
+    fields = graphene.List(
+        FormFieldMetadataType, required=True, description="Form fields"
+    )
+    relationships = graphene.List(
+        FormRelationshipMetadataType, required=True, description="Form relationships"
+    )
+    # Form configuration
+    field_order = graphene.List(graphene.String, description="Field display order")
+    exclude_fields = graphene.List(
+        graphene.String, required=True, description="Fields to exclude from form"
+    )
+    readonly_fields = graphene.List(
+        graphene.String, required=True, description="Fields that are readonly"
+    )
+    # Validation and permissions
+    required_permissions = graphene.List(
+        graphene.String, required=True, description="Required permissions"
+    )
+    form_validation_rules = graphene.JSONString(description="Form validation rules")
+    # UI configuration
+    form_layout = graphene.JSONString(description="Form layout configuration")
+    css_classes = graphene.String(description="CSS classes for form")
+    form_attributes = graphene.JSONString(description="Form HTML attributes")
+
+
 class ModelMetadataExtractor:
     """Extracts comprehensive metadata from Django models."""
 
@@ -570,7 +811,7 @@ class ModelMetadataExtractor:
             help_text=field.help_text or "",
             max_length=max_length,
             choices=choices,
-            is_primary_key=field.primary_key,
+            is_primary_key=getattr(field, "primary_key", None),
             is_foreign_key=isinstance(field, models.ForeignKey),
             is_unique=field.unique,
             is_indexed=field.db_index,
@@ -1493,7 +1734,7 @@ class ModelMetadataExtractor:
 
         for field in model._meta.fields:
             # Skip auto fields and primary keys for create mutations
-            if field.primary_key and mutation_type == "create":
+            if getattr(field, "primary_key", None) and mutation_type == "create":
                 continue
 
             # Skip auto-generated fields
@@ -1653,6 +1894,422 @@ class ModelMetadataExtractor:
         return input_fields
 
 
+class ModelFormMetadataExtractor:
+    """
+    Extractor for Django model form metadata, providing all necessary information
+    to construct forms on the frontend.
+    """
+
+    def __init__(self, schema_name: str = "default", max_depth: int = 1):
+        """
+        Initialize the form metadata extractor.
+
+        Args:
+            schema_name: Name of the schema configuration to use
+            max_depth: Maximum depth for nested related model metadata
+        """
+        self.schema_name = schema_name
+        self.max_depth = max_depth
+
+    @cache_metadata(
+        timeout=1200, user_specific=True
+    )  # 20 minutes cache for form field metadata
+    def _extract_form_field_metadata(self, field, user) -> Optional[FormFieldMetadata]:
+        """
+        Extract form-specific metadata for a single field with permission checking.
+
+        Args:
+            field: Django model field instance
+            user: User instance for permission checking
+
+        Returns:
+            FormFieldMetadata if user has permission, None otherwise
+        """
+        from django.db import models
+
+        # Get field choices
+        choices = None
+        if hasattr(field, "choices") and field.choices:
+            choices = [
+                {"value": choice[0], "label": choice[1]} for choice in field.choices
+            ]
+
+        # Determine widget type based on field type
+        widget_type = self._get_form_widget_type(field)
+
+        # Generate placeholder text
+        placeholder = self._generate_placeholder(field)
+
+        # Get validation attributes
+        max_length = getattr(field, "max_length", None)
+        min_length = (
+            getattr(field, "min_length", None) if hasattr(field, "min_length") else None
+        )
+        max_value = (
+            getattr(field, "max_value", None) if hasattr(field, "max_value") else None
+        )
+        min_value = (
+            getattr(field, "min_value", None) if hasattr(field, "min_value") else None
+        )
+
+        # Handle decimal fields
+        decimal_places = getattr(field, "decimal_places", None)
+        max_digits = getattr(field, "max_digits", None)
+
+        # Determine if field is required for forms (different from database nullable)
+        is_required = not field.blank and field.default == models.NOT_PROVIDED
+
+        # Get default value for forms
+        default_value = None
+        if field.default != models.NOT_PROVIDED:
+            if callable(field.default):
+                try:
+                    default_value = field.default()
+                except:
+                    default_value = None
+            else:
+                default_value = field.default
+
+        # Simplified permission check
+        has_permission = True
+
+        return FormFieldMetadata(
+            name=field.name,
+            field_type=field.__class__.__name__,
+            is_required=is_required,
+            verbose_name=str(field.verbose_name),
+            help_text=field.help_text or "",
+            widget_type=widget_type,
+            placeholder=placeholder,
+            default_value=default_value,
+            choices=choices,
+            max_length=max_length,
+            min_length=min_length,
+            decimal_places=decimal_places,
+            max_digits=max_digits,
+            min_value=min_value,
+            max_value=max_value,
+            auto_now=getattr(field, "auto_now", False),
+            auto_now_add=getattr(field, "auto_now_add", False),
+            blank=field.blank,
+            null=field.null,
+            unique=field.unique,
+            editable=field.editable,
+            validators=[],  # TODO: Extract validators
+            error_messages={},  # TODO: Extract error messages
+            has_permission=has_permission,
+            disabled=not field.editable,
+            readonly=not field.editable or getattr(field, "primary_key", None),
+            css_classes=self._get_css_classes(field),
+            data_attributes=self._get_data_attributes(field),
+        )
+
+    @cache_metadata(
+        timeout=1200, user_specific=True
+    )  # 20 minutes cache for form relationship metadata
+    def _extract_form_relationship_metadata(
+        self, field, user, current_depth: int = 0
+    ) -> Optional[FormRelationshipMetadata]:
+        """
+        Extract form-specific metadata for relationship fields.
+
+        Args:
+            field: Django relationship field instance
+            user: User instance for permission checking
+            current_depth: Current nesting depth
+
+        Returns:
+            FormRelationshipMetadata if user has permission, None otherwise
+        """
+        from django.db import models
+
+        related_model = field.related_model
+
+        if related_model is None or not hasattr(related_model, "_meta"):
+            return None
+
+        related_app_label = getattr(related_model._meta, "app_label", "")
+        related_model_class_name = related_model.__name__
+
+        # Build embedded related model form metadata
+        include_nested = current_depth < self.max_depth
+        embedded_related = self.extract_model_form_metadata(
+            app_name=related_app_label,
+            model_name=related_model_class_name,
+            user=user,
+            nested_fields=[],  # No nested fields for relationships by default
+            current_depth=current_depth + 1,
+        )
+
+        if embedded_related is None:
+            return None
+
+        # Determine widget type for relationship
+        widget_type = self._get_relationship_widget_type(field)
+
+        # Simplified permission check
+        has_permission = True
+
+        return FormRelationshipMetadata(
+            name=field.name,
+            relationship_type=field.__class__.__name__,
+            verbose_name=str(field.verbose_name),
+            help_text=field.help_text or "",
+            widget_type=widget_type,
+            is_required=not field.blank,
+            related_model=embedded_related,
+            related_app=related_app_label,
+            to_field=field.remote_field.name
+            if hasattr(field, "remote_field") and field.remote_field
+            else None,
+            from_field=field.name,
+            many_to_many=isinstance(field, models.ManyToManyField),
+            one_to_one=isinstance(field, models.OneToOneField),
+            foreign_key=isinstance(field, models.ForeignKey),
+            is_reverse=False,
+            multiple=isinstance(field, models.ManyToManyField),
+            queryset_filters=self._get_queryset_filters(field),
+            empty_label=self._get_empty_label(field),
+            limit_choices_to=getattr(field, "limit_choices_to", None),
+            has_permission=has_permission,
+            disabled=not field.editable,
+            readonly=not field.editable or getattr(field, "primary_key", None),
+            css_classes=self._get_css_classes(field),
+            data_attributes=self._get_data_attributes(field),
+        )
+
+    @cache_metadata(
+        timeout=1800, user_specific=False
+    )  # 30 minutes cache for complete model form metadata
+    def extract_model_form_metadata(
+        self,
+        app_name: str,
+        model_name: str,
+        user,
+        nested_fields: List[str] = None,
+        current_depth: int = 0,
+    ) -> Optional[ModelFormMetadata]:
+        """
+        Extract comprehensive form metadata for a Django model.
+
+        Args:
+            app_name: Django app name
+            model_name: Model class name
+            user: User instance for permission checking
+            nested_fields: List of field names to include nested metadata for
+            current_depth: Current nesting depth
+
+        Returns:
+            ModelFormMetadata with all form-specific information
+        """
+        try:
+            model = apps.get_model(app_name, model_name)
+        except (LookupError, ValueError) as e:
+            logger.error(f"Model {app_name}.{model_name} not found: {e}")
+            return None
+
+        if not model or not hasattr(model, "_meta"):
+            return None
+
+        meta = model._meta
+        nested_fields = nested_fields or []
+
+        # Extract form fields
+        form_fields = []
+        form_relationships = []
+
+        for field in meta.get_fields():
+            # Skip reverse relationships unless specifically requested
+            if hasattr(field, "related_model") and field.related_model:
+                # This is a relationship field
+                if field.name in nested_fields or not hasattr(field, "remote_field"):
+                    relationship_metadata = self._extract_form_relationship_metadata(
+                        field, user, current_depth
+                    )
+                    if relationship_metadata:
+                        form_relationships.append(relationship_metadata)
+            else:
+                # This is a regular field
+                if not field.name.startswith("_") and field.concrete:
+                    field_metadata = self._extract_form_field_metadata(field, user)
+                    if field_metadata:
+                        form_fields.append(field_metadata)
+
+        # Get form configuration
+        form_title = f"Form for {meta.verbose_name}"
+        form_description = f"Create or edit {meta.verbose_name.lower()}"
+
+        # Get field ordering
+        field_order = list(getattr(meta, "field_order", []))
+        if not field_order:
+            field_order = [f.name for f in form_fields]
+
+        # Get excluded fields (typically auto fields, computed fields)
+        exclude_fields = []
+        readonly_fields = []
+
+        for field in meta.get_fields():
+            if (
+                field.auto_created
+                or (hasattr(field, "auto_now") and field.auto_now)
+                or (hasattr(field, "auto_now_add") and field.auto_now_add)
+            ):
+                exclude_fields.append(field.name)
+
+            if getattr(field, "primary_key", None) or not field.editable:
+                readonly_fields.append(field.name)
+
+        # Required permissions (simplified)
+        required_permissions = [
+            f"{app_name}.add_{model_name.lower()}",
+            f"{app_name}.change_{model_name.lower()}",
+        ]
+
+        return ModelFormMetadata(
+            app_name=app_name,
+            model_name=model_name,
+            verbose_name=str(meta.verbose_name),
+            verbose_name_plural=str(meta.verbose_name_plural),
+            form_title=form_title,
+            form_description=form_description,
+            fields=form_fields,
+            relationships=form_relationships,
+            field_order=field_order,
+            exclude_fields=exclude_fields,
+            readonly_fields=readonly_fields,
+            required_permissions=required_permissions,
+            form_validation_rules=self._get_form_validation_rules(model),
+            form_layout=self._get_form_layout(model),
+            css_classes=self._get_form_css_classes(model),
+            form_attributes=self._get_form_attributes(model),
+        )
+
+    def _get_form_widget_type(self, field) -> str:
+        """Get the recommended widget type for a form field."""
+        from django.db import models
+
+        widget_mapping = {
+            models.CharField: "text",
+            models.TextField: "textarea",
+            models.EmailField: "email",
+            models.URLField: "url",
+            models.IntegerField: "number",
+            models.FloatField: "number",
+            models.DecimalField: "number",
+            models.BooleanField: "checkbox",
+            models.DateField: "date",
+            models.DateTimeField: "datetime-local",
+            models.TimeField: "time",
+            models.FileField: "file",
+            models.ImageField: "file",
+            models.ForeignKey: "select",
+            models.ManyToManyField: "select",
+            models.OneToOneField: "select",
+        }
+
+        # Check for choices first
+        if hasattr(field, "choices") and field.choices:
+            return "select"
+
+        return widget_mapping.get(field.__class__, "text")
+
+    def _get_relationship_widget_type(self, field) -> str:
+        """Get the recommended widget type for relationship fields."""
+        from django.db import models
+
+        if isinstance(field, models.ManyToManyField):
+            return "multiselect"
+        elif isinstance(field, (models.ForeignKey, models.OneToOneField)):
+            return "select"
+
+        return "select"
+
+    def _generate_placeholder(self, field) -> Optional[str]:
+        """Generate placeholder text for form fields."""
+        if hasattr(field, "help_text") and field.help_text:
+            return field.help_text
+
+        return f"Enter {field.verbose_name.lower()}"
+
+    def _get_queryset_filters(self, field) -> Optional[Dict[str, Any]]:
+        """Get queryset filters for relationship fields."""
+        if hasattr(field, "limit_choices_to") and field.limit_choices_to:
+            return field.limit_choices_to
+        return None
+
+    def _get_empty_label(self, field) -> Optional[str]:
+        """Get empty label for choice fields."""
+        if hasattr(field, "choices") and field.choices:
+            return f"Select {field.verbose_name.lower()}"
+        return None
+
+    def _get_css_classes(self, field) -> Optional[str]:
+        """Get CSS classes for form fields."""
+        from django.db import models
+
+        classes = ["form-control"]
+
+        if isinstance(field, models.TextField):
+            classes.append("form-textarea")
+        elif isinstance(
+            field, (models.DateField, models.DateTimeField, models.TimeField)
+        ):
+            classes.append("form-date")
+        elif isinstance(
+            field, (models.IntegerField, models.FloatField, models.DecimalField)
+        ):
+            classes.append("form-number")
+        elif isinstance(field, models.BooleanField):
+            classes.append("form-checkbox")
+        elif isinstance(field, (models.FileField, models.ImageField)):
+            classes.append("form-file")
+
+        if getattr(field, "primary_key", None):
+            classes.append("form-readonly")
+
+        return " ".join(classes)
+
+    def _get_data_attributes(self, field) -> Optional[Dict[str, Any]]:
+        """Get data attributes for form fields."""
+        attributes = {}
+
+        if hasattr(field, "max_length") and field.max_length:
+            attributes["maxlength"] = field.max_length
+
+        if hasattr(field, "min_length") and field.min_length:
+            attributes["minlength"] = field.min_length
+
+        return attributes if attributes else None
+
+    def _get_form_validation_rules(self, model) -> Optional[Dict[str, Any]]:
+        """Get form validation rules for the model."""
+        return {
+            "validate_on_blur": True,
+            "validate_on_change": True,
+            "show_errors_inline": True,
+        }
+
+    def _get_form_layout(self, model) -> Optional[Dict[str, Any]]:
+        """Get form layout configuration."""
+        return {
+            "layout_type": "vertical",
+            "field_spacing": "medium",
+            "group_related_fields": True,
+        }
+
+    def _get_form_css_classes(self, model) -> Optional[str]:
+        """Get CSS classes for the form."""
+        return f"model-form {model._meta.app_label}-{model._meta.model_name}-form"
+
+    def _get_form_attributes(self, model) -> Optional[Dict[str, Any]]:
+        """Get form HTML attributes."""
+        return {
+            "novalidate": False,
+            "autocomplete": "on",
+            "data-model": f"{model._meta.app_label}.{model._meta.model_name}",
+        }
+
+
 class ModelMetadataQuery(graphene.ObjectType):
     """GraphQL queries for model metadata."""
 
@@ -1671,6 +2328,18 @@ class ModelMetadataQuery(graphene.ObjectType):
             description="Maximum nesting depth for filters (default: 2)",
         ),
         description="Get comprehensive metadata for a Django model",
+    )
+
+    model_form_metadata = graphene.Field(
+        ModelFormMetadataType,
+        app_name=graphene.String(required=True, description="Django app name"),
+        model_name=graphene.String(required=True, description="Model class name"),
+        nested_fields=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="List of field names to include nested metadata for (depth 1)",
+        ),
+        description="Get comprehensive form metadata for a Django model",
     )
 
     def resolve_model_metadata(
@@ -1712,6 +2381,46 @@ class ModelMetadataQuery(graphene.ObjectType):
             nested_fields=nested_fields,
             permissions_included=permissions_included,
         )
+        # Handle extraction error returning None
+        if metadata is None:
+            return None
+
+        # Return dataclass directly for Graphene to resolve attributes
+        return metadata
+
+    def resolve_model_form_metadata(
+        self,
+        info,
+        app_name: str,
+        model_name: str,
+        nested_fields: List[str] = None,
+    ) -> Optional[ModelFormMetadataType]:
+        """
+        Resolve model form metadata for frontend form construction.
+
+        Args:
+            info: GraphQL resolve info
+            app_name: Django app name
+            model_name: Model name
+            nested_fields: List of field names to include nested metadata for (depth 1)
+
+        Returns:
+            ModelFormMetadataType or None if not accessible
+        """
+        # Get user from context
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            user = None
+
+        # Extract form metadata via extractor which handles model lookup
+        extractor = ModelFormMetadataExtractor(max_depth=1)
+        metadata = extractor.extract_model_form_metadata(
+            app_name=app_name,
+            model_name=model_name,
+            user=user,
+            nested_fields=nested_fields or [],
+        )
+
         # Handle extraction error returning None
         if metadata is None:
             return None
