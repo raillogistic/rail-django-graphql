@@ -419,7 +419,8 @@ class FormFieldMetadata:
     readonly: bool = False
     css_classes: Optional[str] = None
     data_attributes: Optional[Dict[str, str]] = None
-    has_permission:bool = True,
+    has_permission: bool = True
+
 
 @dataclass
 class FormRelationshipMetadata:
@@ -432,7 +433,7 @@ class FormRelationshipMetadata:
     widget_type: str
     is_required: bool
     # Related model information
-    related_model: "ModelFormMetadata"
+    related_model: str
     related_app: str
     to_field: Optional[str] = None
     from_field: str = ""
@@ -451,6 +452,7 @@ class FormRelationshipMetadata:
     readonly: bool = False
     css_classes: Optional[str] = None
     data_attributes: Optional[Dict[str, str]] = None
+    has_permission: bool = True
 
 
 @dataclass
@@ -465,6 +467,7 @@ class ModelFormMetadata:
     form_description: Optional[str]
     fields: List[FormFieldMetadata]
     relationships: List[FormRelationshipMetadata]
+    nested: List["ModelFormMetadata"] = field(default_factory=list)
     # Form configuration
     field_order: Optional[List[str]] = None
     exclude_fields: List[str] = field(default_factory=list)
@@ -651,6 +654,12 @@ class FormFieldMetadataType(graphene.ObjectType):
     )
     css_classes = graphene.String(description="CSS classes for form field")
     data_attributes = graphene.JSONString(description="Data attributes for form field")
+    has_permission = graphene.Boolean(
+        required=True, description="Whether user has permission to access this field"
+    )
+    has_permission = graphene.Boolean(
+        required=True, description="Whether user has permission to access this field"
+    )
 
 
 class FormRelationshipMetadataType(graphene.ObjectType):
@@ -669,10 +678,9 @@ class FormRelationshipMetadataType(graphene.ObjectType):
         required=True, description="Whether field is required"
     )
     # Related model information
-    related_model = graphene.Field(
-        lambda: ModelFormMetadataType,
+    related_model = graphene.String(
         required=True,
-        description="Related model form metadata",
+        description="Related model name",
     )
     related_app = graphene.String(required=True, description="Related model app")
     to_field = graphene.String(description="Target field name")
@@ -726,6 +734,11 @@ class ModelFormMetadataType(graphene.ObjectType):
     )
     relationships = graphene.List(
         FormRelationshipMetadataType, required=True, description="Form relationships"
+    )
+    nested = graphene.List(
+        lambda: ModelFormMetadataType,
+        required=True,
+        description="Nested form metadata for specified fields",
     )
     # Form configuration
     field_order = graphene.List(graphene.String, description="Field display order")
@@ -1970,8 +1983,9 @@ class ModelFormMetadataExtractor:
             else:
                 default_value = field.default
 
-        # Simplified permission check
-        has_permission = True
+        # Check field permissions using the model from the field
+        model = field.model
+        has_permission = self._has_field_permission(user, model, field.name)
 
         return FormFieldMetadata(
             name=field.name,
@@ -2008,7 +2022,7 @@ class ModelFormMetadataExtractor:
         timeout=1200, user_specific=True
     )  # 20 minutes cache for form relationship metadata
     def _extract_form_relationship_metadata(
-        self, field, user, current_depth: int = 0
+        self, field, user, current_depth: int = 0, visited_models: set = None
     ) -> Optional[FormRelationshipMetadata]:
         """
         Extract form-specific metadata for relationship fields.
@@ -2027,37 +2041,50 @@ class ModelFormMetadataExtractor:
 
         if related_model is None or not hasattr(related_model, "_meta"):
             return None
-
+    
         related_app_label = getattr(related_model._meta, "app_label", "")
         related_model_class_name = related_model.__name__
 
-        # Build embedded related model form metadata
-        include_nested = current_depth < self.max_depth
-        embedded_related = self.extract_model_form_metadata(
-            app_name=related_app_label,
-            model_name=related_model_class_name,
-            user=user,
-            nested_fields=[],  # No nested fields for relationships by default
-            current_depth=current_depth + 1,
-        )
+        # Check recursion depth to prevent infinite loops in circular relationships
+        if current_depth >= self.max_depth:
+            # Return basic relationship metadata without nested form data
+            pass
+        else:
+            # Build embedded related model form metadata only if within depth limit
+            embedded_related = self.extract_model_form_metadata(
+                app_name=related_app_label,
+                model_name=related_model_class_name,
+                user=user,
+                nested_fields=[],  # No nested fields for relationships by default
+                current_depth=current_depth + 1,
+                visited_models=visited_models,
+            )
 
-        if embedded_related is None:
-            return None
+            if embedded_related is None:
+                return None
 
         # Determine widget type for relationship
         widget_type = self._get_relationship_widget_type(field)
 
-        # Simplified permission check
-        has_permission = True
+        # Check permission for relationship field
+        model = field.model
+        has_permission = self._has_field_permission(user, model, field.name)
+
+        # Handle verbose_name for reverse relationships
+        if hasattr(field, 'verbose_name'):
+            verbose_name = str(field.verbose_name)
+        else:
+            # For reverse relationships like ManyToOneRel, generate a readable name
+            verbose_name = field.name.replace('_', ' ').title()
 
         return FormRelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
-            verbose_name=str(field.verbose_name),
-            help_text=field.help_text or "",
+            verbose_name=verbose_name,
+            help_text=getattr(field, 'help_text', '') or "",
             widget_type=widget_type,
-            is_required=not field.blank,
-            related_model=embedded_related,
+            is_required=not getattr(field, 'blank', True),
+            related_model=related_model_class_name,
             related_app=related_app_label,
             to_field=field.remote_field.name
             if hasattr(field, "remote_field") and field.remote_field
@@ -2088,6 +2115,7 @@ class ModelFormMetadataExtractor:
         user,
         nested_fields: List[str] = None,
         current_depth: int = 0,
+        visited_models: set = None,
     ) -> Optional[ModelFormMetadata]:
         """
         Extract comprehensive form metadata for a Django model.
@@ -2098,17 +2126,35 @@ class ModelFormMetadataExtractor:
             user: User instance for permission checking
             nested_fields: List of field names to include nested metadata for
             current_depth: Current nesting depth
+            visited_models: Set of already visited models to prevent circular references
 
         Returns:
             ModelFormMetadata with all form-specific information
         """
+        # Initialize visited models set if not provided
+        if visited_models is None:
+            visited_models = set()
+        
+        # Create a unique identifier for this model
+        model_key = f"{app_name}.{model_name}"
+        
+        # Check if we've already visited this model to prevent infinite recursion
+        if model_key in visited_models:
+            logger.warning(f"Circular reference detected for model {model_key}, skipping to prevent infinite recursion")
+            return None
+        
+        # Add current model to visited set
+        visited_models.add(model_key)
+        
         try:
             model = apps.get_model(app_name, model_name)
         except (LookupError, ValueError) as e:
             logger.error(f"Model {app_name}.{model_name} not found: {e}")
+            visited_models.discard(model_key)  # Remove from visited set on error
             return None
 
         if not model or not hasattr(model, "_meta"):
+            visited_models.discard(model_key)  # Remove from visited set on error
             return None
 
         meta = model._meta
@@ -2117,17 +2163,16 @@ class ModelFormMetadataExtractor:
         # Extract form fields
         form_fields = []
         form_relationships = []
-
+        
         for field in meta.get_fields():
-            # Skip reverse relationships unless specifically requested
+            # Check if this is a relationship field
             if hasattr(field, "related_model") and field.related_model:
-                # This is a relationship field
-                if field.name in nested_fields or not hasattr(field, "remote_field"):
-                    relationship_metadata = self._extract_form_relationship_metadata(
-                        field, user, current_depth
-                    )
-                    if relationship_metadata:
-                        form_relationships.append(relationship_metadata)
+                # Always include relationship fields regardless of nested_fields
+                relationship_metadata = self._extract_form_relationship_metadata(
+                    field, user, current_depth, visited_models
+                )
+                if relationship_metadata:
+                    form_relationships.append(relationship_metadata)
             else:
                 # This is a regular field
                 if not field.name.startswith("_") and field.concrete:
@@ -2165,6 +2210,36 @@ class ModelFormMetadataExtractor:
             f"{app_name}.change_{model_name.lower()}",
         ]
 
+        # Extract nested metadata for specified fields
+        nested_metadata = []
+        if nested_fields and current_depth < self.max_depth:
+            for field_name in nested_fields:
+                try:
+                    field = meta.get_field(field_name)
+                    if hasattr(field, "related_model") and field.related_model:
+                        related_model = field.related_model
+                        related_meta = related_model._meta
+
+                        # Extract nested form metadata for the related model
+                        nested_form_metadata = self.extract_model_form_metadata(
+                            app_name=related_meta.app_label,
+                            model_name=related_model.__name__,
+                            user=user,
+                            nested_fields=[],  # Don't go deeper to avoid infinite recursion
+                            current_depth=current_depth + 1,
+                            visited_models=visited_models.copy(),  # Pass a copy to avoid affecting parent
+                        )
+
+                        if nested_form_metadata:
+                            nested_metadata.append(nested_form_metadata)
+                except Exception as e:
+                    logger.warning(
+                        f"Could not extract nested metadata for field {field_name}: {e}"
+                    )
+
+        # Remove current model from visited set before returning (cleanup)
+        visited_models.discard(model_key)
+
         return ModelFormMetadata(
             app_name=app_name,
             model_name=model_name,
@@ -2174,6 +2249,7 @@ class ModelFormMetadataExtractor:
             form_description=form_description,
             fields=form_fields,
             relationships=form_relationships,
+            nested=nested_metadata,
             field_order=field_order,
             exclude_fields=exclude_fields,
             readonly_fields=readonly_fields,
@@ -2308,6 +2384,33 @@ class ModelFormMetadataExtractor:
             "autocomplete": "on",
             "data-model": f"{model._meta.app_label}.{model._meta.model_name}",
         }
+
+    def _has_field_permission(self, user, model: type, field_name: str) -> bool:
+        """
+        Check if user has permission to access a specific field in forms.
+
+        Args:
+            user: The user to check permissions for
+            model: The Django model class
+            field_name: The name of the field to check
+
+        Returns:
+            bool: True if user has permission, False otherwise
+        """
+        # Anonymous users have no field permissions
+        if not user or not user.is_authenticated:
+            return False
+
+        # Superusers have access to all fields
+        if user.is_superuser:
+            return True
+
+        # Check if user has view permission for the model
+        app_label = model._meta.app_label
+        model_name = model._meta.model_name
+        view_permission = f"{app_label}.view_{model_name}"
+
+        return user.has_perm(view_permission)
 
 
 class ModelMetadataQuery(graphene.ObjectType):
