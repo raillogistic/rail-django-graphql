@@ -429,14 +429,6 @@ class TypeGenerator:
                     description=f"Count of related {related_model.__name__} objects"
                 )
 
-                # Add parameterized totalCount field with filters
-                total_count_field_name = f"{field_name}_total_count"
-                type_attrs[total_count_field_name] = graphene.Field(
-                    graphene.Int,
-                    filters=graphene.Argument(graphene.JSONString),
-                    description=f"Count of related {related_model.__name__} objects with optional filters",
-                )
-
                 # Add resolver that handles different relationship types with filtering
                 def make_resolver(field_name, rel_info, related_model):
                     def resolver(self, info, filters=None):
@@ -474,25 +466,6 @@ class TypeGenerator:
                     return count_resolver
 
                 # Add parameterized total count resolver with filters
-                def make_total_count_resolver(field_name, related_model):
-                    def total_count_resolver(self, info, filters=None):
-                        related_obj = getattr(self, field_name)
-                        queryset = related_obj.all()
-
-                        # Apply filters if provided
-                        if filters:
-                            from ..generators.filters import AdvancedFilterGenerator
-
-                            filter_generator = AdvancedFilterGenerator()
-                            filter_set_class = filter_generator.generate_filter_set(
-                                related_model
-                            )
-                            filter_set = filter_set_class(filters, queryset=queryset)
-                            queryset = filter_set.qs
-
-                        return queryset.count()
-
-                    return total_count_resolver
 
                 type_attrs[f"resolve_{field_name}"] = make_resolver(
                     field_name, rel_info, related_model

@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
 from django.db import models
-from django.db.models import Q
+from django.db.models import Q, Count
 from graphene_django import DjangoObjectType
 
 # Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
@@ -31,6 +31,7 @@ from ..extensions.optimization import (
 from .filters import AdvancedFilterGenerator
 from .inheritance import inheritance_handler
 from .types import TypeGenerator
+from .introspector import ModelIntrospector
 
 
 class PaginationInfo(graphene.ObjectType):
@@ -116,6 +117,133 @@ class QueryGenerator:
     def filter_generator(self):
         """Access to the filter generator instance."""
         return self._filter_generator
+
+    def _apply_count_annotations_for_ordering(
+        self,
+        queryset: models.QuerySet,
+        model: Type[models.Model],
+        order_by: List[str],
+    ) -> (models.QuerySet, List[str]):
+        """
+        Annotate queryset for any order_by fields that request <relation>_count or <relation>__count.
+        Supports forward ManyToMany and reverse relations using accessor names.
+        Returns updated queryset and a possibly transformed order_by list.
+        """
+        if not order_by:
+            return queryset, order_by
+
+        new_order_by: List[str] = []
+        annotated_aliases: set = set()
+
+        for spec in order_by:
+            desc = spec.startswith("-")
+            field = spec[1:] if desc else spec
+
+            base = None
+            alias = None
+
+            if field.endswith("__count"):
+                base = field[: -len("__count")]
+                alias = f"{base}_count"
+            elif field.endswith("_count"):
+                base = field[: -len("_count")]
+                alias = field
+
+            if base:
+                # Determine if base is a ManyToMany relation to apply distinct
+                is_m2m = False
+                try:
+                    # Check forward fields
+                    for f in model._meta.get_fields():
+                        if getattr(f, "name", None) == base:
+                            try:
+                                from django.db.models.fields.related import ManyToManyField
+                                from django.db.models.fields.reverse_related import ManyToManyRel
+                                is_m2m = isinstance(f, ManyToManyField) or isinstance(f, ManyToManyRel)
+                            except Exception:
+                                pass
+                            break
+                    else:
+                        # Check reverse relations by accessor name
+                        if hasattr(model._meta, "related_objects"):
+                            from django.db.models.fields.reverse_related import ManyToManyRel
+                            for rel in model._meta.related_objects:
+                                if rel.get_accessor_name() == base:
+                                    is_m2m = isinstance(rel, ManyToManyRel)
+                                    break
+                except Exception:
+                    # If introspection fails, default to non-distinct
+                    is_m2m = False
+
+                if alias and alias not in annotated_aliases:
+                    try:
+                        queryset = queryset.annotate(**{alias: Count(base, distinct=is_m2m)})
+                        annotated_aliases.add(alias)
+                    except Exception:
+                        try:
+                            queryset = queryset.annotate(**{alias: Count(base)})
+                            annotated_aliases.add(alias)
+                        except Exception:
+                            # If annotation fails, fall back to original spec
+                            alias = None
+
+                if alias:
+                    new_order_by.append(f"-{alias}" if desc else alias)
+                else:
+                    new_order_by.append(spec)
+            else:
+                new_order_by.append(spec)
+
+        return queryset, new_order_by
+
+    def _split_order_specs(self, model: Type[models.Model], order_by: List[str]) -> (List[str], List[str]):
+        """Split order_by specs into DB fields and property-based fields."""
+        if not order_by:
+            return [], []
+        try:
+            introspector = ModelIntrospector(model)
+            prop_names = set(introspector.properties.keys())
+        except Exception:
+            prop_names = set()
+        db_specs: List[str] = []
+        prop_specs: List[str] = []
+        for spec in order_by:
+            name = spec[1:] if spec.startswith("-") else spec
+            if name in prop_names:
+                prop_specs.append(spec)
+            else:
+                db_specs.append(spec)
+        return db_specs, prop_specs
+
+    def _safe_prop_value(self, obj: Any, prop_name: str):
+        """Return a comparable key for property sorting, nulls last."""
+        try:
+            val = getattr(obj, prop_name)
+        except Exception:
+            val = None
+        if val is None:
+            return (1, None)
+        # If value is not directly comparable, fall back to string representation
+        try:
+            _ = val < val  # type check to ensure comparable
+            return (0, val)
+        except Exception:
+            return (0, str(val))
+
+    def _apply_property_ordering(self, items: List[Any], prop_specs: List[str]) -> List[Any]:
+        """Apply stable multi-key sort on a Python list based on property specs."""
+        if not prop_specs:
+            return items
+        # Stable sort: apply from last to first
+        for spec in reversed(prop_specs):
+            desc = spec.startswith("-")
+            name = spec[1:] if desc else spec
+            try:
+                items.sort(key=lambda o: self._safe_prop_value(o, name), reverse=desc)
+            except Exception:
+                # If sorting fails, skip this spec
+                continue
+        return items
 
     def generate_single_query(
         self, model: Type[models.Model], manager_name: str = "objects"
@@ -206,18 +334,32 @@ class QueryGenerator:
 
                 # Apply ordering
                 order_by = kwargs.get("order_by")
+                items: Optional[List[Any]] = None
                 if order_by:
-                    queryset = queryset.order_by(*order_by)
+                    queryset, order_by = self._apply_count_annotations_for_ordering(queryset, model, order_by)
+                    db_specs, prop_specs = self._split_order_specs(model, order_by)
+                    if db_specs:
+                        queryset = queryset.order_by(*db_specs)
+                    if prop_specs:
+                        items = list(queryset)
+                        items = self._apply_property_ordering(items, prop_specs)
 
                 # Apply pagination
                 offset = kwargs.get("offset")
                 limit = kwargs.get("limit")
-                if offset is not None and limit is not None:
-                    queryset = queryset[offset : offset + limit]
-                elif limit is not None:
-                    queryset = queryset[:limit]
-
-                return queryset
+                if items is not None:
+                    # In-memory pagination on sorted list
+                    if offset is not None and limit is not None:
+                        items = items[offset : offset + limit]
+                    elif limit is not None:
+                        items = items[:limit]
+                    return items
+                else:
+                    if offset is not None and limit is not None:
+                        queryset = queryset[offset : offset + limit]
+                    elif limit is not None:
+                        queryset = queryset[:limit]
+                    return queryset
 
             # Define arguments for the query
             arguments = {}
@@ -368,14 +510,24 @@ class QueryGenerator:
                     return EmptyPaginatedResult()
 
             # Apply ordering (same as list queries)
+            items: Optional[List[Any]] = None
             order_by = kwargs.get("order_by")
             if order_by:
-                queryset = queryset.order_by(*order_by)
+                queryset, order_by = self._apply_count_annotations_for_ordering(queryset, model, order_by)
+                db_specs, prop_specs = self._split_order_specs(model, order_by)
+                if db_specs:
+                    queryset = queryset.order_by(*db_specs)
+                if prop_specs:
+                    items = list(queryset)
+                    items = self._apply_property_ordering(items, prop_specs)
 
             # Calculate pagination values
             page = kwargs.get("page", 1)
             per_page = kwargs.get("per_page", self.settings.default_page_size)
-            total_count = queryset.count()
+            if items is not None:
+                total_count = len(items)
+            else:
+                total_count = queryset.count()
             page_count = (total_count + per_page - 1) // per_page
 
             # Ensure page is within valid range
@@ -384,7 +536,10 @@ class QueryGenerator:
             # Apply pagination
             start = (page - 1) * per_page
             end = start + per_page
-            items = queryset[start:end]
+            if items is not None:
+                items = items[start:end]
+            else:
+                items = list(queryset[start:end])
 
             # Create pagination info
             page_info = PaginationInfo(

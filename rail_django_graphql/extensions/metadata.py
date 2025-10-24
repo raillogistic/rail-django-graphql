@@ -481,6 +481,42 @@ class ModelFormMetadata:
     form_attributes: Optional[Dict[str, str]] = None
 
 
+@dataclass
+class TableFieldMetadata:
+    """Metadata for a table field used in data grid displays."""
+
+    name: str
+    accessor: str
+    display: str
+    editable: bool
+    field_type: str
+    filterable: bool
+    sortable: bool
+    title: str
+    helpText: str
+    is_property: bool
+    is_related: bool
+
+
+@dataclass
+class ModelTableMetadata:
+    """Comprehensive table metadata for a Django model, including fields and filters."""
+
+    app: str
+    model: str
+    verboseName: str
+    verboseNamePlural: str
+    tableName: str
+    primaryKey: str
+    ordering: List[str]
+    defaultOrdering: List[str]
+    get_latest_by: Optional[str]
+    managers: List[str]
+    managed: bool
+    fields: List[TableFieldMetadata]
+    filters: List[Dict[str, Any]]
+
+
 class FieldMetadataType(graphene.ObjectType):
     """GraphQL type for field metadata."""
 
@@ -757,6 +793,60 @@ class ModelFormMetadataType(graphene.ObjectType):
     form_layout = graphene.JSONString(description="Form layout configuration")
     css_classes = graphene.String(description="CSS classes for form")
     form_attributes = graphene.JSONString(description="Form HTML attributes")
+
+
+class TableFieldMetadataType(graphene.ObjectType):
+    """GraphQL type for table field metadata used in data grid."""
+
+    name = graphene.String(required=True, description="Field name")
+    accessor = graphene.String(required=True, description="Field accessor")
+    display = graphene.String(required=True, description="Field display accessor")
+    editable = graphene.Boolean(required=True, description="Whether field is editable")
+    field_type = graphene.String(required=True, description="Field data type")
+    filterable = graphene.Boolean(
+        required=True, description="Whether field is filterable"
+    )
+    sortable = graphene.Boolean(required=True, description="Whether field is sortable")
+    title = graphene.String(required=True, description="Field title (verbose name)")
+    helpText = graphene.String(required=True, description="Help text or description")
+    is_property = graphene.Boolean(
+        required=True, description="Whether field is a property"
+    )
+    is_related = graphene.Boolean(required=True, description="Whether field is related")
+
+
+class ModelTableType(graphene.ObjectType):
+    """GraphQL type for comprehensive table metadata for a Django model."""
+
+    app = graphene.String(required=True, description="Application name")
+    model = graphene.String(required=True, description="Model name")
+    verboseName = graphene.String(required=True, description="Singular verbose name")
+    verboseNamePlural = graphene.String(
+        required=True, description="Plural verbose name"
+    )
+    tableName = graphene.String(required=True, description="Database table name")
+    primaryKey = graphene.String(required=True, description="Primary key field name")
+    ordering = graphene.List(
+        graphene.String, required=True, description="Default ordering fields"
+    )
+    defaultOrdering = graphene.List(
+        graphene.String, required=True, description="Fallback ordering fields"
+    )
+    get_latest_by = graphene.String(description="Field used by 'latest' manager")
+    managers = graphene.List(
+        graphene.String, required=True, description="Manager names"
+    )
+    managed = graphene.Boolean(
+        required=True, description="Whether Django manages the table"
+    )
+    fields = graphene.List(
+        TableFieldMetadataType, required=True, description="All field metadata"
+    )
+    filters = graphene.List(
+        FilterFieldType,
+        required=True,
+        description="Available filters with field structure",
+    )
 
 
 class ModelMetadataExtractor:
@@ -1243,6 +1333,58 @@ class ModelMetadataExtractor:
                                 }
                             ],
                         }
+
+                # Add property filters for @property-based fields
+                try:
+                    from ..generators.introspector import ModelIntrospector
+
+                    introspector = ModelIntrospector(model, self.schema_name)
+                    property_map = getattr(introspector, "properties", {}) or {}
+                    property_names = set(property_map.keys())
+
+                    # Iterate base filters and group property filters under property name
+                    for fname, finstance in getattr(
+                        filter_class, "base_filters", {}
+                    ).items():
+                        base_name = fname.split("__")[0]
+                        if base_name in property_names:
+                            lookup_expr = "__".join(fname.split("__")[1:]) or "exact"
+                            verbose = (
+                                getattr(
+                                    property_map.get(base_name), "verbose_name", None
+                                )
+                                or base_name
+                            )
+                            original_help = (
+                                getattr(finstance, "help_text", None)
+                                or getattr(finstance, "label", "")
+                                or f"Filter for {base_name}"
+                            )
+                            help_text = self._translate_help_text_to_french(
+                                original_help, verbose
+                            )
+
+                            if base_name not in grouped_filter_dict:
+                                grouped_filter_dict[base_name] = {
+                                    "field_name": base_name,
+                                    "is_nested": False,
+                                    "related_model": None,
+                                    "is_custom": False,
+                                    "options": [],
+                                }
+
+                            grouped_filter_dict[base_name]["options"].append(
+                                {
+                                    "name": fname,
+                                    "lookup_expr": lookup_expr,
+                                    "help_text": help_text,
+                                    "filter_type": finstance.__class__.__name__,
+                                }
+                            )
+                except Exception as e:
+                    logger.warning(
+                        f"Error processing property filters for {model.__name__}: {e}"
+                    )
 
             except Exception as e:
                 logger.warning(
@@ -2041,7 +2183,7 @@ class ModelFormMetadataExtractor:
 
         if related_model is None or not hasattr(related_model, "_meta"):
             return None
-    
+
         related_app_label = getattr(related_model._meta, "app_label", "")
         related_model_class_name = related_model.__name__
 
@@ -2071,19 +2213,19 @@ class ModelFormMetadataExtractor:
         has_permission = self._has_field_permission(user, model, field.name)
 
         # Handle verbose_name for reverse relationships
-        if hasattr(field, 'verbose_name'):
+        if hasattr(field, "verbose_name"):
             verbose_name = str(field.verbose_name)
         else:
             # For reverse relationships like ManyToOneRel, generate a readable name
-            verbose_name = field.name.replace('_', ' ').title()
+            verbose_name = field.name.replace("_", " ").title()
 
         return FormRelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
             verbose_name=verbose_name,
-            help_text=getattr(field, 'help_text', '') or "",
+            help_text=getattr(field, "help_text", "") or "",
             widget_type=widget_type,
-            is_required=not getattr(field, 'blank', True),
+            is_required=not getattr(field, "blank", True),
             related_model=related_model_class_name,
             related_app=related_app_label,
             to_field=field.remote_field.name
@@ -2134,18 +2276,20 @@ class ModelFormMetadataExtractor:
         # Initialize visited models set if not provided
         if visited_models is None:
             visited_models = set()
-        
+
         # Create a unique identifier for this model
         model_key = f"{app_name}.{model_name}"
-        
+
         # Check if we've already visited this model to prevent infinite recursion
         if model_key in visited_models:
-            logger.warning(f"Circular reference detected for model {model_key}, skipping to prevent infinite recursion")
+            logger.warning(
+                f"Circular reference detected for model {model_key}, skipping to prevent infinite recursion"
+            )
             return None
-        
+
         # Add current model to visited set
         visited_models.add(model_key)
-        
+
         try:
             model = apps.get_model(app_name, model_name)
         except (LookupError, ValueError) as e:
@@ -2163,7 +2307,7 @@ class ModelFormMetadataExtractor:
         # Extract form fields
         form_fields = []
         form_relationships = []
-        
+
         for field in meta.get_fields():
             # Check if this is a relationship field
             if hasattr(field, "related_model") and field.related_model:
@@ -2413,6 +2557,310 @@ class ModelFormMetadataExtractor:
         return user.has_perm(view_permission)
 
 
+class ModelTableExtractor:
+    """Extractor for comprehensive table metadata including fields and filters."""
+
+    def __init__(self, schema_name: str = "default", max_depth: int = 0):
+        self.schema_name = schema_name
+        self.max_depth = max_depth
+
+    def _get_model(self, app_name: str, model_name: str):
+        try:
+            return apps.get_model(app_name, model_name)
+        except Exception as e:
+            logger.error(
+                "Model '%s' not found in app '%s': %s", model_name, app_name, e
+            )
+            return None
+
+    def _build_table_field_from_django_field(self, field) -> TableFieldMetadata:
+        from django.db import models
+
+        field_type = field.__class__.__name__
+        title = str(getattr(field, "verbose_name", field.name))
+        help_text = str(getattr(field, "help_text", ""))
+        is_related = isinstance(
+            field, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)
+        )
+        return TableFieldMetadata(
+            name=field.name,
+            accessor=field.name,
+            display=f"{field.name}.desc" if is_related else field.name,
+            editable=getattr(field, "editable", True),
+            field_type=field_type,
+            filterable=True,
+            sortable=True,
+            title=title,
+            helpText=help_text,
+            is_property=False,
+            is_related=is_related,
+        )
+
+    def _build_table_field_for_property(
+        self,
+        prop_name: str,
+        return_type,
+        verbose_name: Optional[str] = None,
+    ) -> TableFieldMetadata:
+        import inspect
+        from datetime import date, datetime, time
+        from typing import Any, List, Union, get_args, get_origin
+
+        def _to_graphql_str(py_type: Any) -> str:
+            # Handle missing or Any annotations
+            if py_type is Any or py_type is None or py_type is inspect._empty:
+                return "String"
+
+            # Base type mappings consistent with type generation
+            base_map = {
+                str: "String",
+                int: "Int",
+                float: "Float",
+                bool: "Boolean",
+                date: "Date",
+                datetime: "DateTime",
+                time: "Time",
+            }
+
+            # Dict and JSON-like types
+            if py_type in (dict,):
+                return "JSON"
+
+            origin = get_origin(py_type)
+            if origin is Union:
+                # Optional/Union: pick first non-None type
+                args = [arg for arg in get_args(py_type) if arg is not type(None)]
+                return _to_graphql_str(args[0]) if args else "String"
+
+            if origin in (list, List):
+                args = get_args(py_type)
+                inner = _to_graphql_str(args[0]) if args else "String"
+                return f"List[{inner}]"
+
+            if origin in (dict,):
+                return "JSON"
+
+            return base_map.get(py_type, "String")
+
+        field_type_str = _to_graphql_str(return_type)
+        return TableFieldMetadata(
+            name=prop_name,
+            accessor=prop_name,
+            display=prop_name,
+            editable=False,
+            field_type=field_type_str,
+            filterable=True,
+            sortable=True,
+            title=str(verbose_name or prop_name),
+            helpText=f"Computed property ({field_type_str})",
+            is_property=True,
+            is_related=False,
+        )
+
+    def _build_table_field_for_reverse_count(
+        self, introspector, model
+    ) -> TableFieldMetadata:
+        counts = []
+        reverse_relations = introspector.get_reverse_relations()
+        print(reverse_relations)
+        for rel_name, related_model in reverse_relations.items():
+            counts.append(
+                TableFieldMetadata(
+                    name=f"{rel_name}_count",
+                    accessor=f"{rel_name}_count",
+                    display=f"{rel_name}_count",
+                    editable=False,
+                    field_type="Count",
+                    filterable=True,
+                    sortable=True,
+                    title=f"Related items count ({rel_name})",
+                    helpText=f"Number of related reverse objects ({rel_name})",
+                    is_property=False,
+                    is_related=False,
+                )
+            )
+        for field in model._meta.get_fields():
+            if isinstance(field, models.ManyToManyField):
+                counts.append(
+                    TableFieldMetadata(
+                        name=f"{field.name}_count",
+                        accessor=f"{rel_name}_count",
+                        display=f"{rel_name}_count",
+                        editable=False,
+                        field_type="Count",
+                        filterable=True,
+                        sortable=True,
+                        title=f"Related items count ({field.verbose_name})",
+                        helpText=f"Number of related reverse objects ({field.verbose_name})",
+                        is_property=False,
+                        is_related=False,
+                    )
+                )
+        return counts
+
+    def _parse_custom_fields(self, custom_fields: List[str]) -> List[str]:
+        # Normalize paths: dot-separated to Django double-underscore
+        normalized = []
+        for path in custom_fields or []:
+            path = path.strip()
+            if not path:
+                continue
+            normalized.append(path.replace(".", "__"))
+        return normalized
+
+    @cache_metadata(timeout=1800, user_specific=False)
+    def extract_model_table_metadata(
+        self,
+        app_name: str,
+        model_name: str,
+        custom_fields: Optional[List[str]] = None,
+        user=None,
+    ) -> Optional[ModelTableMetadata]:
+        model = self._get_model(app_name, model_name)
+        if not model:
+            return None
+
+        meta = model._meta
+        introspector = ModelIntrospector(model, self.schema_name)
+
+        # Table-level metadata
+        app_label = meta.app_label
+        model_label = model.__name__
+        verbose_name = str(meta.verbose_name)
+        verbose_name_plural = str(meta.verbose_name_plural)
+        table_name = str(meta.db_table)
+        primary_key = meta.pk.name if meta.pk else "id"
+        ordering = list(meta.ordering) if getattr(meta, "ordering", None) else []
+        # Fallback ordering: latest_by or PK
+        if not ordering:
+            if getattr(meta, "get_latest_by", None):
+                ordering = [f"-{meta.get_latest_by}"]
+            else:
+                ordering = [primary_key]
+        default_ordering = ordering.copy()
+        get_latest_by = getattr(meta, "get_latest_by", None)
+        managers = [m.name for m in getattr(meta, "managers", [])] or [
+            m.name for m in model._meta.managers
+        ]
+        managed = bool(getattr(meta, "managed", True))
+
+        # Field metadata: include concrete fields
+        table_fields: List[TableFieldMetadata] = []
+        for f in meta.get_fields():
+            # Skip auto-created reverse accessors
+            if getattr(f, "auto_created", False) and getattr(f, "is_relation", False):
+                continue
+            # Only include concrete or forward relation fields
+            if getattr(f, "concrete", False) or (
+                getattr(f, "is_relation", False)
+                and not getattr(f, "auto_created", False)
+            ):
+                try:
+                    table_fields.append(self._build_table_field_from_django_field(f))
+                except Exception as e:
+                    logger.warning(f"Unable to build field metadata for {f.name}: {e}")
+
+        # Properties from introspector
+        try:
+            for prop_name, prop_info in getattr(introspector, "properties", {}).items():
+                verbose = getattr(prop_info, "verbose_name", prop_name)
+                return_type = getattr(prop_info, "return_type", None)
+                table_fields.append(
+                    self._build_table_field_for_property(
+                        prop_name, return_type, verbose
+                    )
+                )
+        except Exception:
+            # Properties may not be available; ignore quietly
+            pass
+
+        # Reverse relationship count field
+        table_fields.extend(
+            self._build_table_field_for_reverse_count(introspector, model)
+        )
+
+        # Custom field handling
+        normalized_custom_fields = self._parse_custom_fields(custom_fields or [])
+        for custom_path in normalized_custom_fields:
+            # Title is last segment
+            title = custom_path.split("__")[-1].replace("_", " ")
+            table_fields.append(
+                TableFieldMetadata(
+                    name=custom_path,
+                    accessor=custom_path.replace("__", "."),
+                    display=custom_path.replace("__", "."),
+                    editable=False,
+                    field_type="Related",
+                    filterable=True,
+                    sortable=True,
+                    title=title,
+                    helpText=f"Custom related field '{custom_path}'",
+                    is_property=False,
+                    is_related=True,
+                )
+            )
+
+        # Filters: reuse existing extractor and append custom ones
+        filters: List[Dict[str, Any]] = []
+        try:
+            metadata_extractor = ModelMetadataExtractor(max_depth=self.max_depth)
+            filters = metadata_extractor._extract_filter_metadata(model) or []
+        except Exception as e:
+            logger.warning(f"Error extracting base filters for {model_label}: {e}")
+            filters = []
+
+        # Add custom field filter entries if not already present
+        existing_fields = {
+            f["field_name"]
+            for f in filters
+            if isinstance(f, dict) and "field_name" in f
+        }
+        for custom_path in normalized_custom_fields:
+            if custom_path in existing_fields:
+                continue
+            # Basic filter option set: exact and icontains
+            options = [
+                {
+                    "name": custom_path,
+                    "lookup_expr": "exact",
+                    "help_text": f"Filtrer par {custom_path}",
+                    "filter_type": "CharFilter",
+                },
+                {
+                    "name": f"{custom_path}__icontains",
+                    "lookup_expr": "icontains",
+                    "help_text": f"Recherche texte dans {custom_path}",
+                    "filter_type": "CharFilter",
+                },
+            ]
+            filters.append(
+                {
+                    "field_name": custom_path,
+                    "is_nested": "__" in custom_path,
+                    "related_model": None,
+                    "is_custom": True,
+                    "options": options,
+                }
+            )
+
+        # Assemble final metadata
+        return ModelTableMetadata(
+            app=app_label,
+            model=model_label,
+            verboseName=verbose_name,
+            verboseNamePlural=verbose_name_plural,
+            tableName=table_name,
+            primaryKey=primary_key,
+            ordering=ordering,
+            defaultOrdering=default_ordering,
+            get_latest_by=get_latest_by,
+            managers=managers,
+            managed=managed,
+            fields=table_fields,
+            filters=filters,
+        )
+
+
 class ModelMetadataQuery(graphene.ObjectType):
     """GraphQL queries for model metadata."""
 
@@ -2428,7 +2876,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         ),
         max_depth=graphene.Int(
             default_value=0,
-            description="Maximum nesting depth for filters (default: 2)",
+            description="Maximum nesting depth for filters (default: 0)",
         ),
         description="Get comprehensive metadata for a Django model",
     )
@@ -2445,6 +2893,22 @@ class ModelMetadataQuery(graphene.ObjectType):
         description="Get comprehensive form metadata for a Django model",
     )
 
+    model_table = graphene.Field(
+        ModelTableType,
+        app_name=graphene.String(required=True, description="Django app name"),
+        model_name=graphene.String(required=True, description="Model class name"),
+        custom_fields=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="Additional custom fields to include (e.g., 'author.username')",
+        ),
+        max_depth=graphene.Int(
+            default_value=0,
+            description="Maximum nesting depth for custom field filter resolution",
+        ),
+        description="Get comprehensive table metadata for a Django model",
+    )
+
     def resolve_model_metadata(
         self,
         info,
@@ -2452,7 +2916,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         model_name: str,
         nested_fields: bool = True,
         permissions_included: bool = True,
-        max_depth: int = 2,
+        max_depth: int = 1,
     ) -> Optional[ModelMetadataType]:
         """
         Resolve model metadata with permission checking and settings validation.
@@ -2489,6 +2953,25 @@ class ModelMetadataQuery(graphene.ObjectType):
             return None
 
         # Return dataclass directly for Graphene to resolve attributes
+        return metadata
+
+    def resolve_model_table(
+        self,
+        info,
+        app_name: str,
+        model_name: str,
+        custom_fields: List[str] = None,
+        max_depth: int = 1,
+    ) -> Optional[ModelTableType]:
+        """Resolve comprehensive table metadata for a Django model."""
+        user = getattr(info.context, "user", None)
+        extractor = ModelTableExtractor(max_depth=max_depth)
+        metadata = extractor.extract_model_table_metadata(
+            app_name=app_name,
+            model_name=model_name,
+            custom_fields=custom_fields or [],
+            user=user,
+        )
         return metadata
 
     def resolve_model_form_metadata(

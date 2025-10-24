@@ -49,11 +49,17 @@ class FilterOperation:
     Represents a single filter operation for a field.
     """
 
-    def __init__(self, name: str, filter_type: str, lookup_expr: str = None,
-                 description: str = None, is_array: bool = False):
+    def __init__(
+        self,
+        name: str,
+        filter_type: str,
+        lookup_expr: str = None,
+        description: str = None,
+        is_array: bool = False,
+    ):
         self.name = name
         self.filter_type = filter_type
-        self.lookup_expr = lookup_expr or 'exact'
+        self.lookup_expr = lookup_expr or "exact"
         self.description = description
         self.is_array = is_array
 
@@ -63,7 +69,9 @@ class GroupedFieldFilter:
     Represents a grouped filter for a single field with multiple operations.
     """
 
-    def __init__(self, field_name: str, field_type: str, operations: List[FilterOperation]):
+    def __init__(
+        self, field_name: str, field_type: str, operations: List[FilterOperation]
+    ):
         self.field_name = field_name
         self.field_type = field_type
         self.operations = operations
@@ -71,18 +79,18 @@ class GroupedFieldFilter:
     def to_dict(self):
         """Convert to dictionary format for metadata."""
         return {
-            'field_name': self.field_name,
-            'field_type': self.field_type,
-            'operations': [
+            "field_name": self.field_name,
+            "field_type": self.field_type,
+            "operations": [
                 {
-                    'name': op.name,
-                    'filter_type': op.filter_type,
-                    'lookup_expr': op.lookup_expr,
-                    'description': op.description,
-                    'is_array': op.is_array
+                    "name": op.name,
+                    "filter_type": op.filter_type,
+                    "lookup_expr": op.lookup_expr,
+                    "description": op.description,
+                    "is_array": op.is_array,
                 }
                 for op in self.operations
-            ]
+            ],
         }
 
 
@@ -91,13 +99,19 @@ class EnhancedFilterGenerator:
     Enhanced filter generator that creates grouped filters with comprehensive operations.
     """
 
-    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
-                 enable_nested_filters: bool = True, schema_name: Optional[str] = None):
+    def __init__(
+        self,
+        max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
+        enable_nested_filters: bool = True,
+        schema_name: Optional[str] = None,
+    ):
         self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
         self.enable_nested_filters = enable_nested_filters
-        self.schema_name = schema_name or 'default'
+        self.schema_name = schema_name or "default"
         self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
-        self._grouped_filter_cache: Dict[Type[models.Model], List[GroupedFieldFilter]] = {}
+        self._grouped_filter_cache: Dict[
+            Type[models.Model], List[GroupedFieldFilter]
+        ] = {}
         self._visited_models: set = set()
 
         logger.debug(
@@ -106,7 +120,9 @@ class EnhancedFilterGenerator:
             f"enable_nested_filters={self.enable_nested_filters}"
         )
 
-    def get_grouped_filters(self, model: Type[models.Model]) -> List[GroupedFieldFilter]:
+    def get_grouped_filters(
+        self, model: Type[models.Model]
+    ) -> List[GroupedFieldFilter]:
         """
         Get grouped filters for a model.
 
@@ -123,7 +139,7 @@ class EnhancedFilterGenerator:
 
         # Process each field in the model
         for field in model._meta.get_fields():
-            if not hasattr(field, 'name'):
+            if not hasattr(field, "name"):
                 continue
 
             field_operations = self._generate_field_operations(field)
@@ -131,7 +147,7 @@ class EnhancedFilterGenerator:
                 grouped_filter = GroupedFieldFilter(
                     field_name=field.name,
                     field_type=field.__class__.__name__,
-                    operations=field_operations
+                    operations=field_operations,
                 )
                 grouped_filters.append(grouped_filter)
 
@@ -154,7 +170,9 @@ class EnhancedFilterGenerator:
 
         if isinstance(field, (models.CharField, models.TextField)):
             operations.extend(self._get_text_operations(field_name))
-        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+        elif isinstance(
+            field, (models.IntegerField, models.FloatField, models.DecimalField)
+        ):
             operations.extend(self._get_numeric_operations(field_name))
         elif isinstance(field, (models.DateField, models.DateTimeField)):
             operations.extend(self._get_date_operations(field_name))
@@ -164,7 +182,7 @@ class EnhancedFilterGenerator:
             operations.extend(self._get_foreign_key_operations(field_name))
         elif isinstance(field, models.ManyToManyField):
             operations.extend(self._get_many_to_many_operations(field_name))
-        elif hasattr(field, 'choices') and field.choices:
+        elif hasattr(field, "choices") and field.choices:
             operations.extend(self._get_choice_operations(field_name, field.choices))
         elif isinstance(field, (models.FileField, models.ImageField)):
             operations.extend(self._get_file_operations(field_name))
@@ -176,135 +194,312 @@ class EnhancedFilterGenerator:
     def _get_text_operations(self, field_name: str) -> List[FilterOperation]:
         """Get comprehensive text field operations."""
         return [
-            FilterOperation('exact', 'CharFilter', 'exact', f'Exact match for {field_name}'),
-            FilterOperation('iexact', 'CharFilter', 'iexact',
-                            f'Case-insensitive exact match for {field_name}'),
-            FilterOperation('contains', 'CharFilter', 'contains', f'Contains text in {field_name}'),
-            FilterOperation('icontains', 'CharFilter', 'icontains',
-                            f'Case-insensitive contains text in {field_name}'),
-            FilterOperation('startswith', 'CharFilter', 'startswith',
-                            f'Starts with text in {field_name}'),
-            FilterOperation('istartswith', 'CharFilter', 'istartswith',
-                            f'Case-insensitive starts with text in {field_name}'),
-            FilterOperation('endswith', 'CharFilter', 'endswith',
-                            f'Ends with text in {field_name}'),
-            FilterOperation('iendswith', 'CharFilter', 'iendswith',
-                            f'Case-insensitive ends with text in {field_name}'),
-            FilterOperation('in', 'MultipleChoiceFilter', 'in',
-                            f'Match any of the provided values for {field_name}', is_array=True),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
-            FilterOperation('regex', 'CharFilter', 'regex',
-                            f'Regular expression match for {field_name}'),
-            FilterOperation('iregex', 'CharFilter', 'iregex',
-                            f'Case-insensitive regular expression match for {field_name}'),
+            FilterOperation(
+                "exact", "CharFilter", "exact", f"Exact match for {field_name}"
+            ),
+            FilterOperation(
+                "iexact",
+                "CharFilter",
+                "iexact",
+                f"Case-insensitive exact match for {field_name}",
+            ),
+            FilterOperation(
+                "contains", "CharFilter", "contains", f"Contains text in {field_name}"
+            ),
+            FilterOperation(
+                "icontains",
+                "CharFilter",
+                "icontains",
+                f"Case-insensitive contains text in {field_name}",
+            ),
+            FilterOperation(
+                "startswith",
+                "CharFilter",
+                "startswith",
+                f"Starts with text in {field_name}",
+            ),
+            FilterOperation(
+                "istartswith",
+                "CharFilter",
+                "istartswith",
+                f"Case-insensitive starts with text in {field_name}",
+            ),
+            FilterOperation(
+                "endswith", "CharFilter", "endswith", f"Ends with text in {field_name}"
+            ),
+            FilterOperation(
+                "iendswith",
+                "CharFilter",
+                "iendswith",
+                f"Case-insensitive ends with text in {field_name}",
+            ),
+            FilterOperation(
+                "in",
+                "MultipleChoiceFilter",
+                "in",
+                f"Match any of the provided values for {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
+            FilterOperation(
+                "regex",
+                "CharFilter",
+                "regex",
+                f"Regular expression match for {field_name}",
+            ),
+            FilterOperation(
+                "iregex",
+                "CharFilter",
+                "iregex",
+                f"Case-insensitive regular expression match for {field_name}",
+            ),
         ]
 
     def _get_numeric_operations(self, field_name: str) -> List[FilterOperation]:
         """Get comprehensive numeric field operations."""
         return [
-            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact value for {field_name}'),
-            FilterOperation('gt', 'NumberFilter', 'gt', f'Greater than value for {field_name}'),
-            FilterOperation('gte', 'NumberFilter', 'gte',
-                            f'Greater than or equal to value for {field_name}'),
-            FilterOperation('lt', 'NumberFilter', 'lt', f'Less than value for {field_name}'),
-            FilterOperation('lte', 'NumberFilter', 'lte',
-                            f'Less than or equal to value for {field_name}'),
-            FilterOperation('in', 'BaseInFilter', 'in',
-                            f'Match any of the provided numeric values for {field_name}', is_array=True),
-            FilterOperation('range', 'RangeFilter', 'range',
-                            f'Value within range for {field_name}'),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation(
+                "exact", "NumberFilter", "exact", f"Exact value for {field_name}"
+            ),
+            FilterOperation(
+                "gt", "NumberFilter", "gt", f"Greater than value for {field_name}"
+            ),
+            FilterOperation(
+                "gte",
+                "NumberFilter",
+                "gte",
+                f"Greater than or equal to value for {field_name}",
+            ),
+            FilterOperation(
+                "lt", "NumberFilter", "lt", f"Less than value for {field_name}"
+            ),
+            FilterOperation(
+                "lte",
+                "NumberFilter",
+                "lte",
+                f"Less than or equal to value for {field_name}",
+            ),
+            FilterOperation(
+                "in",
+                "BaseInFilter",
+                "in",
+                f"Match any of the provided numeric values for {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "range", "RangeFilter", "range", f"Value within range for {field_name}"
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
         ]
 
     def _get_date_operations(self, field_name: str) -> List[FilterOperation]:
         """Get comprehensive date field operations."""
         return [
-            FilterOperation('exact', 'DateFilter', 'exact', f'Exact date for {field_name}'),
-            FilterOperation('gt', 'DateFilter', 'gt', f'After date for {field_name}'),
-            FilterOperation('gte', 'DateFilter', 'gte', f'On or after date for {field_name}'),
-            FilterOperation('lt', 'DateFilter', 'lt', f'Before date for {field_name}'),
-            FilterOperation('lte', 'DateFilter', 'lte', f'On or before date for {field_name}'),
-            FilterOperation('range', 'DateRangeFilter', 'range',
-                            f'Date within range for {field_name}'),
-            FilterOperation('year', 'NumberFilter', 'year', f'Filter by year for {field_name}'),
-            FilterOperation('month', 'NumberFilter', 'month', f'Filter by month for {field_name}'),
-            FilterOperation('day', 'NumberFilter', 'day', f'Filter by day for {field_name}'),
-            FilterOperation('week_day', 'NumberFilter', 'week_day',
-                            f'Filter by week day for {field_name}'),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
-            FilterOperation('today', 'BooleanFilter', 'today',
-                            f'Filter for today\'s date in {field_name}'),
-            FilterOperation('yesterday', 'BooleanFilter', 'yesterday',
-                            f'Filter for yesterday\'s date in {field_name}'),
-            FilterOperation('this_week', 'BooleanFilter', 'this_week',
-                            f'Filter for this week\'s dates in {field_name}'),
-            FilterOperation('this_month', 'BooleanFilter', 'this_month',
-                            f'Filter for this month\'s dates in {field_name}'),
-            FilterOperation('this_year', 'BooleanFilter', 'this_year',
-                            f'Filter for this year\'s dates in {field_name}'),
+            FilterOperation(
+                "exact", "DateFilter", "exact", f"Exact date for {field_name}"
+            ),
+            FilterOperation("gt", "DateFilter", "gt", f"After date for {field_name}"),
+            FilterOperation(
+                "gte", "DateFilter", "gte", f"On or after date for {field_name}"
+            ),
+            FilterOperation("lt", "DateFilter", "lt", f"Before date for {field_name}"),
+            FilterOperation(
+                "lte", "DateFilter", "lte", f"On or before date for {field_name}"
+            ),
+            FilterOperation(
+                "range",
+                "DateRangeFilter",
+                "range",
+                f"Date within range for {field_name}",
+            ),
+            FilterOperation(
+                "year", "NumberFilter", "year", f"Filter by year for {field_name}"
+            ),
+            FilterOperation(
+                "month", "NumberFilter", "month", f"Filter by month for {field_name}"
+            ),
+            FilterOperation(
+                "day", "NumberFilter", "day", f"Filter by day for {field_name}"
+            ),
+            FilterOperation(
+                "week_day",
+                "NumberFilter",
+                "week_day",
+                f"Filter by week day for {field_name}",
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
+            FilterOperation(
+                "today",
+                "BooleanFilter",
+                "today",
+                f"Filter for today's date in {field_name}",
+            ),
+            FilterOperation(
+                "yesterday",
+                "BooleanFilter",
+                "yesterday",
+                f"Filter for yesterday's date in {field_name}",
+            ),
+            FilterOperation(
+                "this_week",
+                "BooleanFilter",
+                "this_week",
+                f"Filter for this week's dates in {field_name}",
+            ),
+            FilterOperation(
+                "this_month",
+                "BooleanFilter",
+                "this_month",
+                f"Filter for this month's dates in {field_name}",
+            ),
+            FilterOperation(
+                "this_year",
+                "BooleanFilter",
+                "this_year",
+                f"Filter for this year's dates in {field_name}",
+            ),
         ]
 
     def _get_boolean_operations(self, field_name: str) -> List[FilterOperation]:
         """Get boolean field operations."""
         return [
-            FilterOperation('exact', 'BooleanFilter', 'exact', f'Boolean value for {field_name}'),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation(
+                "exact", "BooleanFilter", "exact", f"Boolean value for {field_name}"
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
         ]
 
     def _get_foreign_key_operations(self, field_name: str) -> List[FilterOperation]:
         """Get foreign key field operations."""
         return [
-            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact ID for {field_name}'),
-            FilterOperation('in', 'BaseInFilter', 'in',
-                            f'Match any of the provided IDs for {field_name}', is_array=True),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation(
+                "exact", "NumberFilter", "exact", f"Exact ID for {field_name}"
+            ),
+            FilterOperation(
+                "in",
+                "BaseInFilter",
+                "in",
+                f"Match any of the provided IDs for {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
         ]
 
     def _get_many_to_many_operations(self, field_name: str) -> List[FilterOperation]:
         """Get many-to-many field operations."""
         return [
-            FilterOperation('exact', 'NumberFilter', 'exact', f'Exact ID in {field_name}'),
-            FilterOperation('in', 'BaseInFilter', 'in',
-                            f'Match any of the provided IDs in {field_name}', is_array=True),
-            FilterOperation('count', 'NumberFilter', 'count',
-                            f'Count of related objects in {field_name}'),
-            FilterOperation('count_gt', 'NumberFilter', 'count_gt',
-                            f'Count greater than for {field_name}'),
-            FilterOperation('count_gte', 'NumberFilter', 'count_gte',
-                            f'Count greater than or equal for {field_name}'),
-            FilterOperation('count_lt', 'NumberFilter', 'count_lt',
-                            f'Count less than for {field_name}'),
-            FilterOperation('count_lte', 'NumberFilter', 'count_lte',
-                            f'Count less than or equal for {field_name}'),
+            FilterOperation(
+                "exact", "NumberFilter", "exact", f"Exact ID in {field_name}"
+            ),
+            FilterOperation(
+                "in",
+                "BaseInFilter",
+                "in",
+                f"Match any of the provided IDs in {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "count",
+                "NumberFilter",
+                "count",
+                f"Count of related objects in {field_name}",
+            ),
+            FilterOperation(
+                "count_gt",
+                "NumberFilter",
+                "count_gt",
+                f"Count greater than for {field_name}",
+            ),
+            FilterOperation(
+                "count_gte",
+                "NumberFilter",
+                "count_gte",
+                f"Count greater than or equal for {field_name}",
+            ),
+            FilterOperation(
+                "count_lt",
+                "NumberFilter",
+                "count_lt",
+                f"Count less than for {field_name}",
+            ),
+            FilterOperation(
+                "count_lte",
+                "NumberFilter",
+                "count_lte",
+                f"Count less than or equal for {field_name}",
+            ),
         ]
 
-    def _get_choice_operations(self, field_name: str, choices: List) -> List[FilterOperation]:
+    def _get_choice_operations(
+        self, field_name: str, choices: List
+    ) -> List[FilterOperation]:
         """Get choice field operations."""
         return [
-            FilterOperation('exact', 'ChoiceFilter', 'exact', f'Exact choice for {field_name}'),
-            FilterOperation('in', 'MultipleChoiceFilter', 'in',
-                            f'Match any of the provided choices for {field_name}', is_array=True),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation(
+                "exact", "ChoiceFilter", "exact", f"Exact choice for {field_name}"
+            ),
+            FilterOperation(
+                "in",
+                "MultipleChoiceFilter",
+                "in",
+                f"Match any of the provided choices for {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
         ]
 
     def _get_file_operations(self, field_name: str) -> List[FilterOperation]:
         """Get file field operations."""
         return [
-            FilterOperation('exact', 'CharFilter', 'exact', f'Exact file path for {field_name}'),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
+            FilterOperation(
+                "exact", "CharFilter", "exact", f"Exact file path for {field_name}"
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
         ]
 
     def _get_json_operations(self, field_name: str) -> List[FilterOperation]:
         """Get JSON field operations."""
         return [
-            FilterOperation('exact', 'CharFilter', 'exact', f'Exact JSON match for {field_name}'),
-            FilterOperation('isnull', 'BooleanFilter', 'isnull', f'Check if {field_name} is null'),
-            FilterOperation('has_key', 'CharFilter', 'has_key',
-                            f'Check if JSON has key in {field_name}'),
-            FilterOperation('has_keys', 'CharFilter', 'has_keys',
-                            f'Check if JSON has all keys in {field_name}', is_array=True),
-            FilterOperation('has_any_keys', 'CharFilter', 'has_any_keys',
-                            f'Check if JSON has any of the keys in {field_name}', is_array=True),
+            FilterOperation(
+                "exact", "CharFilter", "exact", f"Exact JSON match for {field_name}"
+            ),
+            FilterOperation(
+                "isnull", "BooleanFilter", "isnull", f"Check if {field_name} is null"
+            ),
+            FilterOperation(
+                "has_key",
+                "CharFilter",
+                "has_key",
+                f"Check if JSON has key in {field_name}",
+            ),
+            FilterOperation(
+                "has_keys",
+                "CharFilter",
+                "has_keys",
+                f"Check if JSON has all keys in {field_name}",
+                is_array=True,
+            ),
+            FilterOperation(
+                "has_any_keys",
+                "CharFilter",
+                "has_any_keys",
+                f"Check if JSON has any of the keys in {field_name}",
+                is_array=True,
+            ),
         ]
 
 
@@ -343,8 +538,12 @@ class AdvancedFilterGenerator:
         >>> # Creates filters like: name__contains, email__iexact, profile__bio__contains
     """
 
-    def __init__(self, max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
-                 enable_nested_filters: bool = True, schema_name: Optional[str] = None):
+    def __init__(
+        self,
+        max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
+        enable_nested_filters: bool = True,
+        schema_name: Optional[str] = None,
+    ):
         """
         Initialize the filter generator with nested filtering configuration.
 
@@ -356,8 +555,10 @@ class AdvancedFilterGenerator:
         self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
         self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
         self.enable_nested_filters = enable_nested_filters
-        self.schema_name = schema_name or 'default'
-        self._visited_models: set = set()  # Track visited models to prevent infinite recursion
+        self.schema_name = schema_name or "default"
+        self._visited_models: set = (
+            set()
+        )  # Track visited models to prevent infinite recursion
 
         # Log configuration for debugging
         logger.debug(
@@ -366,7 +567,9 @@ class AdvancedFilterGenerator:
             f"enable_nested_filters={self.enable_nested_filters}"
         )
 
-    def generate_filter_set(self, model: Type[models.Model], current_depth: int = 0) -> Type[FilterSet]:
+    def generate_filter_set(
+        self, model: Type[models.Model], current_depth: int = 0
+    ) -> Type[FilterSet]:
         """
         Generate a FilterSet class for the given Django model with nested filtering support.
 
@@ -387,13 +590,15 @@ class AdvancedFilterGenerator:
         # Prevent infinite recursion
         if model in self._visited_models:
             logger.warning(
-                f"Circular reference detected for model {model.__name__} at depth {current_depth}")
+                f"Circular reference detected for model {model.__name__} at depth {current_depth}"
+            )
             return self._generate_basic_filter_set(model)
 
         # Check depth limits
         if current_depth >= self.max_nested_depth:
             logger.debug(
-                f"Maximum nested depth ({self.max_nested_depth}) reached for {model.__name__}")
+                f"Maximum nested depth ({self.max_nested_depth}) reached for {model.__name__}"
+            )
             return self._generate_basic_filter_set(model)
 
         # Add model to visited set
@@ -406,9 +611,10 @@ class AdvancedFilterGenerator:
             # Generate filters for all fields
             filters = {}
             for field in model._meta.get_fields():
-                if hasattr(field, 'name'):  # Skip reverse relations without names
+                if hasattr(field, "name"):  # Skip reverse relations without names
                     field_filters = self._generate_field_filters(
-                        field, current_depth, allow_nested=True)
+                        field, current_depth, allow_nested=True
+                    )
                     filters.update(field_filters)
 
             # Add custom filters from GraphQLMeta
@@ -418,16 +624,16 @@ class AdvancedFilterGenerator:
 
             # Add quick filter if configured
             if graphql_meta and (
-                graphql_meta.filters.get('quick') or
-                graphql_meta.filter_fields.get('quick') or
-                getattr(graphql_meta, 'quick_filter_fields', None)
+                graphql_meta.filters.get("quick")
+                or graphql_meta.filter_fields.get("quick")
+                or getattr(graphql_meta, "quick_filter_fields", None)
             ):
                 # Use quick_filter_fields if available, otherwise fall back to filters['quick']
                 # If filter_fields['quick'] exists but quick_filter_fields doesn't, use default searchable fields
-                quick_fields = getattr(graphql_meta, 'quick_filter_fields', None)
+                quick_fields = getattr(graphql_meta, "quick_filter_fields", None)
                 if not quick_fields:
-                    quick_fields = graphql_meta.filters.get('quick', [])
-                if not quick_fields and graphql_meta.filter_fields.get('quick'):
+                    quick_fields = graphql_meta.filters.get("quick", [])
+                if not quick_fields and graphql_meta.filter_fields.get("quick"):
                     # If filter_fields['quick'] exists but no specific fields defined,
                     # use default searchable fields from the model
                     quick_fields = self._get_default_quick_filter_fields(model)
@@ -435,14 +641,18 @@ class AdvancedFilterGenerator:
                 if quick_fields:
                     quick_filter = self._generate_quick_filter(model, quick_fields)
                     if quick_filter:
-                        filters['quick'] = quick_filter
+                        filters["quick"] = quick_filter
 
             # Generate reverse relationship count filters
-            reverse_count_filters = self._generate_reverse_relationship_count_filters(model)
+            reverse_count_filters = self._generate_reverse_relationship_count_filters(
+                model
+            )
             filters.update(reverse_count_filters)
 
             # Generate reverse relationship field filters
-            reverse_field_filters = self._generate_reverse_relationship_field_filters(model)
+            reverse_field_filters = self._generate_reverse_relationship_field_filters(
+                model
+            )
             filters.update(reverse_field_filters)
 
             # Generate property filters
@@ -454,17 +664,21 @@ class AdvancedFilterGenerator:
 
             # Create FilterSet class
             filter_set_class = type(
-                f'{model.__name__}FilterSet',
+                f"{model.__name__}FilterSet",
                 (FilterSet,),
                 {
                     **filters,
                     **filter_methods,
-                    'Meta': type('Meta', (), {
-                        'model': model,
-                        'fields': list(filters.keys()),
-                        'strict': False,  # Allow partial matches
-                    })
-                }
+                    "Meta": type(
+                        "Meta",
+                        (),
+                        {
+                            "model": model,
+                            "fields": list(filters.keys()),
+                            "strict": False,  # Allow partial matches
+                        },
+                    ),
+                },
             )
 
             # Cache the result
@@ -478,7 +692,9 @@ class AdvancedFilterGenerator:
             # Remove model from visited set
             self._visited_models.discard(model)
 
-    def _generate_quick_filter(self, model: Type[models.Model], quick_filter_fields: List[str]) -> Optional[CharFilter]:
+    def _generate_quick_filter(
+        self, model: Type[models.Model], quick_filter_fields: List[str]
+    ) -> Optional[CharFilter]:
         """
         Generate a quick filter that searches across multiple fields.
 
@@ -489,6 +705,7 @@ class AdvancedFilterGenerator:
         Returns:
             CharFilter that searches across specified fields
         """
+
         def quick_filter_method(queryset, name, value):
             if not value:
                 return queryset
@@ -501,29 +718,38 @@ class AdvancedFilterGenerator:
                     if field:
                         if isinstance(field, (models.CharField, models.TextField)):
                             q_objects |= Q(**{f"{field_path}__icontains": value})
-                        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+                        elif isinstance(
+                            field,
+                            (
+                                models.IntegerField,
+                                models.FloatField,
+                                models.DecimalField,
+                            ),
+                        ):
                             try:
                                 numeric_value = float(value)
                                 q_objects |= Q(**{field_path: numeric_value})
                             except (ValueError, TypeError):
                                 continue
                         elif isinstance(field, models.BooleanField):
-                            if value.lower() in ['true', '1', 'yes', 'on']:
+                            if value.lower() in ["true", "1", "yes", "on"]:
                                 q_objects |= Q(**{field_path: True})
-                            elif value.lower() in ['false', '0', 'no', 'off']:
+                            elif value.lower() in ["false", "0", "no", "off"]:
                                 q_objects |= Q(**{field_path: False})
                         else:
                             # For other field types, try exact match
                             q_objects |= Q(**{f"{field_path}__icontains": value})
                 except Exception as e:
-                    logger.warning(f"Error processing quick filter field {field_path}: {e}")
+                    logger.warning(
+                        f"Error processing quick filter field {field_path}: {e}"
+                    )
                     continue
 
             return queryset.filter(q_objects)
 
         return django_filters.CharFilter(
             method=quick_filter_method,
-            help_text=f'Quick search across fields: {", ".join(quick_filter_fields)}'
+            help_text=f'Quick search across fields: {", ".join(quick_filter_fields)}',
         )
 
     def _get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
@@ -539,12 +765,19 @@ class AdvancedFilterGenerator:
         searchable_fields = []
 
         for field in model._meta.get_fields():
-            if hasattr(field, 'name'):
+            if hasattr(field, "name"):
                 # Include text fields that are suitable for searching
                 if isinstance(field, (models.CharField, models.TextField)):
                     # Skip very short fields and password-like fields
-                    if (hasattr(field, 'max_length') and field.max_length and field.max_length < 10) or \
-                       'password' in field.name.lower() or 'token' in field.name.lower():
+                    if (
+                        (
+                            hasattr(field, "max_length")
+                            and field.max_length
+                            and field.max_length < 10
+                        )
+                        or "password" in field.name.lower()
+                        or "token" in field.name.lower()
+                    ):
                         continue
                     searchable_fields.append(field.name)
                 # Include email fields
@@ -553,9 +786,14 @@ class AdvancedFilterGenerator:
 
         # Add some common related field searches if they exist
         common_related_fields = [
-            'author__username', 'author__first_name', 'author__last_name',
-            'user__username', 'user__first_name', 'user__last_name',
-            'category__name', 'tags__name'
+            "author__username",
+            "author__first_name",
+            "author__last_name",
+            "user__username",
+            "user__first_name",
+            "user__last_name",
+            "category__name",
+            "tags__name",
         ]
 
         for field_path in common_related_fields:
@@ -567,7 +805,9 @@ class AdvancedFilterGenerator:
 
         return searchable_fields
 
-    def _get_field_from_path(self, model: Type[models.Model], field_path: str) -> Optional[models.Field]:
+    def _get_field_from_path(
+        self, model: Type[models.Model], field_path: str
+    ) -> Optional[models.Field]:
         """
         Get Django field from a field path (e.g., 'user__profile__name').
 
@@ -580,7 +820,7 @@ class AdvancedFilterGenerator:
         """
         try:
             current_model = model
-            field_parts = field_path.split('__')
+            field_parts = field_path.split("__")
 
             for i, part in enumerate(field_parts):
                 field = current_model._meta.get_field(part)
@@ -590,7 +830,7 @@ class AdvancedFilterGenerator:
                     return field
 
                 # If it's a relationship field, get the related model
-                if hasattr(field, 'related_model'):
+                if hasattr(field, "related_model"):
                     current_model = field.related_model
                 else:
                     return None
@@ -604,82 +844,112 @@ class AdvancedFilterGenerator:
         """Filter for today's date."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         return queryset.filter(**{f"{field_name}": today})
 
     def _filter_date_yesterday(self, queryset, field_name: str, value):
         """Filter for yesterday's date."""
         if not value:
             return queryset
-        yesterday = (timezone.now().date() if timezone.is_aware(
-            timezone.now()) else date.today()) - timedelta(days=1)
+        yesterday = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        ) - timedelta(days=1)
         return queryset.filter(**{f"{field_name}": yesterday})
 
     def _filter_date_this_week(self, queryset, field_name: str, value):
         """Filter for this week's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         days_since_monday = today.weekday()
         this_week_start = today - timedelta(days=days_since_monday)
         this_week_end = this_week_start + timedelta(days=6)
-        return queryset.filter(**{f"{field_name}__range": [this_week_start, this_week_end]})
+        return queryset.filter(
+            **{f"{field_name}__range": [this_week_start, this_week_end]}
+        )
 
     def _filter_date_past_week(self, queryset, field_name: str, value):
         """Filter for past week's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         days_since_monday = today.weekday()
         this_week_start = today - timedelta(days=days_since_monday)
         past_week_start = this_week_start - timedelta(days=7)
         past_week_end = this_week_start - timedelta(days=1)
-        return queryset.filter(**{f"{field_name}__range": [past_week_start, past_week_end]})
+        return queryset.filter(
+            **{f"{field_name}__range": [past_week_start, past_week_end]}
+        )
 
     def _filter_date_this_month(self, queryset, field_name: str, value):
         """Filter for this month's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         this_month_start = today.replace(day=1)
         if today.month == 12:
             next_month_start = today.replace(year=today.year + 1, month=1, day=1)
         else:
             next_month_start = today.replace(month=today.month + 1, day=1)
         this_month_end = next_month_start - timedelta(days=1)
-        return queryset.filter(**{f"{field_name}__dat__range": [this_month_start, this_month_end]})
+        return queryset.filter(
+            **{f"{field_name}__dat__range": [this_month_start, this_month_end]}
+        )
 
     def _filter_date_past_month(self, queryset, field_name: str, value):
         """Filter for past month's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         this_month_start = today.replace(day=1)
         if this_month_start.month == 1:
             past_month_start = this_month_start.replace(
-                year=this_month_start.year - 1, month=12, day=1)
+                year=this_month_start.year - 1, month=12, day=1
+            )
         else:
-            past_month_start = this_month_start.replace(month=this_month_start.month - 1, day=1)
+            past_month_start = this_month_start.replace(
+                month=this_month_start.month - 1, day=1
+            )
         past_month_end = this_month_start - timedelta(days=1)
-        return queryset.filter(**{f"{field_name}__range": [past_month_start, past_month_end]})
+        return queryset.filter(
+            **{f"{field_name}__range": [past_month_start, past_month_end]}
+        )
 
     def _filter_date_this_year(self, queryset, field_name: str, value):
         """Filter for this year's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         this_year_start = today.replace(month=1, day=1)
         this_year_end = today.replace(month=12, day=31)
-        return queryset.filter(**{f"{field_name}__dat__range": [this_year_start, this_year_end]})
+        return queryset.filter(
+            **{f"{field_name}__dat__range": [this_year_start, this_year_end]}
+        )
 
     def _filter_date_past_year(self, queryset, field_name: str, value):
         """Filter for past year's dates."""
         if not value:
             return queryset
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         past_year_start = today.replace(year=today.year - 1, month=1, day=1)
         past_year_end = today.replace(year=today.year - 1, month=12, day=31)
-        return queryset.filter(**{f"{field_name}__range": [past_year_start, past_year_end]})
+        return queryset.filter(
+            **{f"{field_name}__range": [past_year_start, past_year_end]}
+        )
 
     def _generate_basic_filter_set(self, model: Type[models.Model]) -> Type[FilterSet]:
         """
@@ -699,29 +969,39 @@ class AdvancedFilterGenerator:
         # Generate only basic field filters (no nested relationships)
         filters = {}
         for field in model._meta.get_fields():
-            if hasattr(field, 'name'):  # Skip reverse relations without names
-                field_filters = self._generate_field_filters(field, 0, allow_nested=False)
+            if hasattr(field, "name"):  # Skip reverse relations without names
+                field_filters = self._generate_field_filters(
+                    field, 0, allow_nested=False
+                )
                 filters.update(field_filters)
 
         filter_set_class = type(
-            f'{model.__name__}BasicFilterSet',
+            f"{model.__name__}BasicFilterSet",
             (FilterSet,),
             {
                 **filters,
-                'Meta': type('Meta', (), {
-                    'model': model,
-                    'fields': list(filters.keys()),
-                    'strict': False,
-                })
-            }
+                "Meta": type(
+                    "Meta",
+                    (),
+                    {
+                        "model": model,
+                        "fields": list(filters.keys()),
+                        "strict": False,
+                    },
+                ),
+            },
         )
 
         self._filter_cache[cache_key] = filter_set_class
-        logger.debug(f"Generated basic FilterSet for {model.__name__} with {len(filters)} filters")
+        logger.debug(
+            f"Generated basic FilterSet for {model.__name__} with {len(filters)} filters"
+        )
 
         return filter_set_class
 
-    def _generate_field_filters(self, field: models.Field, current_depth: int = 0, allow_nested: bool = True) -> Dict[str, django_filters.Filter]:
+    def _generate_field_filters(
+        self, field: models.Field, current_depth: int = 0, allow_nested: bool = True
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generates specific filters based on Django field type.
 
@@ -738,7 +1018,9 @@ class AdvancedFilterGenerator:
 
         if isinstance(field, (models.CharField, models.TextField)):
             filters.update(self._generate_text_filters(field_name))
-        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
+        elif isinstance(
+            field, (models.IntegerField, models.FloatField, models.DecimalField)
+        ):
             filters.update(self._generate_numeric_filters(field_name))
         elif isinstance(field, (models.DateField, models.DateTimeField)):
             filters.update(self._generate_date_filters(field_name))
@@ -748,32 +1030,48 @@ class AdvancedFilterGenerator:
             filters.update(self._generate_file_filters(field_name))
         elif isinstance(field, models.JSONField):
             filters.update(self._generate_json_filters(field_name))
-        elif hasattr(field, 'choices') and field.choices:
+        elif hasattr(field, "choices") and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
             # Only generate basic foreign key filters if nested filtering is enabled
             if self.enable_nested_filters:
-                filters.update(self._generate_foreign_key_filters(field_name, field.related_model))
+                filters.update(
+                    self._generate_foreign_key_filters(field_name, field.related_model)
+                )
 
             # Add nested field filters if enabled and within depth limits
-            if (self.enable_nested_filters and allow_nested and
-                current_depth < self.max_nested_depth and
-                    field.related_model not in self._visited_models):
-                filters.update(self._generate_nested_field_filters(field, current_depth))
+            if (
+                self.enable_nested_filters
+                and allow_nested
+                and current_depth < self.max_nested_depth
+                and field.related_model not in self._visited_models
+            ):
+                filters.update(
+                    self._generate_nested_field_filters(field, current_depth)
+                )
         elif isinstance(field, models.ManyToManyField):
             # Generate ManyToMany filters
             if self.enable_nested_filters:
-                filters.update(self._generate_many_to_many_filters(field_name, field.related_model))
+                filters.update(
+                    self._generate_many_to_many_filters(field_name, field.related_model)
+                )
 
             # Add nested field filters if enabled and within depth limits
-            if (self.enable_nested_filters and allow_nested and
-                current_depth < self.max_nested_depth and
-                    field.related_model not in self._visited_models):
-                filters.update(self._generate_nested_field_filters(field, current_depth))
+            if (
+                self.enable_nested_filters
+                and allow_nested
+                and current_depth < self.max_nested_depth
+                and field.related_model not in self._visited_models
+            ):
+                filters.update(
+                    self._generate_nested_field_filters(field, current_depth)
+                )
 
         return filters
 
-    def _generate_count_filter_methods(self, model: Type[models.Model], filters: Dict[str, django_filters.Filter]) -> Dict[str, callable]:
+    def _generate_count_filter_methods(
+        self, model: Type[models.Model], filters: Dict[str, django_filters.Filter]
+    ) -> Dict[str, callable]:
         """
         Generate dynamic filter methods for count-based filtering.
 
@@ -792,37 +1090,48 @@ class AdvancedFilterGenerator:
                 field_name = field.name
 
                 # Generate count filter methods
-                methods[f'filter_{field_name}_count'] = self._create_count_filter_method(
-                    field_name, 'exact')
-                methods[f'filter_{field_name}_count_gt'] = self._create_count_filter_method(
-                    field_name, 'gt')
-                methods[f'filter_{field_name}_count_gte'] = self._create_count_filter_method(
-                    field_name, 'gte')
-                methods[f'filter_{field_name}_count_lt'] = self._create_count_filter_method(
-                    field_name, 'lt')
-                methods[f'filter_{field_name}_count_lte'] = self._create_count_filter_method(
-                    field_name, 'lte')
+                methods[f"filter_{field_name}_count"] = (
+                    self._create_count_filter_method(field_name, "exact")
+                )
+                methods[f"filter_{field_name}_count_gt"] = (
+                    self._create_count_filter_method(field_name, "gt")
+                )
+                methods[f"filter_{field_name}_count_gte"] = (
+                    self._create_count_filter_method(field_name, "gte")
+                )
+                methods[f"filter_{field_name}_count_lt"] = (
+                    self._create_count_filter_method(field_name, "lt")
+                )
+                methods[f"filter_{field_name}_count_lte"] = (
+                    self._create_count_filter_method(field_name, "lte")
+                )
 
         # Generate methods for reverse ManyToOne count filters
-        if hasattr(model._meta, 'related_objects'):
+        if hasattr(model._meta, "related_objects"):
             for rel in model._meta.related_objects:
                 # Skip OneToOne reverse relationships
                 from django.db.models.fields.reverse_related import OneToOneRel
+
                 if isinstance(rel, OneToOneRel):
                     continue
 
                 accessor_name = rel.get_accessor_name()
                 if accessor_name:
-                    methods[f'filter_{accessor_name}_count'] = self._create_reverse_count_filter_method(
-                        accessor_name, 'exact')
-                    methods[f'filter_{accessor_name}_count_gt'] = self._create_reverse_count_filter_method(
-                        accessor_name, 'gt')
-                    methods[f'filter_{accessor_name}_count_gte'] = self._create_reverse_count_filter_method(
-                        accessor_name, 'gte')
-                    methods[f'filter_{accessor_name}_count_lt'] = self._create_reverse_count_filter_method(
-                        accessor_name, 'lt')
-                    methods[f'filter_{accessor_name}_count_lte'] = self._create_reverse_count_filter_method(
-                        accessor_name, 'lte')
+                    methods[f"filter_{accessor_name}_count"] = (
+                        self._create_reverse_count_filter_method(accessor_name, "exact")
+                    )
+                    methods[f"filter_{accessor_name}_count_gt"] = (
+                        self._create_reverse_count_filter_method(accessor_name, "gt")
+                    )
+                    methods[f"filter_{accessor_name}_count_gte"] = (
+                        self._create_reverse_count_filter_method(accessor_name, "gte")
+                    )
+                    methods[f"filter_{accessor_name}_count_lt"] = (
+                        self._create_reverse_count_filter_method(accessor_name, "lt")
+                    )
+                    methods[f"filter_{accessor_name}_count_lte"] = (
+                        self._create_reverse_count_filter_method(accessor_name, "lte")
+                    )
 
         return methods
 
@@ -845,19 +1154,19 @@ class AdvancedFilterGenerator:
             from django.db.models import Count
 
             # Annotate with count and filter
-            count_field = f'{field_name}_count_annotation'
+            count_field = f"{field_name}_count_annotation"
             queryset = queryset.annotate(**{count_field: Count(field_name)})
 
-            if lookup_type == 'exact':
+            if lookup_type == "exact":
                 return queryset.filter(**{count_field: value})
-            elif lookup_type == 'gt':
-                return queryset.filter(**{f'{count_field}__gt': value})
-            elif lookup_type == 'gte':
-                return queryset.filter(**{f'{count_field}__gte': value})
-            elif lookup_type == 'lt':
-                return queryset.filter(**{f'{count_field}__lt': value})
-            elif lookup_type == 'lte':
-                return queryset.filter(**{f'{count_field}__lte': value})
+            elif lookup_type == "gt":
+                return queryset.filter(**{f"{count_field}__gt": value})
+            elif lookup_type == "gte":
+                return queryset.filter(**{f"{count_field}__gte": value})
+            elif lookup_type == "lt":
+                return queryset.filter(**{f"{count_field}__lt": value})
+            elif lookup_type == "lte":
+                return queryset.filter(**{f"{count_field}__lte": value})
 
             return queryset
 
@@ -882,25 +1191,27 @@ class AdvancedFilterGenerator:
             from django.db.models import Count
 
             # Annotate with count and filter
-            count_field = f'{accessor_name}_count_annotation'
+            count_field = f"{accessor_name}_count_annotation"
             queryset = queryset.annotate(**{count_field: Count(accessor_name)})
 
-            if lookup_type == 'exact':
+            if lookup_type == "exact":
                 return queryset.filter(**{count_field: value})
-            elif lookup_type == 'gt':
-                return queryset.filter(**{f'{count_field}__gt': value})
-            elif lookup_type == 'gte':
-                return queryset.filter(**{f'{count_field}__gte': value})
-            elif lookup_type == 'lt':
-                return queryset.filter(**{f'{count_field}__lt': value})
-            elif lookup_type == 'lte':
-                return queryset.filter(**{f'{count_field}__lte': value})
+            elif lookup_type == "gt":
+                return queryset.filter(**{f"{count_field}__gt": value})
+            elif lookup_type == "gte":
+                return queryset.filter(**{f"{count_field}__gte": value})
+            elif lookup_type == "lt":
+                return queryset.filter(**{f"{count_field}__lt": value})
+            elif lookup_type == "lte":
+                return queryset.filter(**{f"{count_field}__lte": value})
 
             return queryset
 
         return filter_method
 
-    def _generate_reverse_relationship_count_filters(self, model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_relationship_count_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generate count filters for reverse ManyToOne relationships.
 
@@ -913,35 +1224,36 @@ class AdvancedFilterGenerator:
         filters = {}
 
         # Get reverse relationships from model meta
-        if hasattr(model._meta, 'related_objects'):
+        if hasattr(model._meta, "related_objects"):
             for rel in model._meta.related_objects:
                 # Skip OneToOne reverse relationships as they don't need count filters
                 from django.db.models.fields.reverse_related import OneToOneRel
+
                 if isinstance(rel, OneToOneRel):
                     continue
 
                 accessor_name = rel.get_accessor_name()
                 if accessor_name:
                     # Add count filters for reverse ManyToOne relationships
-                    filters[f'{accessor_name}_count'] = NumberFilter(
-                        method=f'filter_{accessor_name}_count',
-                        help_text=f'Filter by count of {accessor_name} relationships'
+                    filters[f"{accessor_name}_count"] = NumberFilter(
+                        method=f"filter_{accessor_name}_count",
+                        help_text=f"Filter by count of {accessor_name} relationships",
                     )
-                    filters[f'{accessor_name}_count__gt'] = NumberFilter(
-                        method=f'filter_{accessor_name}_count_gt',
-                        help_text=f'Filter by count of {accessor_name} relationships greater than'
+                    filters[f"{accessor_name}_count__gt"] = NumberFilter(
+                        method=f"filter_{accessor_name}_count_gt",
+                        help_text=f"Filter by count of {accessor_name} relationships greater than",
                     )
-                    filters[f'{accessor_name}_count__gte'] = NumberFilter(
-                        method=f'filter_{accessor_name}_count_gte',
-                        help_text=f'Filter by count of {accessor_name} relationships greater than or equal'
+                    filters[f"{accessor_name}_count__gte"] = NumberFilter(
+                        method=f"filter_{accessor_name}_count_gte",
+                        help_text=f"Filter by count of {accessor_name} relationships greater than or equal",
                     )
-                    filters[f'{accessor_name}_count__lt'] = NumberFilter(
-                        method=f'filter_{accessor_name}_count_lt',
-                        help_text=f'Filter by count of {accessor_name} relationships less than'
+                    filters[f"{accessor_name}_count__lt"] = NumberFilter(
+                        method=f"filter_{accessor_name}_count_lt",
+                        help_text=f"Filter by count of {accessor_name} relationships less than",
                     )
-                    filters[f'{accessor_name}_count__lte'] = NumberFilter(
-                        method=f'filter_{accessor_name}_count_lte',
-                        help_text=f'Filter by count of {accessor_name} relationships less than or equal'
+                    filters[f"{accessor_name}_count__lte"] = NumberFilter(
+                        method=f"filter_{accessor_name}_count_lte",
+                        help_text=f"Filter by count of {accessor_name} relationships less than or equal",
                     )
 
         return filters
@@ -957,6 +1269,7 @@ class AdvancedFilterGenerator:
         Returns:
             Filter method that can be used with django-filter
         """
+
         def filter_method(queryset, name, value):
             """
             Custom filter method for property-based filtering.
@@ -976,11 +1289,15 @@ class AdvancedFilterGenerator:
                     property_value = getattr(obj, property_name)
 
                     # Apply the lookup expression
-                    if self._property_matches_filter(property_value, value, lookup_expr):
+                    if self._property_matches_filter(
+                        property_value, value, lookup_expr
+                    ):
                         filtered_ids.append(obj.pk)
 
                 except (AttributeError, TypeError) as e:
-                    logger.warning(f"Error evaluating property {property_name} on {obj}: {e}")
+                    logger.warning(
+                        f"Error evaluating property {property_name} on {obj}: {e}"
+                    )
                     continue
 
             # Return filtered queryset
@@ -988,7 +1305,9 @@ class AdvancedFilterGenerator:
 
         return filter_method
 
-    def _property_matches_filter(self, property_value: Any, filter_value: Any, lookup_expr: str) -> bool:
+    def _property_matches_filter(
+        self, property_value: Any, filter_value: Any, lookup_expr: str
+    ) -> bool:
         """
         Check if a property value matches the filter criteria.
 
@@ -1001,47 +1320,47 @@ class AdvancedFilterGenerator:
             True if the property value matches the filter criteria
         """
         try:
-            if lookup_expr == 'exact':
+            if lookup_expr == "exact":
                 return property_value == filter_value
-            elif lookup_expr == 'iexact':
+            elif lookup_expr == "iexact":
                 return str(property_value).lower() == str(filter_value).lower()
-            elif lookup_expr == 'contains':
+            elif lookup_expr == "contains":
                 return str(filter_value) in str(property_value)
-            elif lookup_expr == 'icontains':
+            elif lookup_expr == "icontains":
                 return str(filter_value).lower() in str(property_value).lower()
-            elif lookup_expr == 'startswith':
+            elif lookup_expr == "startswith":
                 return str(property_value).startswith(str(filter_value))
-            elif lookup_expr == 'istartswith':
+            elif lookup_expr == "istartswith":
                 return str(property_value).lower().startswith(str(filter_value).lower())
-            elif lookup_expr == 'endswith':
+            elif lookup_expr == "endswith":
                 return str(property_value).endswith(str(filter_value))
-            elif lookup_expr == 'iendswith':
+            elif lookup_expr == "iendswith":
                 return str(property_value).lower().endswith(str(filter_value).lower())
-            elif lookup_expr == 'gt':
+            elif lookup_expr == "gt":
                 return property_value > filter_value
-            elif lookup_expr == 'gte':
+            elif lookup_expr == "gte":
                 return property_value >= filter_value
-            elif lookup_expr == 'lt':
+            elif lookup_expr == "lt":
                 return property_value < filter_value
-            elif lookup_expr == 'lte':
+            elif lookup_expr == "lte":
                 return property_value <= filter_value
-            elif lookup_expr == 'in':
+            elif lookup_expr == "in":
                 return property_value in filter_value
-            elif lookup_expr == 'isnull':
+            elif lookup_expr == "isnull":
                 return (property_value is None) == filter_value
-            elif lookup_expr == 'year':
+            elif lookup_expr == "year":
                 # Handle date year filtering
-                if hasattr(property_value, 'year'):
+                if hasattr(property_value, "year"):
                     return property_value.year == filter_value
                 return False
-            elif lookup_expr == 'month':
+            elif lookup_expr == "month":
                 # Handle date month filtering
-                if hasattr(property_value, 'month'):
+                if hasattr(property_value, "month"):
                     return property_value.month == filter_value
                 return False
-            elif lookup_expr == 'day':
+            elif lookup_expr == "day":
                 # Handle date day filtering
-                if hasattr(property_value, 'day'):
+                if hasattr(property_value, "day"):
                     return property_value.day == filter_value
                 return False
             else:
@@ -1050,10 +1369,13 @@ class AdvancedFilterGenerator:
 
         except (TypeError, ValueError) as e:
             logger.warning(
-                f"Error comparing property value {property_value} with filter {filter_value} using {lookup_expr}: {e}")
+                f"Error comparing property value {property_value} with filter {filter_value} using {lookup_expr}: {e}"
+            )
             return False
 
-    def _generate_nested_field_filters(self, field: models.Field, current_depth: int) -> Dict[str, django_filters.Filter]:
+    def _generate_nested_field_filters(
+        self, field: models.Field, current_depth: int
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generates nested field filters for related model fields.
 
@@ -1073,29 +1395,44 @@ class AdvancedFilterGenerator:
 
         # Get all fields from the related model
         for related_field in related_model._meta.get_fields():
-            if not hasattr(related_field, 'name') or related_field.many_to_many:
+            if not hasattr(related_field, "name") or related_field.many_to_many:
                 continue
 
             nested_field_name = f"{field_name}__{related_field.name}"
 
             # Generate filters based on the related field type
             if isinstance(related_field, (models.CharField, models.TextField)):
-                nested_filters.update(self._generate_nested_text_filters(
-                    nested_field_name, related_field.name))
-            elif isinstance(related_field, (models.IntegerField, models.FloatField, models.DecimalField)):
-                nested_filters.update(self._generate_nested_numeric_filters(
-                    nested_field_name, related_field.name))
+                nested_filters.update(
+                    self._generate_nested_text_filters(
+                        nested_field_name, related_field.name
+                    )
+                )
+            elif isinstance(
+                related_field,
+                (models.IntegerField, models.FloatField, models.DecimalField),
+            ):
+                nested_filters.update(
+                    self._generate_nested_numeric_filters(
+                        nested_field_name, related_field.name
+                    )
+                )
             elif isinstance(related_field, (models.DateField, models.DateTimeField)):
-                nested_filters.update(self._generate_nested_date_filters(
-                    nested_field_name, related_field.name))
+                nested_filters.update(
+                    self._generate_nested_date_filters(
+                        nested_field_name, related_field.name
+                    )
+                )
             elif isinstance(related_field, models.BooleanField):
-                nested_filters.update(self._generate_nested_boolean_filters(
-                    nested_field_name, related_field.name))
+                nested_filters.update(
+                    self._generate_nested_boolean_filters(
+                        nested_field_name, related_field.name
+                    )
+                )
             elif isinstance(related_field, models.ForeignKey):
                 # Add basic foreign key filter
                 nested_filters[nested_field_name] = NumberFilter(
                     field_name=nested_field_name,
-                    help_text=f'Filter by {nested_field_name} ID'
+                    help_text=f"Filter by {nested_field_name} ID",
                 )
 
                 # Recursively add deeper nested filters if within depth limits
@@ -1107,12 +1444,12 @@ class AdvancedFilterGenerator:
                     for deep_filter_name, deep_filter in deeper_nested_filters.items():
                         prefixed_name = f"{field_name}__{deep_filter_name}"
                         # Extract the lookup expression from the filter name
-                        if '__' in deep_filter_name:
-                            base_field_path = deep_filter_name.rsplit('__', 1)[0]
-                            lookup_expr = deep_filter_name.rsplit('__', 1)[1]
+                        if "__" in deep_filter_name:
+                            base_field_path = deep_filter_name.rsplit("__", 1)[0]
+                            lookup_expr = deep_filter_name.rsplit("__", 1)[1]
                         else:
                             base_field_path = deep_filter_name
-                            lookup_expr = 'exact'
+                            lookup_expr = "exact"
 
                         # Create the correct field path for Django ORM
                         correct_field_path = f"{field_name}__{base_field_path}"
@@ -1122,8 +1459,11 @@ class AdvancedFilterGenerator:
                         new_filter = filter_class(
                             field_name=correct_field_path,
                             lookup_expr=lookup_expr,
-                            help_text=getattr(deep_filter, 'help_text',
-                                              f'Filter by {correct_field_path}')
+                            help_text=getattr(
+                                deep_filter,
+                                "help_text",
+                                f"Filter by {correct_field_path}",
+                            ),
                         )
                         nested_filters[prefixed_name] = new_filter
 
@@ -1132,16 +1472,20 @@ class AdvancedFilterGenerator:
             field_path = field_name
             if isinstance(field, (models.ForeignKey, models.OneToOneField)):
                 optimization_suggestions.append(f"select_related('{field_path}')")
-            elif hasattr(field, 'related_model'):
+            elif hasattr(field, "related_model"):
                 optimization_suggestions.append(f"prefetch_related('{field_path}')")
 
             if optimization_suggestions:
-                logger.debug(f"Performance suggestion for {related_model.__name__}: "
-                             f"Consider using {', '.join(optimization_suggestions)} for better performance")
+                logger.debug(
+                    f"Performance suggestion for {related_model.__name__}: "
+                    f"Consider using {', '.join(optimization_suggestions)} for better performance"
+                )
 
         return nested_filters
 
-    def analyze_query_performance(self, model: Type[models.Model], filters: Dict[str, Any]) -> Dict[str, Any]:
+    def analyze_query_performance(
+        self, model: Type[models.Model], filters: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Analyze the performance implications of applied filters and suggest optimizations.
 
@@ -1153,29 +1497,29 @@ class AdvancedFilterGenerator:
             Dictionary containing performance analysis and optimization suggestions
         """
         analysis = {
-            'model': model.__name__,
-            'total_filters': len(filters),
-            'nested_filters': 0,
-            'max_depth': 0,
-            'select_related_suggestions': set(),
-            'prefetch_related_suggestions': set(),
-            'potential_n_plus_one_risks': [],
-            'performance_score': 'good',  # good, moderate, poor
-            'recommendations': []
+            "model": model.__name__,
+            "total_filters": len(filters),
+            "nested_filters": 0,
+            "max_depth": 0,
+            "select_related_suggestions": set(),
+            "prefetch_related_suggestions": set(),
+            "potential_n_plus_one_risks": [],
+            "performance_score": "good",  # good, moderate, poor
+            "recommendations": [],
         }
 
         # Analyze each filter
         for filter_name, filter_value in filters.items():
-            if '__' in filter_name:
+            if "__" in filter_name:
                 # Calculate depth
-                depth = filter_name.count('__') - 1  # Subtract 1 for lookup expression
+                depth = filter_name.count("__") - 1  # Subtract 1 for lookup expression
                 if depth > 0:
                     # Only count as nested filter if it crosses model boundaries
-                    analysis['nested_filters'] += 1
-                    analysis['max_depth'] = max(analysis['max_depth'], depth)
+                    analysis["nested_filters"] += 1
+                    analysis["max_depth"] = max(analysis["max_depth"], depth)
 
                     # Extract field path (remove lookup expression)
-                    parts = filter_name.split('__')
+                    parts = filter_name.split("__")
                     lookup_expr = parts[-1]
                     field_path_parts = parts[:-1]
 
@@ -1188,65 +1532,74 @@ class AdvancedFilterGenerator:
                             field = current_model._meta.get_field(part)
                             field_path.append(part)
 
-                            if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+                            if isinstance(
+                                field, (models.ForeignKey, models.OneToOneField)
+                            ):
                                 # Forward relationship - suggest select_related
-                                path = '__'.join(field_path)
-                                analysis['select_related_suggestions'].add(path)
+                                path = "__".join(field_path)
+                                analysis["select_related_suggestions"].add(path)
                                 current_model = field.related_model
-                            elif hasattr(field, 'related_model'):
+                            elif hasattr(field, "related_model"):
                                 # Reverse relationship - suggest prefetch_related
-                                path = '__'.join(field_path)
-                                analysis['prefetch_related_suggestions'].add(path)
-                                analysis['potential_n_plus_one_risks'].append(path)
+                                path = "__".join(field_path)
+                                analysis["prefetch_related_suggestions"].add(path)
+                                analysis["potential_n_plus_one_risks"].append(path)
                                 current_model = field.related_model
                         except:
                             break
 
         # Calculate performance score
-        if analysis['max_depth'] > 3 or analysis['nested_filters'] > 10:
-            analysis['performance_score'] = 'poor'
-        elif analysis['max_depth'] > 2 or analysis['nested_filters'] > 5:
-            analysis['performance_score'] = 'moderate'
+        if analysis["max_depth"] > 3 or analysis["nested_filters"] > 10:
+            analysis["performance_score"] = "poor"
+        elif analysis["max_depth"] > 2 or analysis["nested_filters"] > 5:
+            analysis["performance_score"] = "moderate"
 
         # Generate recommendations
-        if analysis['select_related_suggestions']:
-            select_related_list = sorted(analysis['select_related_suggestions'])
-            analysis['recommendations'].append(
+        if analysis["select_related_suggestions"]:
+            select_related_list = sorted(analysis["select_related_suggestions"])
+            analysis["recommendations"].append(
                 f"Use select_related({', '.join(repr(s) for s in select_related_list)}) "
                 f"to optimize forward relationship queries"
             )
 
-        if analysis['prefetch_related_suggestions']:
-            prefetch_related_list = sorted(analysis['prefetch_related_suggestions'])
-            analysis['recommendations'].append(
+        if analysis["prefetch_related_suggestions"]:
+            prefetch_related_list = sorted(analysis["prefetch_related_suggestions"])
+            analysis["recommendations"].append(
                 f"Use prefetch_related({', '.join(repr(p) for p in prefetch_related_list)}) "
                 f"to optimize reverse relationship queries"
             )
 
-        if analysis['potential_n_plus_one_risks']:
-            analysis['recommendations'].append(
+        if analysis["potential_n_plus_one_risks"]:
+            analysis["recommendations"].append(
                 f"Potential N+1 query risks detected in: {', '.join(analysis['potential_n_plus_one_risks'])}"
             )
 
-        if analysis['max_depth'] > 3:
-            analysis['recommendations'].append(
+        if analysis["max_depth"] > 3:
+            analysis["recommendations"].append(
                 f"Consider reducing max_nested_depth from {analysis['max_depth']} to improve performance"
             )
 
         # Convert sets to lists for JSON serialization
-        analysis['select_related_suggestions'] = list(analysis['select_related_suggestions'])
-        analysis['prefetch_related_suggestions'] = list(analysis['prefetch_related_suggestions'])
+        analysis["select_related_suggestions"] = list(
+            analysis["select_related_suggestions"]
+        )
+        analysis["prefetch_related_suggestions"] = list(
+            analysis["prefetch_related_suggestions"]
+        )
 
         # Log performance analysis
-        logger.info(f"Performance analysis for {model.__name__}: "
-                    f"Score={analysis['performance_score']}, "
-                    f"Nested filters={analysis['nested_filters']}, "
-                    f"Max depth={analysis['max_depth']}")
+        logger.info(
+            f"Performance analysis for {model.__name__}: "
+            f"Score={analysis['performance_score']}, "
+            f"Nested filters={analysis['nested_filters']}, "
+            f"Max depth={analysis['max_depth']}"
+        )
 
         return analysis
 
-    def get_optimized_queryset(self, model: Type[models.Model], filters: Dict[str, Any],
-                               base_queryset=None) -> models.QuerySet:
+    def get_optimized_queryset(
+        self, model: Type[models.Model], filters: Dict[str, Any], base_queryset=None
+    ) -> models.QuerySet:
         """
         Get an optimized queryset based on the filters being applied.
 
@@ -1267,16 +1620,20 @@ class AdvancedFilterGenerator:
         analysis = self.analyze_query_performance(model, filters)
 
         # Apply select_related optimizations
-        if analysis['select_related_suggestions']:
-            queryset = queryset.select_related(*analysis['select_related_suggestions'])
+        if analysis["select_related_suggestions"]:
+            queryset = queryset.select_related(*analysis["select_related_suggestions"])
             logger.debug(
-                f"Applied select_related({analysis['select_related_suggestions']}) to {model.__name__} queryset")
+                f"Applied select_related({analysis['select_related_suggestions']}) to {model.__name__} queryset"
+            )
 
         # Apply prefetch_related optimizations
-        if analysis['prefetch_related_suggestions']:
-            queryset = queryset.prefetch_related(*analysis['prefetch_related_suggestions'])
+        if analysis["prefetch_related_suggestions"]:
+            queryset = queryset.prefetch_related(
+                *analysis["prefetch_related_suggestions"]
+            )
             logger.debug(
-                f"Applied prefetch_related({analysis['prefetch_related_suggestions']}) to {model.__name__} queryset")
+                f"Applied prefetch_related({analysis['prefetch_related_suggestions']}) to {model.__name__} queryset"
+            )
 
         return queryset
         """Generate nested text-specific filters for related fields."""
@@ -1308,7 +1665,9 @@ class AdvancedFilterGenerator:
         #     ),
         # }
 
-    def _generate_nested_text_filters(self, field_name: str, base_field_name: str) -> Dict[str, CharFilter]:
+    def _generate_nested_text_filters(
+        self, field_name: str, base_field_name: str
+    ) -> Dict[str, CharFilter]:
         """
         Generate nested text-based filters for CharField and TextField.
 
@@ -1320,241 +1679,248 @@ class AdvancedFilterGenerator:
             Dictionary of nested text filter mappings
         """
         return {
-            f'{field_name}__exact': CharFilter(
+            f"{field_name}__exact": CharFilter(
                 field_name=field_name,
-                lookup_expr='exact',
-                help_text=f'Exact match for {base_field_name}'
+                lookup_expr="exact",
+                help_text=f"Exact match for {base_field_name}",
             ),
             field_name: CharFilter(
                 field_name=field_name,
-                lookup_expr='exact',
-                help_text=f'Exact match for {base_field_name}'
+                lookup_expr="exact",
+                help_text=f"Exact match for {base_field_name}",
             ),
-            f'{field_name}__icontains': CharFilter(
+            f"{field_name}__icontains": CharFilter(
                 field_name=field_name,
-                lookup_expr='icontains',
-                help_text=f'Case-insensitive partial match for {base_field_name}'
+                lookup_expr="icontains",
+                help_text=f"Case-insensitive partial match for {base_field_name}",
             ),
-            f'{field_name}__istartswith': CharFilter(
+            f"{field_name}__istartswith": CharFilter(
                 field_name=field_name,
-                lookup_expr='istartswith',
-                help_text=f'Case-insensitive starts with for {base_field_name}'
+                lookup_expr="istartswith",
+                help_text=f"Case-insensitive starts with for {base_field_name}",
             ),
-            f'{field_name}__iendswith': CharFilter(
+            f"{field_name}__iendswith": CharFilter(
                 field_name=field_name,
-                lookup_expr='iendswith',
-                help_text=f'Case-insensitive ends with for {base_field_name}'
+                lookup_expr="iendswith",
+                help_text=f"Case-insensitive ends with for {base_field_name}",
             ),
         }
 
-    def _generate_nested_numeric_filters(self, field_name: str, base_field_name: str) -> Dict[str, NumberFilter]:
+    def _generate_nested_numeric_filters(
+        self, field_name: str, base_field_name: str
+    ) -> Dict[str, NumberFilter]:
         """Generate nested numeric filters for related fields."""
         return {
-            f'{field_name}__exact': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='exact',
-                help_text=f'Filter {base_field_name} with exact value'
+            f"{field_name}__exact": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="exact",
+                help_text=f"Filter {base_field_name} with exact value",
             ),
-            f'{field_name}__gt': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='gt',
-                help_text=f'Filter {base_field_name} greater than the specified value'
+            f"{field_name}__gt": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="gt",
+                help_text=f"Filter {base_field_name} greater than the specified value",
             ),
-            f'{field_name}__gte': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='gte',
-                help_text=f'Filter {base_field_name} greater than or equal to the specified value'
+            f"{field_name}__gte": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="gte",
+                help_text=f"Filter {base_field_name} greater than or equal to the specified value",
             ),
-            f'{field_name}__lt': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='lt',
-                help_text=f'Filter {base_field_name} less than the specified value'
+            f"{field_name}__lt": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="lt",
+                help_text=f"Filter {base_field_name} less than the specified value",
             ),
-            f'{field_name}__lte': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='lte',
-                help_text=f'Filter {base_field_name} less than or equal to the specified value'
+            f"{field_name}__lte": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="lte",
+                help_text=f"Filter {base_field_name} less than or equal to the specified value",
             ),
-            f'{field_name}__range': django_filters.RangeFilter(
-                field_name=field_name.replace('__', '__'),
-                help_text=f'Filter {base_field_name} within the specified range'
+            f"{field_name}__range": django_filters.RangeFilter(
+                field_name=field_name.replace("__", "__"),
+                help_text=f"Filter {base_field_name} within the specified range",
             ),
         }
 
-    def _generate_nested_date_filters(self, field_name: str, base_field_name: str) -> Dict[str, DateFilter]:
+    def _generate_nested_date_filters(
+        self, field_name: str, base_field_name: str
+    ) -> Dict[str, DateFilter]:
         """Generate nested date filters for related fields."""
         return {
-            f'{field_name}__exact': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='exact',
-                help_text=f'Filter {base_field_name} with exact date match'
+            f"{field_name}__exact": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="exact",
+                help_text=f"Filter {base_field_name} with exact date match",
             ),
-            f'{field_name}__gt': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='gt',
-                help_text=f'Filter {base_field_name} after the specified date'
+            f"{field_name}__gt": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="gt",
+                help_text=f"Filter {base_field_name} after the specified date",
             ),
-            f'{field_name}__gte': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='gte',
-                help_text=f'Filter {base_field_name} on or after the specified date'
+            f"{field_name}__gte": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="gte",
+                help_text=f"Filter {base_field_name} on or after the specified date",
             ),
-            f'{field_name}__lt': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='lt',
-                help_text=f'Filter {base_field_name} before the specified date'
+            f"{field_name}__lt": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="lt",
+                help_text=f"Filter {base_field_name} before the specified date",
             ),
-            f'{field_name}__lte': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='lte',
-                help_text=f'Filter {base_field_name} on or before the specified date'
+            f"{field_name}__lte": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="lte",
+                help_text=f"Filter {base_field_name} on or before the specified date",
             ),
-            f'{field_name}__date': DateFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='date',
-                help_text=f'Filter {base_field_name} by date (ignoring time)'
+            f"{field_name}__date": DateFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="date",
+                help_text=f"Filter {base_field_name} by date (ignoring time)",
             ),
-            f'{field_name}__year': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='year',
-                help_text=f'Filter {base_field_name} by year'
+            f"{field_name}__year": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="year",
+                help_text=f"Filter {base_field_name} by year",
             ),
-            f'{field_name}__month': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='month',
-                help_text=f'Filter {base_field_name} by month'
+            f"{field_name}__month": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="month",
+                help_text=f"Filter {base_field_name} by month",
             ),
-            f'{field_name}__day': NumberFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='day',
-                help_text=f'Filter {base_field_name} by day'
+            f"{field_name}__day": NumberFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="day",
+                help_text=f"Filter {base_field_name} by day",
             ),
         }
 
-    def _generate_nested_boolean_filters(self, field_name: str, base_field_name: str) -> Dict[str, BooleanFilter]:
+    def _generate_nested_boolean_filters(
+        self, field_name: str, base_field_name: str
+    ) -> Dict[str, BooleanFilter]:
         """Generate nested boolean filters for related fields."""
         return {
-            f'{field_name}__exact': BooleanFilter(
+            f"{field_name}__exact": BooleanFilter(
                 field_name=field_name,
-                lookup_expr='exact',
-                help_text=f'Exact match for {base_field_name}'
+                lookup_expr="exact",
+                help_text=f"Exact match for {base_field_name}",
             ),
-            f'{field_name}': BooleanFilter(
-                field_name=field_name.replace('__', '__'),
-                help_text=f'Filter {base_field_name} by boolean value'
+            f"{field_name}": BooleanFilter(
+                field_name=field_name.replace("__", "__"),
+                help_text=f"Filter {base_field_name} by boolean value",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=field_name.replace('__', '__'),
-                lookup_expr='isnull',
-                help_text=f'Filter {base_field_name} for null/empty values'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="isnull",
+                help_text=f"Filter {base_field_name} for null/empty values",
             ),
         }
 
     def _generate_text_filters(self, field_name: str) -> Dict[str, CharFilter]:
         """Generate text-specific filters: contains, icontains, startswith, endswith."""
         return {
-            f'{field_name}': CharFilter(
+            f"{field_name}": CharFilter(
                 field_name=field_name,
-                help_text=f'Filter {field_name} with basic text matching'
+                help_text=f"Filter {field_name} with basic text matching",
             ),
-            f'{field_name}__contains': CharFilter(
+            f"{field_name}__contains": CharFilter(
                 field_name=field_name,
-                lookup_expr='contains',
-                help_text=f'Filter {field_name} containing the specified text (case-sensitive)'
+                lookup_expr="contains",
+                help_text=f"Filter {field_name} containing the specified text (case-sensitive)",
             ),
-            f'{field_name}__icontains': CharFilter(
+            f"{field_name}__icontains": CharFilter(
                 field_name=field_name,
-                lookup_expr='icontains',
-                help_text=f'Filter {field_name} containing the specified text (case-insensitive)'
+                lookup_expr="icontains",
+                help_text=f"Filter {field_name} containing the specified text (case-insensitive)",
             ),
-            f'{field_name}__startswith': CharFilter(
+            f"{field_name}__startswith": CharFilter(
                 field_name=field_name,
-                lookup_expr='startswith',
-                help_text=f'Filter {field_name} starting with the specified text'
+                lookup_expr="startswith",
+                help_text=f"Filter {field_name} starting with the specified text",
             ),
-            f'{field_name}__endswith': CharFilter(
+            f"{field_name}__endswith": CharFilter(
                 field_name=field_name,
-                lookup_expr='endswith',
-                help_text=f'Filter {field_name} ending with the specified text'
+                lookup_expr="endswith",
+                help_text=f"Filter {field_name} ending with the specified text",
             ),
-            f'{field_name}__exact': CharFilter(
+            f"{field_name}__exact": CharFilter(
                 field_name=field_name,
-                lookup_expr='exact',
-                help_text=f'Filter {field_name} with exact match'
+                lookup_expr="exact",
+                help_text=f"Filter {field_name} with exact match",
             ),
         }
 
     def _generate_numeric_filters(self, field_name: str) -> Dict[str, NumberFilter]:
         """Generate numeric filters: gt, gte, lt, lte, in (replacing range)."""
         return {
-            f'{field_name}': NumberFilter(
+            f"{field_name}": NumberFilter(
                 field_name=field_name,
-                help_text=f'Filter {field_name} with basic numeric matching'
+                help_text=f"Filter {field_name} with basic numeric matching",
             ),
-            f'{field_name}__gt': NumberFilter(
+            f"{field_name}__gt": NumberFilter(
                 field_name=field_name,
-                lookup_expr='gt',
-                help_text=f'Filter {field_name} greater than the specified value'
+                lookup_expr="gt",
+                help_text=f"Filter {field_name} greater than the specified value",
             ),
-            f'{field_name}__gte': NumberFilter(
+            f"{field_name}__gte": NumberFilter(
                 field_name=field_name,
-                lookup_expr='gte',
-                help_text=f'Filter {field_name} greater than or equal to the specified value'
+                lookup_expr="gte",
+                help_text=f"Filter {field_name} greater than or equal to the specified value",
             ),
-            f'{field_name}__lt': NumberFilter(
+            f"{field_name}__lt": NumberFilter(
                 field_name=field_name,
-                lookup_expr='lt',
-                help_text=f'Filter {field_name} less than the specified value'
+                lookup_expr="lt",
+                help_text=f"Filter {field_name} less than the specified value",
             ),
-            f'{field_name}__lte': NumberFilter(
+            f"{field_name}__lte": NumberFilter(
                 field_name=field_name,
-                lookup_expr='lte',
-                help_text=f'Filter {field_name} less than or equal to the specified value'
+                lookup_expr="lte",
+                help_text=f"Filter {field_name} less than or equal to the specified value",
             ),
-            f'{field_name}__in': django_filters.BaseInFilter(
-
+            f"{field_name}__in": django_filters.BaseInFilter(
                 field_name=field_name,
-                lookup_expr='in',
-                help_text=f'Filter {field_name} matching any of the provided values (Int[] array)'
+                lookup_expr="in",
+                help_text=f"Filter {field_name} matching any of the provided values (Int[] array)",
             ),
         }
 
     def _generate_date_filters(self, field_name: str) -> Dict[str, DateFilter]:
         """Generate date filters: year, month, day, range, gt, lt, and time-based filters."""
         filters = {
-            f'{field_name}__year': NumberFilter(
+            f"{field_name}__year": NumberFilter(
                 field_name=field_name,
-                lookup_expr='year',
-                help_text=f'Filter {field_name} by year'
+                lookup_expr="year",
+                help_text=f"Filter {field_name} by year",
             ),
-            f'{field_name}__month': NumberFilter(
+            f"{field_name}__month": NumberFilter(
                 field_name=field_name,
-                lookup_expr='month',
-                help_text=f'Filter {field_name} by month'
+                lookup_expr="month",
+                help_text=f"Filter {field_name} by month",
             ),
-            f'{field_name}__day': NumberFilter(
+            f"{field_name}__day": NumberFilter(
                 field_name=field_name,
-                lookup_expr='day',
-                help_text=f'Filter {field_name} by day'
+                lookup_expr="day",
+                help_text=f"Filter {field_name} by day",
             ),
-            f'{field_name}__gt': DateFilter(
+            f"{field_name}__gt": DateFilter(
                 field_name=field_name,
-                lookup_expr='gt',
-                help_text=f'Filter {field_name} after the specified date'
+                lookup_expr="gt",
+                help_text=f"Filter {field_name} after the specified date",
             ),
-            f'{field_name}__lt': DateFilter(
+            f"{field_name}__lt": DateFilter(
                 field_name=field_name,
-                lookup_expr='lt',
-                help_text=f'Filter {field_name} before the specified date'
+                lookup_expr="lt",
+                help_text=f"Filter {field_name} before the specified date",
             ),
-            f'{field_name}__range': django_filters.DateRangeFilter(
+            f"{field_name}__range": django_filters.DateRangeFilter(
                 field_name=field_name,
-                help_text=f'Filter {field_name} within the specified date range'
+                help_text=f"Filter {field_name} within the specified date range",
             ),
         }
 
         # Add time-based filters
-        today = timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        today = (
+            timezone.now().date() if timezone.is_aware(timezone.now()) else date.today()
+        )
         yesterday = today - timedelta(days=1)
 
         # Calculate week boundaries (Monday as start of week)
@@ -1574,9 +1940,12 @@ class AdvancedFilterGenerator:
 
         if this_month_start.month == 1:
             past_month_start = this_month_start.replace(
-                year=this_month_start.year - 1, month=12, day=1)
+                year=this_month_start.year - 1, month=12, day=1
+            )
         else:
-            past_month_start = this_month_start.replace(month=this_month_start.month - 1, day=1)
+            past_month_start = this_month_start.replace(
+                month=this_month_start.month - 1, day=1
+            )
         past_month_end = this_month_start - timedelta(days=1)
 
         # Calculate year boundaries
@@ -1587,45 +1956,53 @@ class AdvancedFilterGenerator:
 
         # Add time-based filters using custom filter methods
         time_filters = {
-            f'{field_name}_today': django_filters.BooleanFilter(
+            f"{field_name}_today": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_today(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for today'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for today",
             ),
-            f'{field_name}_yesterday': django_filters.BooleanFilter(
+            f"{field_name}_yesterday": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_yesterday(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for yesterday'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for yesterday",
             ),
-            f'{field_name}_this_week': django_filters.BooleanFilter(
+            f"{field_name}_this_week": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_week(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for this week'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for this week",
             ),
-            f'{field_name}_past_week': django_filters.BooleanFilter(
+            f"{field_name}_past_week": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_week(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for past week'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for past week",
             ),
-            f'{field_name}_this_month': django_filters.BooleanFilter(
+            f"{field_name}_this_month": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_month(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for this month'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for this month",
             ),
-            f'{field_name}_past_month': django_filters.BooleanFilter(
+            f"{field_name}_past_month": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_month(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for past month'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for past month",
             ),
-            f'{field_name}_this_year': django_filters.BooleanFilter(
+            f"{field_name}_this_year": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_year(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for this year'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for this year",
             ),
-            f'{field_name}_past_year': django_filters.BooleanFilter(
+            f"{field_name}_past_year": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_year(
-                    queryset, field_name, value),
-                help_text=f'Filter {field_name} for past year'
+                    queryset, field_name, value
+                ),
+                help_text=f"Filter {field_name} for past year",
             ),
         }
 
@@ -1635,77 +2012,81 @@ class AdvancedFilterGenerator:
     def _generate_boolean_filters(self, field_name: str) -> Dict[str, BooleanFilter]:
         """Generate boolean filters: exact matching."""
         return {
-            f'{field_name}': BooleanFilter(
-                field_name=field_name,
-                help_text=f'Filter {field_name} by boolean value'
+            f"{field_name}": BooleanFilter(
+                field_name=field_name, help_text=f"Filter {field_name} by boolean value"
             ),
         }
 
-    def _generate_choice_filters(self, field_name: str, choices: List) -> Dict[str, ChoiceFilter]:
+    def _generate_choice_filters(
+        self, field_name: str, choices: List
+    ) -> Dict[str, ChoiceFilter]:
         """Generate choice filters: in, exact."""
         choice_values = [choice[0] for choice in choices]
         return {
-            f'{field_name}': ChoiceFilter(
+            f"{field_name}": ChoiceFilter(
                 field_name=field_name,
                 choices=choices,
-                help_text=f'Filter {field_name} by specific choice'
+                help_text=f"Filter {field_name} by specific choice",
             ),
-            f'{field_name}__in': django_filters.MultipleChoiceFilter(
+            f"{field_name}__in": django_filters.MultipleChoiceFilter(
                 field_name=field_name,
                 choices=choices,
-                help_text=f'Filter {field_name} by multiple choices'
+                help_text=f"Filter {field_name} by multiple choices",
             ),
         }
 
     def _generate_file_filters(self, field_name: str) -> Dict[str, CharFilter]:
         """Generate file-specific filters: isnull, exact."""
         return {
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                label=f'{field_name.replace("_", " ").title()} Is Null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                label=f'{field_name.replace("_", " ").title()} Is Null',
             ),
-            f'{field_name}__exact': CharFilter(
-                field_name=f'{field_name}__exact',
-                label=f'{field_name.replace("_", " ").title()} Exact'
+            f"{field_name}__exact": CharFilter(
+                field_name=f"{field_name}__exact",
+                label=f'{field_name.replace("_", " ").title()} Exact',
             ),
         }
 
     def _generate_json_filters(self, field_name: str) -> Dict[str, CharFilter]:
         """Generate JSON-specific filters: exact match and null checks."""
         return {
-            f'{field_name}': CharFilter(
+            f"{field_name}": CharFilter(
                 field_name=field_name,
-                lookup_expr='exact',
-                help_text=f'Filter {field_name} with exact JSON match'
+                lookup_expr="exact",
+                help_text=f"Filter {field_name} with exact JSON match",
             ),
-            f'{field_name}__isnull': BooleanFilter(
+            f"{field_name}__isnull": BooleanFilter(
                 field_name=field_name,
-                lookup_expr='isnull',
-                help_text=f'Filter {field_name} for null/empty values'
+                lookup_expr="isnull",
+                help_text=f"Filter {field_name} for null/empty values",
             ),
         }
 
-    def _generate_foreign_key_filters(self, field_name: str, related_model: Type[models.Model] = None) -> Dict[str, NumberFilter]:
+    def _generate_foreign_key_filters(
+        self, field_name: str, related_model: Type[models.Model] = None
+    ) -> Dict[str, NumberFilter]:
         """Generate foreign key filters: exact, in."""
         filters = {
-            f'{field_name}': NumberFilter(
-                field_name=field_name,
-                help_text=f'Filter by {field_name} ID'
+            f"{field_name}": NumberFilter(
+                field_name=field_name, help_text=f"Filter by {field_name} ID"
             ),
         }
 
         # Only add ModelMultipleChoiceFilter if we have the related model
         if related_model:
-            filters[f'{field_name}__in'] = django_filters.ModelMultipleChoiceFilter(
+            filters[f"{field_name}__in"] = django_filters.ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=related_model.objects.all(),
-                to_field_name='pk',
-                help_text=f'Filter by multiple {field_name} IDs'
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} IDs",
             )
 
         return filters
 
-    def _generate_many_to_many_filters(self, field_name: str, related_model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+    def _generate_many_to_many_filters(
+        self, field_name: str, related_model: Type[models.Model]
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generate ManyToMany field filters including count filters.
 
@@ -1718,36 +2099,35 @@ class AdvancedFilterGenerator:
         """
         filters = {
             # Basic ManyToMany filters
-            f'{field_name}': NumberFilter(
-                field_name=field_name,
-                help_text=f'Filter by {field_name} ID'
+            f"{field_name}": NumberFilter(
+                field_name=field_name, help_text=f"Filter by {field_name} ID"
             ),
-            f'{field_name}__in': django_filters.ModelMultipleChoiceFilter(
+            f"{field_name}__in": django_filters.ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=related_model.objects.all(),
-                to_field_name='pk',
-                help_text=f'Filter by multiple {field_name} IDs'
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} IDs",
             ),
             # Count filters for ManyToMany relationships
-            f'{field_name}_count': NumberFilter(
-                method=f'filter_{field_name}_count',
-                help_text=f'Filter by count of {field_name} relationships'
+            f"{field_name}_count": NumberFilter(
+                method=f"filter_{field_name}_count",
+                help_text=f"Filter by count of {field_name} relationships",
             ),
-            f'{field_name}_count__gt': NumberFilter(
-                method=f'filter_{field_name}_count_gt',
-                help_text=f'Filter by count of {field_name} relationships greater than'
+            f"{field_name}_count__gt": NumberFilter(
+                method=f"filter_{field_name}_count_gt",
+                help_text=f"Filter by count of {field_name} relationships greater than",
             ),
-            f'{field_name}_count__gte': NumberFilter(
-                method=f'filter_{field_name}_count_gte',
-                help_text=f'Filter by count of {field_name} relationships greater than or equal'
+            f"{field_name}_count__gte": NumberFilter(
+                method=f"filter_{field_name}_count_gte",
+                help_text=f"Filter by count of {field_name} relationships greater than or equal",
             ),
-            f'{field_name}_count__lt': NumberFilter(
-                method=f'filter_{field_name}_count_lt',
-                help_text=f'Filter by count of {field_name} relationships less than'
+            f"{field_name}_count__lt": NumberFilter(
+                method=f"filter_{field_name}_count_lt",
+                help_text=f"Filter by count of {field_name} relationships less than",
             ),
-            f'{field_name}_count__lte': NumberFilter(
-                method=f'filter_{field_name}_count_lte',
-                help_text=f'Filter by count of {field_name} relationships less than or equal'
+            f"{field_name}_count__lte": NumberFilter(
+                method=f"filter_{field_name}_count_lte",
+                help_text=f"Filter by count of {field_name} relationships less than or equal",
             ),
         }
 
@@ -1764,25 +2144,29 @@ class AdvancedFilterGenerator:
             List of lookup expressions for the field
         """
         if isinstance(field, (models.CharField, models.TextField)):
-            return ['exact', 'icontains', 'startswith', 'endswith']
-        elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
-            return ['exact', 'gt', 'gte', 'lt', 'lte']
+            return ["exact", "icontains", "startswith", "endswith"]
+        elif isinstance(
+            field, (models.IntegerField, models.FloatField, models.DecimalField)
+        ):
+            return ["exact", "gt", "gte", "lt", "lte"]
         elif isinstance(field, (models.DateField, models.DateTimeField)):
-            return ['exact', 'year', 'month', 'day', 'gt', 'lt']
+            return ["exact", "year", "month", "day", "gt", "lt"]
         elif isinstance(field, models.BooleanField):
-            return ['exact']
+            return ["exact"]
         elif isinstance(field, (models.FileField, models.ImageField)):
-            return ['exact', 'isnull']
+            return ["exact", "isnull"]
         elif isinstance(field, models.JSONField):
-            return ['exact', 'isnull']
-        elif hasattr(field, 'choices') and field.choices:
-            return ['exact', 'in']
+            return ["exact", "isnull"]
+        elif hasattr(field, "choices") and field.choices:
+            return ["exact", "in"]
         elif isinstance(field, models.ForeignKey):
-            return ['exact', 'in']
+            return ["exact", "in"]
         else:
-            return ['exact']
+            return ["exact"]
 
-    def generate_complex_filter_input(self, model: Type[models.Model]) -> Type[graphene.InputObjectType]:
+    def generate_complex_filter_input(
+        self, model: Type[models.Model]
+    ) -> Type[graphene.InputObjectType]:
         """
         Generates a GraphQL InputObjectType for complex filtering with AND, OR, NOT operations.
 
@@ -1811,19 +2195,21 @@ class AdvancedFilterGenerator:
 
         # Create the complex filter input type
         complex_filter_class = type(
-            f'{model_name}ComplexFilter',
+            f"{model_name}ComplexFilter",
             (graphene.InputObjectType,),
             {
                 **filter_fields,
-                'AND': graphene.List(lambda: complex_filter_class),
-                'OR': graphene.List(lambda: complex_filter_class),
-                'NOT': graphene.Field(lambda: complex_filter_class),
-            }
+                "AND": graphene.List(lambda: complex_filter_class),
+                "OR": graphene.List(lambda: complex_filter_class),
+                "NOT": graphene.Field(lambda: complex_filter_class),
+            },
         )
 
         return complex_filter_class
 
-    def apply_complex_filters(self, queryset: models.QuerySet, filter_input: Dict[str, Any]) -> models.QuerySet:
+    def apply_complex_filters(
+        self, queryset: models.QuerySet, filter_input: Dict[str, Any]
+    ) -> models.QuerySet:
         """
         Applies complex filters (AND, OR, NOT) to a Django queryset.
 
@@ -1840,23 +2226,23 @@ class AdvancedFilterGenerator:
         q_objects = Q()
 
         # Handle AND operations
-        if 'AND' in filter_input:
-            and_filters = filter_input.pop('AND')
+        if "AND" in filter_input:
+            and_filters = filter_input.pop("AND")
             for and_filter in and_filters:
                 and_q = self._build_q_object(and_filter)
                 q_objects &= and_q
 
         # Handle OR operations
-        if 'OR' in filter_input:
-            or_filters = filter_input.pop('OR')
+        if "OR" in filter_input:
+            or_filters = filter_input.pop("OR")
             or_q = Q()
             for or_filter in or_filters:
                 or_q |= self._build_q_object(or_filter)
             q_objects &= or_q
 
         # Handle NOT operations
-        if 'NOT' in filter_input:
-            not_filter = filter_input.pop('NOT')
+        if "NOT" in filter_input:
+            not_filter = filter_input.pop("NOT")
             not_q = self._build_q_object(not_filter)
             q_objects &= ~not_q
 
@@ -1879,7 +2265,7 @@ class AdvancedFilterGenerator:
         q_object = Q()
 
         for key, value in filter_dict.items():
-            if key in ['AND', 'OR', 'NOT']:
+            if key in ["AND", "OR", "NOT"]:
                 continue  # These are handled separately
 
             if value is not None:
@@ -1887,7 +2273,9 @@ class AdvancedFilterGenerator:
 
         return q_object
 
-    def _generate_property_filters(self, model: Type[models.Model]) -> Dict[str, django_filters.Filter]:
+    def _generate_property_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generate filters for @property methods on the model.
 
@@ -1906,13 +2294,16 @@ class AdvancedFilterGenerator:
         for property_name, property_info in properties.items():
             # Generate filters based on property return type
             property_filters = self._generate_property_type_filters(
-                property_name, property_info.return_type)
+                property_name, property_info.return_type
+            )
             filters.update(property_filters)
 
         logger.debug(f"Generated {len(filters)} property filters for {model.__name__}")
         return filters
 
-    def _generate_property_type_filters(self, property_name: str, return_type: Any) -> Dict[str, django_filters.Filter]:
+    def _generate_property_type_filters(
+        self, property_name: str, return_type: Any
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generate specific filters based on property return type.
 
@@ -1926,17 +2317,21 @@ class AdvancedFilterGenerator:
         filters = {}
 
         # Handle different return types
-        if return_type == str or return_type == 'str':
+        if return_type == str or return_type == "str":
             filters.update(self._generate_property_text_filters(property_name))
-        elif return_type == int or return_type == 'int':
+        elif return_type == int or return_type == "int":
             filters.update(self._generate_property_numeric_filters(property_name))
-        elif return_type == float or return_type == 'float':
+        elif return_type == float or return_type == "float":
             filters.update(self._generate_property_numeric_filters(property_name))
-        elif return_type == bool or return_type == 'bool':
+        elif return_type == bool or return_type == "bool":
             filters.update(self._generate_property_boolean_filters(property_name))
-        elif return_type == date or return_type == 'date' or str(return_type) == "<class 'datetime.date'>":
+        elif (
+            return_type == date
+            or return_type == "date"
+            or str(return_type) == "<class 'datetime.date'>"
+        ):
             filters.update(self._generate_property_date_filters(property_name))
-        elif return_type == list or return_type == 'list':
+        elif return_type == list or return_type == "list":
             # For list properties, provide basic text filtering
             filters.update(self._generate_property_text_filters(property_name))
 
@@ -1946,111 +2341,121 @@ class AdvancedFilterGenerator:
 
         return filters
 
-    def _generate_property_text_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+    def _generate_property_text_filters(
+        self, property_name: str
+    ) -> Dict[str, django_filters.Filter]:
         """Generate text-specific filters for properties: contains, icontains, startswith, endswith."""
         return {
-            f'{property_name}': CharFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property with exact text matching'
+            f"{property_name}": CharFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property with exact text matching",
             ),
-            f'{property_name}__contains': CharFilter(
-                method=self._create_property_filter_method(property_name, 'contains'),
-                help_text=f'Filter by {property_name} property containing the specified text (case-sensitive)'
+            f"{property_name}__contains": CharFilter(
+                method=self._create_property_filter_method(property_name, "contains"),
+                help_text=f"Filter by {property_name} property containing the specified text (case-sensitive)",
             ),
-            f'{property_name}__icontains': CharFilter(
-                method=self._create_property_filter_method(property_name, 'icontains'),
-                help_text=f'Filter by {property_name} property containing the specified text (case-insensitive)'
+            f"{property_name}__icontains": CharFilter(
+                method=self._create_property_filter_method(property_name, "icontains"),
+                help_text=f"Filter by {property_name} property containing the specified text (case-insensitive)",
             ),
-            f'{property_name}__startswith': CharFilter(
-                method=self._create_property_filter_method(property_name, 'startswith'),
-                help_text=f'Filter by {property_name} property starting with the specified text'
+            f"{property_name}__startswith": CharFilter(
+                method=self._create_property_filter_method(property_name, "startswith"),
+                help_text=f"Filter by {property_name} property starting with the specified text",
             ),
-            f'{property_name}__endswith': CharFilter(
-                method=self._create_property_filter_method(property_name, 'endswith'),
-                help_text=f'Filter by {property_name} property ending with the specified text'
+            f"{property_name}__endswith": CharFilter(
+                method=self._create_property_filter_method(property_name, "endswith"),
+                help_text=f"Filter by {property_name} property ending with the specified text",
             ),
-            f'{property_name}__exact': CharFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property with exact match'
+            f"{property_name}__exact": CharFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property with exact match",
             ),
         }
 
-    def _generate_property_numeric_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+    def _generate_property_numeric_filters(
+        self, property_name: str
+    ) -> Dict[str, django_filters.Filter]:
         """Generate numeric filters for properties: gt, gte, lt, lte."""
         return {
-            f'{property_name}': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property with exact numeric matching'
+            f"{property_name}": NumberFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property with exact numeric matching",
             ),
-            f'{property_name}__gt': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'gt'),
-                help_text=f'Filter by {property_name} property greater than the specified value'
+            f"{property_name}__gt": NumberFilter(
+                method=self._create_property_filter_method(property_name, "gt"),
+                help_text=f"Filter by {property_name} property greater than the specified value",
             ),
-            f'{property_name}__gte': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'gte'),
-                help_text=f'Filter by {property_name} property greater than or equal to the specified value'
+            f"{property_name}__gte": NumberFilter(
+                method=self._create_property_filter_method(property_name, "gte"),
+                help_text=f"Filter by {property_name} property greater than or equal to the specified value",
             ),
-            f'{property_name}__lt': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'lt'),
-                help_text=f'Filter by {property_name} property less than the specified value'
+            f"{property_name}__lt": NumberFilter(
+                method=self._create_property_filter_method(property_name, "lt"),
+                help_text=f"Filter by {property_name} property less than the specified value",
             ),
-            f'{property_name}__lte': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'lte'),
-                help_text=f'Filter by {property_name} property less than or equal to the specified value'
+            f"{property_name}__lte": NumberFilter(
+                method=self._create_property_filter_method(property_name, "lte"),
+                help_text=f"Filter by {property_name} property less than or equal to the specified value",
             ),
         }
 
-    def _generate_property_boolean_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+    def _generate_property_boolean_filters(
+        self, property_name: str
+    ) -> Dict[str, django_filters.Filter]:
         """Generate boolean filters for properties."""
         return {
-            f'{property_name}': BooleanFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property boolean value'
+            f"{property_name}": BooleanFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property boolean value",
             ),
         }
 
-    def _generate_property_date_filters(self, property_name: str) -> Dict[str, django_filters.Filter]:
+    def _generate_property_date_filters(
+        self, property_name: str
+    ) -> Dict[str, django_filters.Filter]:
         """Generate date-specific filters for properties: exact, gt, gte, lt, lte, year, month, day."""
         return {
-            f'{property_name}': DateFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property with exact date matching'
+            f"{property_name}": DateFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property with exact date matching",
             ),
-            f'{property_name}__exact': DateFilter(
-                method=self._create_property_filter_method(property_name, 'exact'),
-                help_text=f'Filter by {property_name} property with exact date match'
+            f"{property_name}__exact": DateFilter(
+                method=self._create_property_filter_method(property_name, "exact"),
+                help_text=f"Filter by {property_name} property with exact date match",
             ),
-            f'{property_name}__gt': DateFilter(
-                method=self._create_property_filter_method(property_name, 'gt'),
-                help_text=f'Filter by {property_name} property after the specified date'
+            f"{property_name}__gt": DateFilter(
+                method=self._create_property_filter_method(property_name, "gt"),
+                help_text=f"Filter by {property_name} property after the specified date",
             ),
-            f'{property_name}__gte': DateFilter(
-                method=self._create_property_filter_method(property_name, 'gte'),
-                help_text=f'Filter by {property_name} property on or after the specified date'
+            f"{property_name}__gte": DateFilter(
+                method=self._create_property_filter_method(property_name, "gte"),
+                help_text=f"Filter by {property_name} property on or after the specified date",
             ),
-            f'{property_name}__lt': DateFilter(
-                method=self._create_property_filter_method(property_name, 'lt'),
-                help_text=f'Filter by {property_name} property before the specified date'
+            f"{property_name}__lt": DateFilter(
+                method=self._create_property_filter_method(property_name, "lt"),
+                help_text=f"Filter by {property_name} property before the specified date",
             ),
-            f'{property_name}__lte': DateFilter(
-                method=self._create_property_filter_method(property_name, 'lte'),
-                help_text=f'Filter by {property_name} property on or before the specified date'
+            f"{property_name}__lte": DateFilter(
+                method=self._create_property_filter_method(property_name, "lte"),
+                help_text=f"Filter by {property_name} property on or before the specified date",
             ),
-            f'{property_name}__year': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'year'),
-                help_text=f'Filter by {property_name} property year'
+            f"{property_name}__year": NumberFilter(
+                method=self._create_property_filter_method(property_name, "year"),
+                help_text=f"Filter by {property_name} property year",
             ),
-            f'{property_name}__month': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'month'),
-                help_text=f'Filter by {property_name} property month'
+            f"{property_name}__month": NumberFilter(
+                method=self._create_property_filter_method(property_name, "month"),
+                help_text=f"Filter by {property_name} property month",
             ),
-            f'{property_name}__day': NumberFilter(
-                method=self._create_property_filter_method(property_name, 'day'),
-                help_text=f'Filter by {property_name} property day'
+            f"{property_name}__day": NumberFilter(
+                method=self._create_property_filter_method(property_name, "day"),
+                help_text=f"Filter by {property_name} property day",
             ),
         }
 
-    def _generate_reverse_relationship_field_filters(self, model) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_relationship_field_filters(
+        self, model
+    ) -> Dict[str, django_filters.Filter]:
         """
         Generate filters for actual fields of reverse-related models.
 
@@ -2069,10 +2474,14 @@ class AdvancedFilterGenerator:
         reverse_relations = []
 
         # Use the modern Django approach to get reverse relationships
-        if hasattr(model._meta, 'related_objects'):
+        if hasattr(model._meta, "related_objects"):
             for rel in model._meta.related_objects:
                 # Include both OneToMany and OneToOne reverse relationships
-                from django.db.models.fields.reverse_related import ManyToOneRel, OneToOneRel
+                from django.db.models.fields.reverse_related import (
+                    ManyToOneRel,
+                    OneToOneRel,
+                )
+
                 if isinstance(rel, (OneToOneRel, ManyToOneRel)):
                     reverse_relations.append(rel)
 
@@ -2084,12 +2493,12 @@ class AdvancedFilterGenerator:
                 reverse_relations.append(field)
 
         for relation in reverse_relations:
-            if hasattr(relation, 'related_model'):
+            if hasattr(relation, "related_model"):
                 related_model = relation.related_model
                 # Handle different types of relations for accessor name
-                if hasattr(relation, 'get_accessor_name'):
+                if hasattr(relation, "get_accessor_name"):
                     relation_name = relation.get_accessor_name()
-                elif hasattr(relation, 'name'):
+                elif hasattr(relation, "name"):
                     relation_name = relation.name
                 else:
                     continue  # Skip if we can't determine the relation name
@@ -2102,20 +2511,14 @@ class AdvancedFilterGenerator:
                 # Generate filters for fields of the related model
                 filters.update(
                     self._generate_reverse_nested_field_filters(
-                        relation_name,
-                        related_model,
-                        depth=0
+                        relation_name, related_model, depth=0
                     )
                 )
 
         return filters
 
     def _generate_reverse_nested_field_filters(
-        self,
-        relation_name: str,
-        related_model,
-        depth: int = 0,
-        max_depth: int = 2
+        self, relation_name: str, related_model, depth: int = 0, max_depth: int = 2
     ) -> Dict[str, django_filters.Filter]:
         """
         Generate nested filters for reverse relationship fields.
@@ -2138,206 +2541,240 @@ class AdvancedFilterGenerator:
         for field in related_model._meta.get_fields():
             if field.is_relation:
                 # Handle foreign key and one-to-one relationships
-                if hasattr(field, 'related_model') and (field.many_to_one or field.one_to_one):
+                if hasattr(field, "related_model") and (
+                    field.many_to_one or field.one_to_one
+                ):
                     field_name = f"{relation_name}__{field.name}"
-                    filters.update(self._generate_reverse_foreign_key_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_foreign_key_filters(field_name, field)
+                    )
 
                     # Recursive nesting for deeper relationships
                     if depth < max_depth - 1:
                         nested_filters = self._generate_reverse_nested_field_filters(
-                            field_name,
-                            field.related_model,
-                            depth + 1,
-                            max_depth
+                            field_name, field.related_model, depth + 1, max_depth
                         )
                         filters.update(nested_filters)
 
                 # Handle many-to-many relationships
                 elif field.many_to_many:
                     field_name = f"{relation_name}__{field.name}"
-                    filters.update(self._generate_reverse_many_to_many_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_many_to_many_filters(field_name, field)
+                    )
             else:
                 # Handle regular fields
                 field_name = f"{relation_name}__{field.name}"
 
                 if isinstance(field, (models.CharField, models.TextField)):
-                    filters.update(self._generate_reverse_text_filters(field_name, field))
-                elif isinstance(field, (models.IntegerField, models.FloatField, models.DecimalField)):
-                    filters.update(self._generate_reverse_numeric_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_text_filters(field_name, field)
+                    )
+                elif isinstance(
+                    field, (models.IntegerField, models.FloatField, models.DecimalField)
+                ):
+                    filters.update(
+                        self._generate_reverse_numeric_filters(field_name, field)
+                    )
                 elif isinstance(field, (models.DateField, models.DateTimeField)):
-                    filters.update(self._generate_reverse_date_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_date_filters(field_name, field)
+                    )
                 elif isinstance(field, models.BooleanField):
-                    filters.update(self._generate_reverse_boolean_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_boolean_filters(field_name, field)
+                    )
                 elif isinstance(field, models.EmailField):
-                    filters.update(self._generate_reverse_text_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_text_filters(field_name, field)
+                    )
                 elif isinstance(field, models.URLField):
-                    filters.update(self._generate_reverse_text_filters(field_name, field))
+                    filters.update(
+                        self._generate_reverse_text_filters(field_name, field)
+                    )
 
         return filters
 
-    def _generate_reverse_text_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_text_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate text-based filters for reverse relationship text fields."""
         return {
-            f'{field_name}': CharFilter(
+            f"{field_name}": CharFilter(
                 field_name=field_name,
-                help_text=f'Filter by {field_name} with exact text matching'
+                help_text=f"Filter by {field_name} with exact text matching",
             ),
-            f'{field_name}__contains': CharFilter(
-                field_name=f'{field_name}__contains',
-                help_text=f'Filter by {field_name} containing the specified text (case-sensitive)'
+            f"{field_name}__contains": CharFilter(
+                field_name=f"{field_name}__contains",
+                help_text=f"Filter by {field_name} containing the specified text (case-sensitive)",
             ),
-            f'{field_name}__icontains': CharFilter(
-                field_name=f'{field_name}__icontains',
-                help_text=f'Filter by {field_name} containing the specified text (case-insensitive)'
+            f"{field_name}__icontains": CharFilter(
+                field_name=f"{field_name}__icontains",
+                help_text=f"Filter by {field_name} containing the specified text (case-insensitive)",
             ),
-            f'{field_name}__startswith': CharFilter(
-                field_name=f'{field_name}__startswith',
-                help_text=f'Filter by {field_name} starting with the specified text'
+            f"{field_name}__startswith": CharFilter(
+                field_name=f"{field_name}__startswith",
+                help_text=f"Filter by {field_name} starting with the specified text",
             ),
-            f'{field_name}__endswith': CharFilter(
-                field_name=f'{field_name}__endswith',
-                help_text=f'Filter by {field_name} ending with the specified text'
+            f"{field_name}__endswith": CharFilter(
+                field_name=f"{field_name}__endswith",
+                help_text=f"Filter by {field_name} ending with the specified text",
             ),
-            f'{field_name}__exact': CharFilter(
-                field_name=f'{field_name}__exact',
-                help_text=f'Filter by {field_name} with exact match'
+            f"{field_name}__exact": CharFilter(
+                field_name=f"{field_name}__exact",
+                help_text=f"Filter by {field_name} with exact match",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} is null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
-    def _generate_reverse_numeric_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_numeric_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate numeric filters for reverse relationship numeric fields."""
         return {
-            f'{field_name}': NumberFilter(
+            f"{field_name}": NumberFilter(
                 field_name=field_name,
-                help_text=f'Filter by {field_name} with exact numeric matching'
+                help_text=f"Filter by {field_name} with exact numeric matching",
             ),
-            f'{field_name}__in': type(f'{field_name.title()}InFilter', (django_filters.BaseInFilter, NumberFilter), {})(
+            f"{field_name}__in": type(
+                f"{field_name.title()}InFilter",
+                (django_filters.BaseInFilter, NumberFilter),
+                {},
+            )(
                 field_name=field_name,
-                help_text=f'Filter by multiple {field_name} values'
+                help_text=f"Filter by multiple {field_name} values",
             ),
-            f'{field_name}__gt': NumberFilter(
-                field_name=f'{field_name}__gt',
-                help_text=f'Filter by {field_name} greater than the specified value'
+            f"{field_name}__gt": NumberFilter(
+                field_name=f"{field_name}__gt",
+                help_text=f"Filter by {field_name} greater than the specified value",
             ),
-            f'{field_name}__gte': NumberFilter(
-                field_name=f'{field_name}__gte',
-                help_text=f'Filter by {field_name} greater than or equal to the specified value'
+            f"{field_name}__gte": NumberFilter(
+                field_name=f"{field_name}__gte",
+                help_text=f"Filter by {field_name} greater than or equal to the specified value",
             ),
-            f'{field_name}__lt': NumberFilter(
-                field_name=f'{field_name}__lt',
-                help_text=f'Filter by {field_name} less than the specified value'
+            f"{field_name}__lt": NumberFilter(
+                field_name=f"{field_name}__lt",
+                help_text=f"Filter by {field_name} less than the specified value",
             ),
-            f'{field_name}__lte': NumberFilter(
-                field_name=f'{field_name}__lte',
-                help_text=f'Filter by {field_name} less than or equal to the specified value'
+            f"{field_name}__lte": NumberFilter(
+                field_name=f"{field_name}__lte",
+                help_text=f"Filter by {field_name} less than or equal to the specified value",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} is null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
-    def _generate_reverse_date_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_date_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate date filters for reverse relationship date fields."""
         filters = {
-            f'{field_name}': DateFilter(
+            f"{field_name}": DateFilter(
                 field_name=field_name,
-                help_text=f'Filter by {field_name} with exact date matching'
+                help_text=f"Filter by {field_name} with exact date matching",
             ),
-            f'{field_name}__gt': DateFilter(
-                field_name=f'{field_name}__gt',
-                help_text=f'Filter by {field_name} after the specified date'
+            f"{field_name}__gt": DateFilter(
+                field_name=f"{field_name}__gt",
+                help_text=f"Filter by {field_name} after the specified date",
             ),
-            f'{field_name}__gte': DateFilter(
-                field_name=f'{field_name}__gte',
-                help_text=f'Filter by {field_name} on or after the specified date'
+            f"{field_name}__gte": DateFilter(
+                field_name=f"{field_name}__gte",
+                help_text=f"Filter by {field_name} on or after the specified date",
             ),
-            f'{field_name}__lt': DateFilter(
-                field_name=f'{field_name}__lt',
-                help_text=f'Filter by {field_name} before the specified date'
+            f"{field_name}__lt": DateFilter(
+                field_name=f"{field_name}__lt",
+                help_text=f"Filter by {field_name} before the specified date",
             ),
-            f'{field_name}__lte': DateFilter(
-                field_name=f'{field_name}__lte',
-                help_text=f'Filter by {field_name} on or before the specified date'
+            f"{field_name}__lte": DateFilter(
+                field_name=f"{field_name}__lte",
+                help_text=f"Filter by {field_name} on or before the specified date",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} is null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
         # Add datetime-specific filters if it's a DateTimeField
         if isinstance(field, models.DateTimeField):
-            filters.update({
-                f'{field_name}__year': NumberFilter(
-                    field_name=f'{field_name}__year',
-                    help_text=f'Filter by {field_name} year'
-                ),
-                f'{field_name}__month': NumberFilter(
-                    field_name=f'{field_name}__month',
-                    help_text=f'Filter by {field_name} month'
-                ),
-                f'{field_name}__day': NumberFilter(
-                    field_name=f'{field_name}__day',
-                    help_text=f'Filter by {field_name} day'
-                ),
-            })
+            filters.update(
+                {
+                    f"{field_name}__year": NumberFilter(
+                        field_name=f"{field_name}__year",
+                        help_text=f"Filter by {field_name} year",
+                    ),
+                    f"{field_name}__month": NumberFilter(
+                        field_name=f"{field_name}__month",
+                        help_text=f"Filter by {field_name} month",
+                    ),
+                    f"{field_name}__day": NumberFilter(
+                        field_name=f"{field_name}__day",
+                        help_text=f"Filter by {field_name} day",
+                    ),
+                }
+            )
 
         return filters
 
-    def _generate_reverse_boolean_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_boolean_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate boolean filters for reverse relationship boolean fields."""
         return {
-            f'{field_name}': BooleanFilter(
-                field_name=field_name,
-                help_text=f'Filter by {field_name} boolean value'
+            f"{field_name}": BooleanFilter(
+                field_name=field_name, help_text=f"Filter by {field_name} boolean value"
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} is null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
-    def _generate_reverse_foreign_key_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_foreign_key_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship foreign key fields."""
         return {
-            f'{field_name}': ModelChoiceFilter(
+            f"{field_name}": ModelChoiceFilter(
                 field_name=field_name,
                 queryset=field.related_model.objects.all(),
-                help_text=f'Filter by {field_name} foreign key'
+                help_text=f"Filter by {field_name} foreign key",
             ),
-            f'{field_name}__in': ModelMultipleChoiceFilter(
+            f"{field_name}__in": ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=field.related_model.objects.all(),
-                to_field_name='pk',
-                help_text=f'Filter by multiple {field_name} foreign key IDs'
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} foreign key IDs",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} is null'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
-    def _generate_reverse_many_to_many_filters(self, field_name: str, field) -> Dict[str, django_filters.Filter]:
+    def _generate_reverse_many_to_many_filters(
+        self, field_name: str, field
+    ) -> Dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship many-to-many fields."""
         return {
-            f'{field_name}': ModelMultipleChoiceFilter(
+            f"{field_name}": ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=field.related_model.objects.all(),
-                help_text=f'Filter by {field_name} many-to-many relationship'
+                help_text=f"Filter by {field_name} many-to-many relationship",
             ),
-            f'{field_name}__in': ModelMultipleChoiceFilter(
+            f"{field_name}__in": ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=field.related_model.objects.all(),
-                to_field_name='pk',
-                help_text=f'Filter by multiple {field_name} many-to-many IDs'
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} many-to-many IDs",
             ),
-            f'{field_name}__isnull': BooleanFilter(
-                field_name=f'{field_name}__isnull',
-                help_text=f'Filter by whether {field_name} has any related objects'
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Filter by whether {field_name} has any related objects",
             ),
         }

@@ -114,10 +114,12 @@ class PropertyInfo:
 
     Attributes:
         return_type: The return type annotation of the property
+        verbose_name: Optional human-friendly title, from fget.short_description
     """
 
-    def __init__(self, return_type: Any):
+    def __init__(self, return_type: Any, verbose_name: Optional[str] = None):
         self.return_type = return_type
+        self.verbose_name = verbose_name
 
 
 class ManagerInfo:
@@ -519,11 +521,14 @@ class ModelIntrospector:
 
             # Infer return type from property's fget method if available
             return_type = Any
+            verbose_name = None
             if member.fget:
                 sig = inspect.signature(member.fget)
                 return_type = sig.return_annotation
+                # Capture admin-style short_description as title if present
+                verbose_name = getattr(member.fget, "short_description", None)
 
-            property_info[name] = PropertyInfo(return_type=return_type)
+            property_info[name] = PropertyInfo(return_type=return_type, verbose_name=verbose_name)
         return property_info
 
     @cached_property
