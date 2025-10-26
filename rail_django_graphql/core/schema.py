@@ -291,7 +291,11 @@ class SchemaBuilder:
         Args:
             models: List of Django models to generate queries for
         """
-        self._query_fields = {}
+        self._query_fields = {
+            "dummy": graphene.String(
+                description="Dummy query field to ensure schema validity"
+            )
+        }
 
         for model in models:
             model_name = model.__name__.lower()

@@ -2264,12 +2264,13 @@ class AdvancedFilterGenerator:
         """
         q_object = Q()
 
-        for key, value in filter_dict.items():
-            if key in ["AND", "OR", "NOT"]:
-                continue  # These are handled separately
+        if filter_dict:
+            for key, value in filter_dict.items():
+                if key in ["AND", "OR", "NOT"]:
+                    continue  # These are handled separately
 
-            if value is not None:
-                q_object &= Q(**{key: value})
+                if value is not None:
+                    q_object &= Q(**{key: value})
 
         return q_object
 

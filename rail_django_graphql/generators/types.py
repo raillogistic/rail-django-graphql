@@ -389,6 +389,16 @@ class TypeGenerator:
         type_attrs["pk"] = graphene.ID(description="Primary key of the model")
         type_attrs["resolve_pk"] = lambda self, info: getattr(self, self._meta.pk.name)
 
+        def desc_resolver():
+            def desc_resolver(self, info):
+                desc = getattr(self, "desc", None) or self.__str__() or ""
+                return desc
+
+            return desc_resolver
+
+        # add desc field for desc
+        type_attrs["desc"] = graphene.String(description="Description of the object")
+        type_attrs["resolve_desc"] = desc_resolver()
         # Add custom field resolvers
         for field_name, field_info in fields.items():
             if not self._should_include_field(model, field_name):
@@ -466,7 +476,6 @@ class TypeGenerator:
                     return count_resolver
 
                 # Add parameterized total count resolver with filters
-
                 type_attrs[f"resolve_{field_name}"] = make_resolver(
                     field_name, rel_info, related_model
                 )
