@@ -2723,6 +2723,40 @@ class ModelTableExtractor:
         meta = model._meta
         introspector = ModelIntrospector(model, self.schema_name)
 
+        # Detect polymorphic/multi-table inheritance and hide OneToOne relations
+        # to avoid exposing parent/child or sibling pointers in table columns.
+        # This is especially relevant for django-polymorphic where child models
+        # include an auto-managed OneToOne link to the base model and projects
+        # may define additional OneToOne links between siblings.
+        try:
+            from ..generators.inheritance import inheritance_handler
+            inheritance_info = inheritance_handler.analyze_model_inheritance(model)
+        except Exception:
+            inheritance_info = {}
+
+        # Basic heuristic: presence of polymorphic_ctype field, any parents, or any children
+        is_polymorphic_model = False
+        try:
+            for _f in meta.get_fields():
+                if getattr(_f, "name", None) == "polymorphic_ctype":
+                    is_polymorphic_model = True
+                    break
+        except Exception:
+            pass
+
+        if getattr(meta, "parents", None):
+            try:
+                if len(meta.parents) > 0:
+                    is_polymorphic_model = True
+            except Exception:
+                # Some Django versions expose parents as a dict-like
+                is_polymorphic_model = True
+
+        if inheritance_info and (
+            inheritance_info.get("child_models") or inheritance_info.get("concrete_parents")
+        ):
+            is_polymorphic_model = True
+
         # Table-level metadata
         app_label = meta.app_label
         model_label = model.__name__
@@ -2752,6 +2786,12 @@ class ModelTableExtractor:
                 continue
             # Only include concrete or forward relation fields
             if f.name == "polymorphic_ctype" or f.name == "id":
+                continue
+
+            # In polymorphic/multi-table inheritance contexts, hide OneToOne relations
+            # (parent_link or explicit) from table exposure to prevent confusing columns.
+            # These links are implementation details rather than user-facing table fields.
+            if is_polymorphic_model and isinstance(f, models.OneToOneField):
                 continue
 
             if getattr(f, "concrete", False) or (
