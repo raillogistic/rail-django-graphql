@@ -1390,6 +1390,10 @@ class AdvancedFilterGenerator:
         field_name = field.name
         related_model = field.related_model
 
+        # Skip nested filters for Simple History models
+        if related_model and self._is_historical_model(related_model):
+            return nested_filters
+
         # Track performance optimization suggestions
         optimization_suggestions = []
 
@@ -2168,13 +2172,40 @@ class AdvancedFilterGenerator:
         self, model: Type[models.Model]
     ) -> Type[graphene.InputObjectType]:
         """
-        Generates a GraphQL InputObjectType for complex filtering with AND, OR, NOT operations.
+        Purpose: Build a typed GraphQL InputObjectType to express complex filters with AND/OR/NOT.
+
+        This uses a self-referential, nested InputObjectType instead of a GenericScalar to preserve
+        strong typing, autocompletion, and validation. Nested JSON-like structures are naturally
+        supported in GraphQL input objects, so callers can pass hierarchies of AND/OR lists and a
+        single NOT object.
 
         Args:
-            model: Django model class
+            model (Type[models.Model]): Django model class the filter targets.
 
         Returns:
-            GraphQL InputObjectType for complex filtering
+            Type[graphene.InputObjectType]: A generated "<ModelName>ComplexFilter" input type with
+            typed field filters and AND/OR/NOT recursion for composing logical expressions.
+
+        Raises:
+            Exception: If the underlying filter set generation fails for the provided model.
+
+        Example:
+            >>> # Example GraphQL variables for a UniteMesure list query
+            >>> variables = {
+            ...     "filters": {
+            ...         "AND": [
+            ...             {"code__icontains": "G"},
+            ...             {"nom__icontains": "unité"}
+            ...         ],
+            ...         "OR": [
+            ...             {"nom__startswith": "K"},
+            ...             {"code__exact": "KG"}
+            ...         ],
+            ...         "NOT": {"nom__endswith": "zzz"}
+            ...     },
+            ...     "limit": 5
+            ... }
+            >>> # The input type name will be "UniteMesureComplexFilter"
         """
         model_name = model.__name__
         filter_set = self.generate_filter_set(model)
@@ -2211,14 +2242,24 @@ class AdvancedFilterGenerator:
         self, queryset: models.QuerySet, filter_input: Dict[str, Any]
     ) -> models.QuerySet:
         """
-        Applies complex filters (AND, OR, NOT) to a Django queryset.
+        Purpose: Apply a nested AND/OR/NOT filter tree to a queryset using Django Q objects.
 
         Args:
-            queryset: Django queryset to filter
-            filter_input: Dictionary containing filter criteria
+            queryset (models.QuerySet): Base queryset to filter.
+            filter_input (Dict[str, Any]): Parsed complex filter input (matching the generated
+                <ModelName>ComplexFilter structure). Keys for regular filters use the standard
+                "field__lookup" convention.
 
         Returns:
-            Filtered queryset
+            models.QuerySet: A queryset filtered by the composed logical expression.
+
+        Raises:
+            ValueError: If filter_input contains unsupported structures or types.
+
+        Example:
+            >>> # Given variables['filters'] built like in the generate_complex_filter_input example,
+            >>> # the resolver passes it into apply_complex_filters(queryset, filters).
+            >>> # This method translates the logical tree into Q() objects and returns queryset.filter(Q(...)).
         """
         if not filter_input:
             return queryset

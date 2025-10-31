@@ -996,6 +996,16 @@ class TypeGenerator:
         """
         reverse_relations = {}
 
+        def _is_historical_model(m: Type[models.Model]) -> bool:
+            """Return True if the given model appears to be a Simple History model."""
+            try:
+                return (
+                    getattr(m, "__name__", "").startswith("Historical")
+                    or "simple_history" in getattr(m, "__module__", "")
+                )
+            except Exception:
+                return False
+
         # For modern Django versions, use related_objects
         if hasattr(model._meta, "related_objects"):
             for rel in model._meta.related_objects:
@@ -1006,6 +1016,11 @@ class TypeGenerator:
                 if not self._should_include_field(model, accessor_name):
                     continue
 
+                # Skip reverse relations that point to historical models or history accessors
+                if _is_historical_model(rel.related_model):
+                    continue
+                if accessor_name.startswith("history") or accessor_name.startswith("historical"):
+                    continue
                 reverse_relations[accessor_name] = rel.related_model
         # Fallback for Django versions that use get_fields() with related fields
         elif hasattr(model._meta, "get_fields"):
@@ -1018,6 +1033,10 @@ class TypeGenerator:
                         accessor_name = field.get_accessor_name()
 
                         if self._should_include_field(model, accessor_name):
+                            if _is_historical_model(field.related_model):
+                                continue
+                            if accessor_name.startswith("history") or accessor_name.startswith("historical"):
+                                continue
                             reverse_relations[accessor_name] = field.related_model
             except AttributeError:
                 # If get_fields doesn't work as expected, continue without reverse relations
@@ -1032,6 +1051,10 @@ class TypeGenerator:
                         accessor_name = rel.name
 
                     if self._should_include_field(model, accessor_name):
+                        if _is_historical_model(rel.related_model):
+                            continue
+                        if accessor_name.startswith("history") or accessor_name.startswith("historical"):
+                            continue
                         reverse_relations[accessor_name] = rel.related_model
             except AttributeError:
                 # If get_all_related_objects doesn't exist, skip reverse relations

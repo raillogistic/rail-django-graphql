@@ -242,6 +242,19 @@ class SchemaBuilder:
             )
             return False
 
+        # Ignore Django Simple History generated models (Historical*).
+        # These models are used for audit/history tracking and should not be exposed in the API.
+        try:
+            model_module = getattr(model, "__module__", "")
+            if model.__name__.startswith("Historical") or "simple_history" in model_module:
+                logger.debug(
+                    f"Excluding historical model {full_model_name} (Simple History)"
+                )
+                return False
+        except Exception:
+            # Fail-safe: if any attribute access fails, do not exclude based on history
+            pass
+
         return True
 
     def _discover_models(self) -> List[Type[models.Model]]:
@@ -299,7 +312,10 @@ class SchemaBuilder:
 
         for model in models:
             model_name = model.__name__.lower()
-
+            # skip HistoricalModel
+            if model_name.startswith("historical"):
+                print("xxxxxxxxxxxxxx", model_name)
+                continue
             # Get model managers using introspector
             from ..generators.introspector import ModelIntrospector
 
@@ -314,6 +330,7 @@ class SchemaBuilder:
                     single_query = self.query_generator.generate_single_query(
                         model, manager_name
                     )
+
                     self._query_fields[model_name] = single_query
 
                     # List query
@@ -350,6 +367,7 @@ class SchemaBuilder:
                         self._query_fields[f"{model_name}s_pages_{manager_name}"] = (
                             paginated_query
                         )
+                    print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", self._query_fields.keys())
 
     def _generate_mutation_fields(self, models: List[Type[models.Model]]) -> None:
         """
