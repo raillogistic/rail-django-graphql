@@ -1391,8 +1391,11 @@ class AdvancedFilterGenerator:
         related_model = field.related_model
 
         # Skip nested filters for Simple History models
-        if related_model and self._is_historical_model(related_model):
-            return nested_filters
+        try:
+            if related_model and self._is_historical_model(related_model):
+                return nested_filters
+        except:
+            pass
 
         # Track performance optimization suggestions
         optimization_suggestions = []

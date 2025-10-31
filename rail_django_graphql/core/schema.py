@@ -246,7 +246,10 @@ class SchemaBuilder:
         # These models are used for audit/history tracking and should not be exposed in the API.
         try:
             model_module = getattr(model, "__module__", "")
-            if model.__name__.startswith("Historical") or "simple_history" in model_module:
+            if (
+                model.__name__.startswith("Historical")
+                or "simple_history" in model_module
+            ):
                 logger.debug(
                     f"Excluding historical model {full_model_name} (Simple History)"
                 )
@@ -313,9 +316,8 @@ class SchemaBuilder:
         for model in models:
             model_name = model.__name__.lower()
             # skip HistoricalModel
-            if model_name.startswith("historical"):
-                print("xxxxxxxxxxxxxx", model_name)
-                continue
+            # if model_name.startswith("historical"):
+            #     continue
             # Get model managers using introspector
             from ..generators.introspector import ModelIntrospector
 
@@ -367,7 +369,6 @@ class SchemaBuilder:
                         self._query_fields[f"{model_name}s_pages_{manager_name}"] = (
                             paginated_query
                         )
-                    print("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", self._query_fields.keys())
 
     def _generate_mutation_fields(self, models: List[Type[models.Model]]) -> None:
         """

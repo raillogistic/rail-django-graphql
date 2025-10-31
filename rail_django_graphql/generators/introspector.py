@@ -528,7 +528,9 @@ class ModelIntrospector:
                 # Capture admin-style short_description as title if present
                 verbose_name = getattr(member.fget, "short_description", None)
 
-            property_info[name] = PropertyInfo(return_type=return_type, verbose_name=verbose_name)
+            property_info[name] = PropertyInfo(
+                return_type=return_type, verbose_name=verbose_name
+            )
         return property_info
 
     @cached_property
@@ -561,6 +563,55 @@ class ModelIntrospector:
 
     def analyze_inheritance(self) -> InheritanceInfo:
         return self.inheritance
+
+    def get_manytoone_relations(self) -> Dict[str, Type[models.Model]]:
+        """
+        Get reverse relationships for the model (e.g., comments for Post).
+
+        Returns:
+            Dict mapping field names to related models
+        """
+        reverse_relations = {}
+        if not self._meta:
+            return reverse_relations
+
+        # For modern Django versions, use related_objects
+        if hasattr(self._meta, "related_objects"):
+            for rel in self._meta.related_objects:
+                # Get the accessor name (e.g., 'comments' for Comment.post -> Post)
+                if type(rel) == models.ManyToOneRel:
+                    accessor_name = rel.get_accessor_name()
+                    reverse_relations[accessor_name] = rel.related_model
+
+        # Fallback for Django versions that use get_fields() with related fields
+        elif hasattr(self._meta, "get_fields"):
+            try:
+                for field in self._meta.get_fields():
+                    # Check if it's a reverse relation (ForeignKey, OneToOneField, ManyToManyField)
+                    if hasattr(field, "related_model") and hasattr(
+                        field, "get_accessor_name"
+                    ):
+                        print(type(field), field.__class__)
+                        accessor_name = field.get_accessor_name()
+                        reverse_relations[accessor_name] = field.related_model
+            except AttributeError:
+                # If get_fields doesn't work as expected, continue without reverse relations
+                pass
+        else:
+            # Final fallback for very old Django versions
+            try:
+                for rel in self._meta.get_all_related_objects():
+                    if hasattr(rel, "get_accessor_name"):
+                        accessor_name = rel.get_accessor_name()
+                    else:
+                        accessor_name = rel.name
+
+                    reverse_relations[accessor_name] = rel.related_model
+            except AttributeError:
+                # If get_all_related_objects doesn't exist, skip reverse relations
+                pass
+
+        return reverse_relations
 
     def get_reverse_relations(self) -> Dict[str, Type[models.Model]]:
         """

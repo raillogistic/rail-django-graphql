@@ -2661,8 +2661,7 @@ class ModelTableExtractor:
         self, introspector, model
     ) -> TableFieldMetadata:
         counts = []
-        reverse_relations = introspector.get_reverse_relations()
-        print(reverse_relations)
+        reverse_relations = introspector.get_manytoone_relations()
         for rel_name, related_model in reverse_relations.items():
             counts.append(
                 TableFieldMetadata(
@@ -2714,6 +2713,7 @@ class ModelTableExtractor:
         app_name: str,
         model_name: str,
         custom_fields: Optional[List[str]] = None,
+        counts: bool = False,
         user=None,
     ) -> Optional[ModelTableMetadata]:
         model = self._get_model(app_name, model_name)
@@ -2751,6 +2751,9 @@ class ModelTableExtractor:
             if getattr(f, "auto_created", False) and getattr(f, "is_relation", False):
                 continue
             # Only include concrete or forward relation fields
+            if f.name == "polymorphic_ctype" or f.name == "id":
+                continue
+
             if getattr(f, "concrete", False) or (
                 getattr(f, "is_relation", False)
                 and not getattr(f, "auto_created", False)
@@ -2763,6 +2766,8 @@ class ModelTableExtractor:
         # Properties from introspector
         try:
             for prop_name, prop_info in getattr(introspector, "properties", {}).items():
+                if prop_name == "pk":
+                    continue
                 verbose = getattr(prop_info, "verbose_name", prop_name)
                 return_type = getattr(prop_info, "return_type", None)
                 table_fields.append(
@@ -2774,10 +2779,11 @@ class ModelTableExtractor:
             # Properties may not be available; ignore quietly
             pass
 
-        # Reverse relationship count field
-        table_fields.extend(
-            self._build_table_field_for_reverse_count(introspector, model)
-        )
+        # Reverse relationship count field if counts is True
+        if counts:
+            table_fields.extend(
+                self._build_table_field_for_reverse_count(introspector, model)
+            )
 
         # Custom field handling
         normalized_custom_fields = self._parse_custom_fields(custom_fields or [])
@@ -2902,6 +2908,9 @@ class ModelMetadataQuery(graphene.ObjectType):
             default_value=[],
             description="Additional custom fields to include (e.g., 'author.username')",
         ),
+        counts=graphene.Boolean(
+            default_value=False, description="Show reverse relationship count"
+        ),
         max_depth=graphene.Int(
             default_value=0,
             description="Maximum nesting depth for custom field filter resolution",
@@ -2962,6 +2971,7 @@ class ModelMetadataQuery(graphene.ObjectType):
         model_name: str,
         custom_fields: List[str] = None,
         max_depth: int = 1,
+        counts: bool = False,
     ) -> Optional[ModelTableType]:
         """Resolve comprehensive table metadata for a Django model."""
         user = getattr(info.context, "user", None)
@@ -2970,6 +2980,7 @@ class ModelMetadataQuery(graphene.ObjectType):
             app_name=app_name,
             model_name=model_name,
             custom_fields=custom_fields or [],
+            counts=counts,
             user=user,
         )
         return metadata
