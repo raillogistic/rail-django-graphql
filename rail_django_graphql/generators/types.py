@@ -132,6 +132,8 @@ class TypeGenerator:
         self._interface_registry: Dict[
             Type[models.Model], Type[graphene.Interface]
         ] = {}
+        # Registry for generated GraphQL Enums for choice fields
+        self._enum_registry: Dict[str, Type[graphene.Enum]] = {}
 
     def _update_field_type_map(self) -> None:
         """Update field type map with custom scalars based on settings."""
@@ -705,6 +707,21 @@ class TypeGenerator:
                 # Handle custom fields that aren't in FIELD_TYPE_MAP
                 field_type = self.handle_custom_fields(field_info.field_type)
 
+            # If this is a CharField/TextField with choices, generate/use an Enum type
+            try:
+                django_field_obj = model._meta.get_field(field_name)
+            except Exception:
+                django_field_obj = None
+            if (
+                django_field_obj is not None
+                and hasattr(django_field_obj, "choices")
+                and django_field_obj.choices
+                and issubclass(field_info.field_type, (models.CharField, models.TextField))
+            ):
+                enum_type = self._get_or_create_enum_for_field(model, django_field_obj)
+                if enum_type is not None:
+                    field_type = enum_type
+
             # Determine if field should be required based on mutation type
             if mutation_type == "create":
                 is_required = (
@@ -860,6 +877,88 @@ class TypeGenerator:
         cache_key = (model, partial, mutation_type, include_reverse_relations)
         self._input_type_registry[cache_key] = input_type
         return input_type
+
+    def _build_enum_name(self, model: Type[models.Model], field_name: str) -> str:
+        """
+        Purpose: Build a stable GraphQL Enum name for a model field.
+        Args: 
+            model: Django model class the field belongs to
+            field_name: Name of the Django model field
+        Returns: 
+            str: GraphQL-safe enum type name
+        Raises:
+            None
+        Example:
+            >>> self._build_enum_name(Book, "status")
+            'Book_status_Enum'
+        """
+        return f"{model.__name__}_{field_name}_Enum"
+
+    def _get_or_create_enum_for_field(
+        self, model: Type[models.Model], django_field: Field
+    ) -> Optional[Type[graphene.Enum]]:
+        """
+        Purpose: Create or retrieve a GraphQL Enum type for a Django field with choices.
+        Args:
+            model: Django model class
+            django_field: Django field instance which may have choices
+        Returns:
+            Optional[graphene.Enum]: GraphQL Enum type if choices exist, otherwise None
+        Raises:
+            None
+        Example:
+            >>> enum_type = self._get_or_create_enum_for_field(Book, Book._meta.get_field('status'))
+            >>> isinstance(enum_type, type)
+            True
+        """
+        # Validate choices presence
+        choices = getattr(django_field, "choices", None)
+        if not choices:
+            return None
+
+        # Build a cache key unique per schema/model/field
+        enum_name = self._build_enum_name(model, django_field.name)
+        cache_key = f"{self.schema_name}:{enum_name}"
+        if cache_key in self._enum_registry:
+            return self._enum_registry[cache_key]
+
+        # Prepare enum members from choices
+        # Choices may be provided as list of (value, label) tuples
+        # We derive enum member names from values for stability
+        def _normalize_member_name(raw_value: Any, index: int) -> str:
+            text = str(raw_value).strip()
+            # Uppercase, replace non-alphanumeric with underscores
+            import re
+
+            candidate = re.sub(r"[^a-zA-Z0-9]+", "_", text).upper()
+            if not candidate or not candidate[0].isalpha():
+                candidate = f"CHOICE_{candidate}" if candidate else "CHOICE"
+            # Ensure uniqueness by appending index if duplicates
+            return f"{candidate}_{index}" if candidate in member_names else candidate
+
+        member_names: set = set()
+        enum_members: Dict[str, Any] = {}
+        for idx, choice in enumerate(choices):
+            try:
+                value, label = choice
+            except Exception:
+                # Fallback if choice is a single value
+                value, label = choice, str(choice)
+            name = _normalize_member_name(value, idx)
+            member_names.add(name)
+            enum_members[name] = value
+
+        # Create the Graphene Enum
+        try:
+            enum_type = graphene.Enum(enum_name, enum_members)
+        except Exception:
+            # As a safety fallback, if Graphene fails due to naming, prefix with schema
+            safe_enum_name = f"{self.schema_name}_{enum_name}"
+            enum_type = graphene.Enum(safe_enum_name, enum_members)
+
+        # Cache and return
+        self._enum_registry[cache_key] = enum_type
+        return enum_type
 
     def generate_filter_type(self, model: Type[models.Model]) -> Type:
         """
@@ -1106,9 +1205,25 @@ class TypeGenerator:
             if mutation_type == "create" and field_name == "id":
                 continue
 
+            # Determine input type, with Enum support for choice fields
             field_type = self._get_input_field_type(field_info.field_type)
             if not field_type:
                 field_type = self.handle_custom_fields(field_info.field_type)
+
+            # If CharField/TextField has choices, use or generate a GraphQL Enum
+            try:
+                django_field_obj = model._meta.get_field(field_name)
+            except Exception:
+                django_field_obj = None
+            if (
+                django_field_obj is not None
+                and hasattr(django_field_obj, "choices")
+                and getattr(django_field_obj, "choices", None)
+                and issubclass(field_info.field_type, (models.CharField, models.TextField))
+            ):
+                enum_type = self._get_or_create_enum_for_field(model, django_field_obj)
+                if enum_type is not None:
+                    field_type = enum_type
 
             # For nested inputs, make most fields optional to allow partial data
             is_required = False

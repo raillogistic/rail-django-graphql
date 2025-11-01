@@ -118,6 +118,9 @@ class MutationGenerator:
                     # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
 
+                    # Normalize enum inputs (GraphQL Enum -> underlying Django values)
+                    input = cls._normalize_enum_inputs(input, model)
+
                     # Process dual fields with automatic priority handling
                     input = cls._process_dual_fields(input, model)
 
@@ -204,6 +207,53 @@ class MutationGenerator:
                     return value
 
                 return {k: sanitize_value(v) for k, v in input_data.items()}
+
+            @classmethod
+            def _normalize_enum_inputs(
+                cls, input_data: Dict[str, Any], model: Type[models.Model]
+            ) -> Dict[str, Any]:
+                """
+                Purpose: Normalize GraphQL Enum inputs to their underlying Django field values.
+                Args: 
+                    input_data: Input payload from GraphQL mutation
+                    model: Django model being mutated
+                Returns: 
+                    Dict: Input data with enum values normalized
+                Raises:
+                    None
+                Example:
+                    >>> normalized = CreateMutation._normalize_enum_inputs({'status': SomeEnum.ACTIVE}, Book)
+                    >>> isinstance(normalized['status'], str)
+                    True
+                """
+                normalized: Dict[str, Any] = input_data.copy()
+
+                # Build mapping of choice fields for the model
+                choice_fields = {
+                    f.name: f
+                    for f in model._meta.get_fields()
+                    if hasattr(f, "choices") and getattr(f, "choices", None)
+                }
+
+                def normalize_value(value: Any) -> Any:
+                    # Graphene enum may come through as an object with a 'value' attribute
+                    if hasattr(value, "value") and not isinstance(value, (str, bytes)):
+                        try:
+                            return getattr(value, "value")
+                        except Exception:
+                            return value
+                    # Recurse into lists/dicts for nested structures
+                    if isinstance(value, list):
+                        return [normalize_value(v) for v in value]
+                    if isinstance(value, dict):
+                        return {k: normalize_value(v) for k, v in value.items()}
+                    return value
+
+                for field_name in choice_fields.keys():
+                    if field_name in normalized:
+                        normalized[field_name] = normalize_value(normalized[field_name])
+
+                return normalized
 
             @classmethod
             def _process_dual_fields(
@@ -366,6 +416,9 @@ class MutationGenerator:
                     # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
 
+                    # Normalize enum inputs (GraphQL Enum -> underlying Django values)
+                    input = cls._normalize_enum_inputs(input, model)
+
                     # Process dual fields with automatic priority handling
                     input = cls._process_dual_fields(input, model)
 
@@ -477,6 +530,51 @@ class MutationGenerator:
                     return value
 
                 return {k: sanitize_value(v) for k, v in input_data.items()}
+
+            @classmethod
+            def _normalize_enum_inputs(
+                cls, input_data: Dict[str, Any], model: Type[models.Model]
+            ) -> Dict[str, Any]:
+                """
+                Purpose: Normalize GraphQL Enum inputs to their underlying Django field values for updates.
+                Args: 
+                    input_data: Input payload from GraphQL mutation
+                    model: Django model being mutated
+                Returns: 
+                    Dict: Input data with enum values normalized
+                Raises:
+                    None
+                Example:
+                    >>> normalized = UpdateMutation._normalize_enum_inputs({'status': SomeEnum.ACTIVE}, Book)
+                    >>> isinstance(normalized['status'], str)
+                    True
+                """
+                normalized: Dict[str, Any] = input_data.copy()
+
+                # Build mapping of choice fields for the model
+                choice_fields = {
+                    f.name: f
+                    for f in model._meta.get_fields()
+                    if hasattr(f, "choices") and getattr(f, "choices", None)
+                }
+
+                def normalize_value(value: Any) -> Any:
+                    if hasattr(value, "value") and not isinstance(value, (str, bytes)):
+                        try:
+                            return getattr(value, "value")
+                        except Exception:
+                            return value
+                    if isinstance(value, list):
+                        return [normalize_value(v) for v in value]
+                    if isinstance(value, dict):
+                        return {k: normalize_value(v) for k, v in value.items()}
+                    return value
+
+                for field_name in choice_fields.keys():
+                    if field_name in normalized:
+                        normalized[field_name] = normalize_value(normalized[field_name])
+
+                return normalized
 
             @classmethod
             def _process_dual_fields(
@@ -680,6 +778,8 @@ class MutationGenerator:
                 try:
                     instances = []
                     for input_data in inputs:
+                        # Normalize enum inputs (GraphQL Enum -> underlying Django values)
+                        input_data = cls._normalize_enum_inputs(input_data, model)
                         instance = model.objects.create(**input_data)
                         instances.append(instance)
 
@@ -709,6 +809,49 @@ class MutationGenerator:
                     ]
                     return cls(ok=False, objects=[], errors=error_objects)
 
+            @classmethod
+            def _normalize_enum_inputs(
+                cls, input_data: Dict[str, Any], model: Type[models.Model]
+            ) -> Dict[str, Any]:
+                """
+                Purpose: Normalize GraphQL Enum inputs to their underlying Django field values for bulk create.
+                Args:
+                    input_data: Single input payload from GraphQL bulk mutation list
+                    model: Django model being mutated
+                Returns:
+                    Dict: Input data with enum values normalized
+                Raises:
+                    None
+                Example:
+                    >>> normalized = BulkCreateMutation._normalize_enum_inputs({'status': SomeEnum.ACTIVE}, Book)
+                    >>> isinstance(normalized['status'], str)
+                    True
+                """
+                normalized: Dict[str, Any] = input_data.copy()
+
+                choice_fields = {
+                    f.name: f
+                    for f in model._meta.get_fields()
+                    if hasattr(f, "choices") and getattr(f, "choices", None)
+                }
+
+                def normalize_value(value: Any) -> Any:
+                    if hasattr(value, "value") and not isinstance(value, (str, bytes)):
+                        try:
+                            return getattr(value, "value")
+                        except Exception:
+                            return value
+                    if isinstance(value, list):
+                        return [normalize_value(v) for v in value]
+                    if isinstance(value, dict):
+                        return {k: normalize_value(v) for k, v in value.items()}
+                    return value
+
+                for field_name in choice_fields.keys():
+                    if field_name in normalized:
+                        normalized[field_name] = normalize_value(normalized[field_name])
+
+                return normalized
         return type(
             f"BulkCreate{model_name}",
             (BulkCreateMutation,),
@@ -749,7 +892,9 @@ class MutationGenerator:
                     instances = []
                     for input_data in inputs:
                         instance = model.objects.get(pk=input_data["id"])
-                        for field, value in input_data["data"].items():
+                        # Normalize enum inputs for update payload
+                        update_data = cls._normalize_enum_inputs(input_data["data"], model)
+                        for field, value in update_data.items():
                             setattr(instance, field, value)
                         instance.full_clean()
                         instance.save()
