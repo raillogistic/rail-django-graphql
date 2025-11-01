@@ -1211,7 +1211,7 @@ class ModelMetadataExtractor:
 
             # Use the instance's max_depth parameter
             max_depth = self.max_depth
-
+            
             # Create enhanced filter generator instance with configurable depth
             enhanced_generator = EnhancedFilterGenerator(
                 max_nested_depth=max_depth,
@@ -2730,6 +2730,7 @@ class ModelTableExtractor:
         # may define additional OneToOne links between siblings.
         try:
             from ..generators.inheritance import inheritance_handler
+
             inheritance_info = inheritance_handler.analyze_model_inheritance(model)
         except Exception:
             inheritance_info = {}
@@ -2753,7 +2754,8 @@ class ModelTableExtractor:
                 is_polymorphic_model = True
 
         if inheritance_info and (
-            inheritance_info.get("child_models") or inheritance_info.get("concrete_parents")
+            inheritance_info.get("child_models")
+            or inheritance_info.get("concrete_parents")
         ):
             is_polymorphic_model = True
 
@@ -2780,12 +2782,25 @@ class ModelTableExtractor:
 
         # Field metadata: include concrete fields
         table_fields: List[TableFieldMetadata] = []
-        for f in meta.get_fields():
+        
+        # For polymorphic models, we need to handle inheritance hierarchy properly
+        # to ensure fields from all parent classes are included in child metadata
+        if is_polymorphic_model and inheritance_info:
+            # Get all fields including inherited ones with proper model attribution
+            all_fields = meta.get_fields(include_parents=True)
+        else:
+            all_fields = meta.get_fields()
+            
+        for f in all_fields:
             # Skip auto-created reverse accessors
             if getattr(f, "auto_created", False) and getattr(f, "is_relation", False):
                 continue
             # Only include concrete or forward relation fields
-            if f.name == "polymorphic_ctype" or f.name == "id":
+            if (
+                f.name == "polymorphic_ctype"
+                or f.name == "id"
+                or f.name.endswith("_ptr")
+            ):
                 continue
 
             # In polymorphic/multi-table inheritance contexts, hide OneToOne relations
