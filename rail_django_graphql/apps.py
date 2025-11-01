@@ -10,21 +10,22 @@ This module configures:
 
 import logging
 
-from django.apps import AppConfig
+from django.apps import AppConfig as BaseAppConfig
 
 logger = logging.getLogger(__name__)
 
 
-class RailDjangoGraphQLConfig(AppConfig):
+class AppConfig(BaseAppConfig):
     """Django app configuration for rail-django-graphql library."""
 
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'rail_django_graphql'
-    verbose_name = 'Rail Django GraphQL'
-    label = 'rail_django_graphql'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "rail_django_graphql"
+    verbose_name = "Rail Django GraphQL"
+    label = "rail_django_graphql"
 
     def ready(self):
         """Initialize the application after Django has loaded."""
+        logger.info("AppConfig.ready() method called - starting initialization")
         try:
             # Setup performance monitoring if enabled
             self._setup_performance_monitoring()
@@ -53,8 +54,10 @@ class RailDjangoGraphQLConfig(AppConfig):
         """Setup performance monitoring if enabled."""
         try:
             from .conf import settings
-            if settings.MONITORING_SETTINGS.get('ENABLE_METRICS', False):
+
+            if settings.MONITORING_SETTINGS.get("ENABLE_METRICS", False):
                 from .middleware.performance import setup_performance_monitoring
+
                 setup_performance_monitoring()
                 logger.debug("Performance monitoring setup completed")
         except ImportError as e:
@@ -66,9 +69,11 @@ class RailDjangoGraphQLConfig(AppConfig):
         """Configure Django signals for automatic schema generation."""
         try:
             from .conf import settings
-            if settings.SCHEMA_REGISTRY.get('ENABLE_AUTO_DISCOVERY', True):
+
+            if settings.SCHEMA_REGISTRY.get("ENABLE_AUTO_DISCOVERY", True):
                 # Import signals to register them
                 from . import signals  # This will be created later
+
                 logger.debug("Django signals setup completed")
         except ImportError as e:
             logger.debug(f"Signals module not found, skipping: {e}")
@@ -78,8 +83,9 @@ class RailDjangoGraphQLConfig(AppConfig):
     def _validate_configuration(self):
         """Validate library configuration."""
         try:
-            from .conf import validate_configuration
-            validate_configuration()
+            from .core.config_loader import ConfigLoader
+
+            ConfigLoader.validate_configuration()
             logger.debug("Configuration validation completed")
         except Exception as e:
             logger.warning(f"Configuration validation failed: {e}")
@@ -90,8 +96,10 @@ class RailDjangoGraphQLConfig(AppConfig):
         """Initialize the schema registry."""
         try:
             from .conf import settings
-            if settings.SCHEMA_REGISTRY.get('ENABLE_AUTO_DISCOVERY', True):
+
+            if settings.SCHEMA_REGISTRY.get("ENABLE_AUTO_DISCOVERY", True):
                 from .core.registry import schema_registry
+
                 schema_registry.discover_schemas()
                 logger.debug("Schema registry initialization completed")
         except ImportError as e:
@@ -103,7 +111,8 @@ class RailDjangoGraphQLConfig(AppConfig):
         """Check if we're in debug mode."""
         try:
             from django.conf import settings as django_settings
-            return getattr(django_settings, 'DEBUG', False)
+
+            return getattr(django_settings, "DEBUG", False)
         except:
             return False
 
@@ -112,14 +121,15 @@ class RailDjangoGraphQLConfig(AppConfig):
         import os
 
         # Configuration des logs pour l'application
-        logging.getLogger('rail_django_graphql').setLevel(
-            logging.DEBUG if os.environ.get('DEBUG') else logging.INFO
+        logging.getLogger("rail_django_graphql").setLevel(
+            logging.DEBUG if os.environ.get("DEBUG") else logging.INFO
         )
 
     def _invalidate_cache_on_startup(self):
         """Invalidate metadata cache on application startup."""
         try:
             from .extensions.metadata import invalidate_cache_on_startup
+
             invalidate_cache_on_startup()
             logger.info("Metadata cache invalidated on startup")
         except ImportError:
@@ -129,4 +139,4 @@ class RailDjangoGraphQLConfig(AppConfig):
 
 
 # Backward compatibility alias
-DjangoGraphQLAutoConfig = RailDjangoGraphQLConfig
+DjangoGraphQLAutoConfig = AppConfig

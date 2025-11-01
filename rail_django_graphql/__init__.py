@@ -16,8 +16,15 @@ __description__ = (
 __url__ = "https://github.com/raillogistic/rail-django-graphql"
 __license__ = "MIT"
 
-# Django app configuration
-default_app_config = "rail_django_graphql.apps.RailDjangoGraphQLConfig"
+# Django app configuration - handle deprecation of default_app_config
+try:
+    import django
+    if django.VERSION < (3, 2):
+        # For Django < 3.2, explicitly set default_app_config
+        default_app_config = "rail_django_graphql.apps.AppConfig"
+except ImportError:
+    # Django not available, skip configuration
+    pass
 
 # Import check for Django
 try:

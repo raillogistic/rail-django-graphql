@@ -622,26 +622,44 @@ class AdvancedFilterGenerator:
                 custom_filters = graphql_meta.get_custom_filters()
                 filters.update(custom_filters)
 
-            # Add quick filter if configured
-            if graphql_meta and (
-                graphql_meta.filters.get("quick")
-                or graphql_meta.filter_fields.get("quick")
-                or getattr(graphql_meta, "quick_filter_fields", None)
-            ):
-                # Use quick_filter_fields if available, otherwise fall back to filters['quick']
-                # If filter_fields['quick'] exists but quick_filter_fields doesn't, use default searchable fields
-                quick_fields = getattr(graphql_meta, "quick_filter_fields", None)
+            # Always add a 'quick' filter.
+            # Purpose: Ensure the 'quick' keyword is integrated for all models,
+            # even when GraphQLMeta does not explicitly configure quick filters.
+            # Strategy:
+            # - Prefer GraphQLMeta.quick_filter_fields if present
+            # - Else prefer GraphQLMeta.filters['quick']
+            # - Else fall back to default searchable text fields
+            # - If no fields can be determined, still register a no-op quick filter
+            #   so the argument is exposed consistently in query generation
+            try:
+                quick_fields = []
+                if graphql_meta is not None:
+                    # Use explicit quick filter fields when provided
+                    quick_fields = (
+                        getattr(graphql_meta, "quick_filter_fields", None) or []
+                    )
+                    if not quick_fields:
+                        # Legacy/alternative configuration using filters dict
+                        quick_fields = graphql_meta.filters.get("quick", [])
+                    if not quick_fields and graphql_meta.filter_fields.get("quick"):
+                        # If 'quick' is enabled but no fields specified,
+                        # fall back to default searchable fields
+                        quick_fields = self._get_default_quick_filter_fields(model)
+
+                # If still empty (no GraphQLMeta or no suitable fields),
+                # try default searchable fields
                 if not quick_fields:
-                    quick_fields = graphql_meta.filters.get("quick", [])
-                if not quick_fields and graphql_meta.filter_fields.get("quick"):
-                    # If filter_fields['quick'] exists but no specific fields defined,
-                    # use default searchable fields from the model
                     quick_fields = self._get_default_quick_filter_fields(model)
 
-                if quick_fields:
-                    quick_filter = self._generate_quick_filter(model, quick_fields)
-                    if quick_filter:
-                        filters["quick"] = quick_filter
+                # Generate and register the quick filter (no-op when fields list is empty)
+                quick_filter = self._generate_quick_filter(model, quick_fields)
+                if quick_filter:
+                    filters["quick"] = quick_filter
+            except Exception as e:
+                # In case of any error during quick filter setup, log and continue
+                logger.warning(
+                    f"Failed to configure quick filter for {model.__name__}: {e}"
+                )
 
             # Generate reverse relationship count filters
             reverse_count_filters = self._generate_reverse_relationship_count_filters(
