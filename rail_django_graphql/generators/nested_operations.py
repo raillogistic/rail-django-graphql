@@ -360,13 +360,25 @@ class NestedOperationHandler:
             # Preserve field-specific errors so mutation can map them to fields
             raise e
         except IntegrityError as e:
-            # Attempt to parse unique constraint violations and map to fields
+            # Attempt to parse constraint violations and map to fields
+            error_msg = str(e)
+            
+            # Handle not-null constraint violations
+            match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+            if match:
+                column_name = match.group(1)
+                field_name = self._map_column_to_field(model, column_name) or column_name
+                raise ValidationError({field_name: f"{field_name} cannot be null."})
+            
+            # Handle unique constraint violations
             fields = self._extract_unique_constraint_fields(model, e)
             if fields:
                 message = f"Failed to create {model.__name__}: {str(e)}"
                 raise ValidationError({field: message for field in fields})
+            
             # Fallback to generic message if fields cannot be determined
             raise ValidationError(f"Failed to create {model.__name__}: {str(e)}")
+
         except Exception as e:
             # Wrap non-validation exceptions with context
             raise ValidationError(f"Failed to create {model.__name__}: {str(e)}")
@@ -821,11 +833,22 @@ class NestedOperationHandler:
             # Preserve field-specific errors so mutation can map them to fields
             raise e
         except IntegrityError as e:
-            # Attempt to parse unique constraint violations and map to fields
+            # Attempt to parse constraint violations and map to fields
+            error_msg = str(e)
+            
+            # Handle not-null constraint violations
+            match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+            if match:
+                column_name = match.group(1)
+                field_name = self._map_column_to_field(model, column_name) or column_name
+                raise ValidationError({field_name: f"{field_name} cannot be null."})
+            
+            # Handle unique constraint violations
             fields = self._extract_unique_constraint_fields(model, e)
             if fields:
                 message = f"Failed to update {model.__name__}: {str(e)}"
                 raise ValidationError({field: message for field in fields})
+            
             # Fallback to generic message if fields cannot be determined
             raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
         except Exception as e:

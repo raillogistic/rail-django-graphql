@@ -286,8 +286,7 @@ class TypeGenerator:
             List of field names that are mandatory for this model
         """
         # Define mandatory fields per model
-        if model.__name__ == "BlogPost":
-            return ["category"]
+        
 
         return []
 
@@ -805,7 +804,7 @@ class TypeGenerator:
                     input_fields[field_name] = graphene.ID()
                 elif is_required:
                     # Regular required fields remain NonNull
-                    input_fields[field_name] = graphene.InputField(graphene.ID)
+                    input_fields[field_name] = graphene.InputField(graphene.NonNull(graphene.ID))
                 else:
                     # Optional fields remain optional
                     input_fields[field_name] = graphene.ID()

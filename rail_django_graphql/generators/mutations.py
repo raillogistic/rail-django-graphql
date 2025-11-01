@@ -14,11 +14,12 @@ from ..core.performance import get_query_optimizer
 from ..core.error_handling import get_error_handler
 from ..conf import get_mutation_generator_settings
 import inspect
+import re
 from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 import graphene
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import IntegrityError, models, transaction
 from graphene_django import DjangoObjectType
 
 
@@ -174,6 +175,17 @@ class MutationGenerator:
                                 MutationError(field=None, message=str(e))
                             )
                     return cls(ok=False, object=None, errors=error_objects)
+                except IntegrityError as e:
+                    transaction.set_rollback(True)
+                    error_msg = str(e)
+                    # Parse not-null constraint violation
+                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    if match:
+                        field_name = match.group(1)
+                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                    else:
+                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                    return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -214,10 +226,10 @@ class MutationGenerator:
             ) -> Dict[str, Any]:
                 """
                 Purpose: Normalize GraphQL Enum inputs to their underlying Django field values.
-                Args: 
+                Args:
                     input_data: Input payload from GraphQL mutation
                     model: Django model being mutated
-                Returns: 
+                Returns:
                     Dict: Input data with enum values normalized
                 Raises:
                     None
@@ -299,9 +311,11 @@ class MutationGenerator:
                             nested_field_name in processed_data
                             and field_name in processed_data
                         ):
-                            raise ValidationError({
-                                field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
-                            })
+                            raise ValidationError(
+                                {
+                                    field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
+                                }
+                            )
 
                         # Check if mandatory field is missing
                         if field_name in mandatory_fields:
@@ -309,9 +323,11 @@ class MutationGenerator:
                                 nested_field_name not in processed_data
                                 and field_name not in processed_data
                             ):
-                                raise ValidationError({
-                                    field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
-                                })
+                                raise ValidationError(
+                                    {
+                                        field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
+                                    }
+                                )
 
                         # Transform nested field to direct field for processing
                         if nested_field_name in processed_data:
@@ -356,7 +372,7 @@ class MutationGenerator:
                 # Define mandatory fields per model
                 # This can be extended to read from model metadata or configuration
                 mandatory_fields_map = {
-                    'BlogPost': ['category'],
+                    "BlogPost": ["category"],
                     # Add other models and their mandatory fields here
                 }
 
@@ -497,6 +513,17 @@ class MutationGenerator:
                                 MutationError(field=None, message=str(e))
                             )
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
+                except IntegrityError as e:
+                    transaction.set_rollback(True)
+                    error_msg = str(e)
+                    # Parse not-null constraint violation
+                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    if match:
+                        field_name = match.group(1)
+                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                    else:
+                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                    return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -537,10 +564,10 @@ class MutationGenerator:
             ) -> Dict[str, Any]:
                 """
                 Purpose: Normalize GraphQL Enum inputs to their underlying Django field values for updates.
-                Args: 
+                Args:
                     input_data: Input payload from GraphQL mutation
                     model: Django model being mutated
-                Returns: 
+                Returns:
                     Dict: Input data with enum values normalized
                 Raises:
                     None
@@ -615,21 +642,34 @@ class MutationGenerator:
                     nested_field_name = f"nested_{field_name}"
 
                     if rel_info.relationship_type in ["ForeignKey", "OneToOneField"]:
-                        has_direct = field_name in processed_data and processed_data[field_name] is not None
-                        has_nested = nested_field_name in processed_data and processed_data[
-                            nested_field_name] is not None
+                        has_direct = (
+                            field_name in processed_data
+                            and processed_data[field_name] is not None
+                        )
+                        has_nested = (
+                            nested_field_name in processed_data
+                            and processed_data[nested_field_name] is not None
+                        )
 
                         # Validate mutual exclusivity
                         if has_direct and has_nested:
-                            raise ValidationError({
-                                field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
-                            })
+                            raise ValidationError(
+                                {
+                                    field_name: f"Cannot provide both '{field_name}' and '{nested_field_name}'. Please provide only one."
+                                }
+                            )
 
                         # Validate mandatory fields
-                        if field_name in mandatory_fields and not has_direct and not has_nested:
-                            raise ValidationError({
-                                field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
-                            })
+                        if (
+                            field_name in mandatory_fields
+                            and not has_direct
+                            and not has_nested
+                        ):
+                            raise ValidationError(
+                                {
+                                    field_name: f"Field '{field_name}' is mandatory. Please provide either '{field_name}' or '{nested_field_name}'."
+                                }
+                            )
 
                         # OneToManyRel: Prioritize nested field over direct ID field
                         if has_nested:
@@ -674,8 +714,8 @@ class MutationGenerator:
                 """
                 # For now, hardcode BlogPost category as mandatory
                 # This should be made configurable in the future
-                if model.__name__ == 'BlogPost':
-                    return ['category']
+                if model.__name__ == "BlogPost":
+                    return ["category"]
                 return []
 
             @classmethod
@@ -799,6 +839,17 @@ class MutationGenerator:
                         # General validation error
                         error_objects.append(MutationError(field=None, message=str(e)))
                     return cls(ok=False, objects=[], errors=error_objects)
+                except IntegrityError as e:
+                    transaction.set_rollback(True)
+                    error_msg = str(e)
+                    # Parse not-null constraint violation
+                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    if match:
+                        field_name = match.group(1)
+                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                    else:
+                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
                     error_objects = [
@@ -852,6 +903,7 @@ class MutationGenerator:
                         normalized[field_name] = normalize_value(normalized[field_name])
 
                 return normalized
+
         return type(
             f"BulkCreate{model_name}",
             (BulkCreateMutation,),
@@ -893,7 +945,9 @@ class MutationGenerator:
                     for input_data in inputs:
                         instance = model.objects.get(pk=input_data["id"])
                         # Normalize enum inputs for update payload
-                        update_data = cls._normalize_enum_inputs(input_data["data"], model)
+                        update_data = cls._normalize_enum_inputs(
+                            input_data["data"], model
+                        )
                         for field, value in update_data.items():
                             setattr(instance, field, value)
                         instance.full_clean()
@@ -910,6 +964,17 @@ class MutationGenerator:
                     )
                 except ValidationError as e:
                     return cls(ok=False, objects=[], errors=[str(e)])
+                except IntegrityError as e:
+                    transaction.set_rollback(True)
+                    error_msg = str(e)
+                    # Parse not-null constraint violation
+                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    if match:
+                        field_name = match.group(1)
+                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                    else:
+                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                    return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
                     return cls(
