@@ -43,17 +43,29 @@ class PerformanceSettings:
         from ..defaults import LIBRARY_DEFAULTS
 
         defaults = LIBRARY_DEFAULTS.get("performance_settings", {})
-
+        
         # Override with Django settings if available
-        django_perf_settings = getattr(django_settings, 'RAIL_DJANGO_GRAPHQL', {
-        }).get('performance_settings', {})
+        django_perf_settings = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}).get(
+            "performance_settings", {}
+        )
 
-        # Merge settings
+        # Merge settings (Django settings override defaults)
         merged_settings = {**defaults, **django_perf_settings}
 
         # Filter to only include valid fields
         valid_fields = set(cls.__dataclass_fields__.keys())
         filtered_settings = {k: v for k, v in merged_settings.items() if k in valid_fields}
+
+        # Auto-disable query caching in DEBUG mode to avoid stale results during development
+        try:
+            if getattr(django_settings, "DEBUG", False):
+                filtered_settings["enable_query_caching"] = False
+                logger.debug(
+                    "PerformanceSettings: DEBUG=True detected, disabling query caching for development."
+                )
+        except Exception:
+            # If settings are unavailable, proceed without modification
+            pass
 
         return cls(**filtered_settings)
 

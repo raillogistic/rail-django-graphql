@@ -139,7 +139,7 @@ class EnhancedFilterGenerator:
 
         # Process each field in the model
         for field in model._meta.get_fields():
-            if not hasattr(field, "name") or field.name.endswith("_ptr"):
+            if not hasattr(field, "name"):
                 continue
 
             field_operations = self._generate_field_operations(field)

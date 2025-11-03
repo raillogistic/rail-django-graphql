@@ -43,12 +43,30 @@ class MiddlewareSettings:
     def from_schema(cls, schema_name: Optional[str] = None) -> "MiddlewareSettings":
         """Create MiddlewareSettings from schema configuration."""
         from ..defaults import LIBRARY_DEFAULTS
+        from django.conf import settings as django_settings
 
         defaults = LIBRARY_DEFAULTS.get("middleware_settings", {})
 
+        # Allow Django settings to override defaults
+        django_mw_settings = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}).get(
+            "middleware_settings", {}
+        )
+
+        merged_settings = {**defaults, **django_mw_settings}
+
         # Filter to only include valid fields
         valid_fields = set(cls.__dataclass_fields__.keys())
-        filtered_settings = {k: v for k, v in defaults.items() if k in valid_fields}
+        filtered_settings = {k: v for k, v in merged_settings.items() if k in valid_fields}
+
+        # Auto-disable caching middleware in DEBUG mode to avoid serving stale query results
+        try:
+            if getattr(django_settings, "DEBUG", False):
+                filtered_settings["enable_caching_middleware"] = False
+                logger.debug(
+                    "MiddlewareSettings: DEBUG=True detected, disabling caching middleware for development."
+                )
+        except Exception:
+            pass
 
         return cls(**filtered_settings)
 

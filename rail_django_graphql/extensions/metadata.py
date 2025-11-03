@@ -32,14 +32,34 @@ from .caching import CacheConfig, get_cache_manager
 logger = logging.getLogger(__name__)
 
 # Cache configuration for metadata
+# Disable cache automatically when DEBUG is True.
+# In non-debug mode, allow enabling via Django settings:
+# RAIL_DJANGO_GRAPHQL = { 'METADATA': { 'enable_cache': True } }
+_metadata_cache_enabled = False
+try:
+    from django.conf import settings as django_settings  # type: ignore
+
+    debug_mode = bool(getattr(django_settings, "DEBUG", False))
+    if debug_mode:
+        _metadata_cache_enabled = False
+    else:
+        rdg_config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
+        metadata_config = rdg_config.get("METADATA", {})
+        _metadata_cache_enabled = bool(metadata_config.get("enable_cache", False))
+except Exception:
+    # If settings are not available, keep cache disabled
+    _metadata_cache_enabled = False
+
 METADATA_CACHE_CONFIG = CacheConfig(
-    enabled=True,
+    enabled=_metadata_cache_enabled,
+    # Use sane, explicit TTLs. A timeout of 0 in Django caches can mean "cache forever"
+    # on some backends (e.g., Memcached). We avoid that to prevent stale metadata.
     default_timeout=1800,  # 30 minutes for metadata
-    schema_cache_timeout=3600 * 24,  # 1 hour for schema metadata
-    query_cache_timeout=900,  # 15 minutes for query metadata
-    field_cache_timeout=1200,  # 20 minutes for field metadata
+    schema_cache_timeout=24 * 60 * 60,  # 24 hours for schema metadata
+    query_cache_timeout=15 * 60,  # 15 minutes for query metadata
+    field_cache_timeout=20 * 60,  # 20 minutes for field metadata
     cache_hit_logging=True,
-    cache_stats_enabled=True,
+    cache_stats_enabled=False,
 )
 
 
@@ -101,13 +121,25 @@ def cache_metadata(
             result = func(self, *args, **kwargs)
 
             if result is not None:
-                cache_timeout = timeout or METADATA_CACHE_CONFIG.default_timeout
-                cache.set(cache_key, result, cache_timeout)
+                # Compute effective timeout. If timeout resolves to <= 0, skip caching to
+                # prevent accidental "cache forever" behavior across different backends.
+                cache_timeout = (
+                    timeout
+                    if timeout is not None
+                    else METADATA_CACHE_CONFIG.default_timeout
+                )
 
-                if METADATA_CACHE_CONFIG.cache_hit_logging:
-                    logger.debug(
-                        f"Cached metadata result: {func.__name__} (timeout: {cache_timeout}s)"
-                    )
+                if isinstance(cache_timeout, int) and cache_timeout > 0:
+                    cache.set(cache_key, result, cache_timeout)
+                    if METADATA_CACHE_CONFIG.cache_hit_logging:
+                        logger.debug(
+                            f"Cached metadata result: {func.__name__} (timeout: {cache_timeout}s)"
+                        )
+                else:
+                    if METADATA_CACHE_CONFIG.cache_hit_logging:
+                        logger.debug(
+                            f"Skipping cache set for metadata: {func.__name__} (timeout disabled)"
+                        )
 
             return result
 
@@ -163,6 +195,48 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
         logger.warning(f"Failed to invalidate cache pattern {pattern}: {e}")
         # Fallback: clear all cache
         cache.clear()
+
+
+def invalidate_cache_on_startup() -> None:
+    """
+
+    Purpose: Invalidate metadata cache when the Django application starts, controlled by settings.
+    Args: None
+    Returns: None
+    Raises: None
+    Example:
+        >>> invalidate_cache_on_startup()
+    """
+    try:
+        from django.conf import settings as django_settings
+    except Exception:
+        # Settings may not be available in certain script contexts
+        logger.debug("Django settings unavailable; skipping startup cache invalidation")
+        return
+
+    # Configuration flags
+    config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
+    metadata_config = config.get("METADATA", {})
+
+    clear_on_start = bool(metadata_config.get("clear_cache_on_start", False))
+    debug_only = bool(metadata_config.get("clear_cache_on_start_debug_only", False))
+    debug_mode = bool(getattr(django_settings, "DEBUG", False))
+
+    # Determine whether to clear cache
+    should_clear = clear_on_start and (not debug_only or debug_mode)
+
+    if not should_clear:
+        logger.info(
+            "Startup cache invalidation disabled by configuration (RAIL_DJANGO_GRAPHQL.METADATA)"
+        )
+        return
+
+    try:
+        # Invalidate all metadata cache entries
+        invalidate_metadata_cache()
+        logger.info("Metadata cache invalidated on application startup")
+    except Exception as exc:
+        logger.warning(f"Failed to invalidate metadata cache on startup: {exc}")
 
 
 # Use lazy import to avoid AppRegistryNotReady error
@@ -868,7 +942,9 @@ class ModelMetadataExtractor:
         # self.settings = get_schema_settings(schema_name)
 
     @cache_metadata(
-        timeout=1200, user_specific=True
+        timeout=0,
+        user_specific=True,
+        # timeout=1200, user_specific=True
     )  # 20 minutes cache for field metadata
     def _extract_field_metadata(self, field, user) -> Optional[FieldMetadata]:
         """
@@ -1211,7 +1287,7 @@ class ModelMetadataExtractor:
 
             # Use the instance's max_depth parameter
             max_depth = self.max_depth
-            
+
             # Create enhanced filter generator instance with configurable depth
             enhanced_generator = EnhancedFilterGenerator(
                 max_nested_depth=max_depth,
@@ -1236,7 +1312,9 @@ class ModelMetadataExtractor:
                 try:
                     field = model._meta.get_field(field_name)
                     verbose_name = str(field.verbose_name)
-                except:
+                except Exception:
+                    # Ensure 'field' is defined to avoid UnboundLocalError later
+                    field = None
                     verbose_name = field_name
 
                 options = []
@@ -1248,8 +1326,9 @@ class ModelMetadataExtractor:
                     )
 
                     # Translate help text to French using verbose_name
+                    # Be defensive: some operations may not have description
                     help_text = self._translate_help_text_to_french(
-                        operation.description, verbose_name
+                        operation.description or operation.lookup_expr, verbose_name
                     )
 
                     options.append(
@@ -1260,12 +1339,17 @@ class ModelMetadataExtractor:
                             "filter_type": operation.filter_type,
                         }
                     )
+                # Safely resolve related model name even when 'field' lookup fails
+                related_model_name = (
+                    field.related_model.__name__
+                    if (field is not None and getattr(field, "related_model", None))
+                    else None
+                )
+
                 grouped_filter_dict[field_name] = {
                     "field_name": field_name,
                     "is_nested": False,
-                    "related_model": field.related_model.__name__
-                    if field.related_model
-                    else None,
+                    "related_model": related_model_name,
                     "is_custom": False,
                     "options": options,
                 }
@@ -1465,6 +1549,133 @@ class ModelMetadataExtractor:
                         }
 
             # Convert to list format and sort for consistency
+            # Fallback: if no filters were constructed, build a minimal set
+            if not grouped_filter_dict:
+                try:
+                    for f in model._meta.get_fields():
+                        if not hasattr(f, "name") or getattr(f, "auto_created", False):
+                            continue
+
+                        fname = f.name
+                        verbose = str(getattr(f, "verbose_name", fname))
+                        options = []
+
+                        # Minimal operation set per common field types
+                        if isinstance(f, (models.CharField, models.TextField)):
+                            for lookup in ("exact", "icontains"):
+                                help_text = self._translate_help_text_to_french(
+                                    lookup, verbose
+                                )
+                                options.append(
+                                    {
+                                        "name": fname
+                                        if lookup == "exact"
+                                        else f"{fname}__{lookup}",
+                                        "lookup_expr": lookup,
+                                        "help_text": help_text,
+                                        "filter_type": "CharFilter",
+                                    }
+                                )
+                        elif isinstance(
+                            f,
+                            (
+                                models.IntegerField,
+                                models.FloatField,
+                                models.DecimalField,
+                            ),
+                        ):
+                            for lookup in ("exact", "gt", "gte", "lt", "lte"):
+                                help_text = self._translate_help_text_to_french(
+                                    lookup, verbose
+                                )
+                                options.append(
+                                    {
+                                        "name": fname
+                                        if lookup == "exact"
+                                        else f"{fname}__{lookup}",
+                                        "lookup_expr": lookup,
+                                        "help_text": help_text,
+                                        "filter_type": "NumberFilter",
+                                    }
+                                )
+                        elif isinstance(f, (models.DateField, models.DateTimeField)):
+                            for lookup in (
+                                "exact",
+                                "range",
+                                "today",
+                                "this_month",
+                                "this_year",
+                            ):
+                                help_text = self._translate_help_text_to_french(
+                                    lookup, verbose
+                                )
+                                options.append(
+                                    {
+                                        "name": fname
+                                        if lookup == "exact"
+                                        else f"{fname}__{lookup}",
+                                        "lookup_expr": lookup,
+                                        "help_text": help_text,
+                                        "filter_type": "DateFilter",
+                                    }
+                                )
+                        elif isinstance(f, models.BooleanField):
+                            for lookup in ("exact", "isnull"):
+                                help_text = self._translate_help_text_to_french(
+                                    lookup, verbose
+                                )
+                                options.append(
+                                    {
+                                        "name": fname
+                                        if lookup == "exact"
+                                        else f"{fname}__{lookup}",
+                                        "lookup_expr": lookup,
+                                        "help_text": help_text,
+                                        "filter_type": "BooleanFilter",
+                                    }
+                                )
+                        elif isinstance(f, models.ForeignKey):
+                            # Basic FK filter: exact by id
+                            help_text = self._translate_help_text_to_french(
+                                "exact", verbose
+                            )
+                            options.append(
+                                {
+                                    "name": fname,
+                                    "lookup_expr": "exact",
+                                    "help_text": help_text,
+                                    "filter_type": "NumberFilter",
+                                }
+                            )
+                        elif isinstance(f, models.ManyToManyField):
+                            # Basic M2M filter: in
+                            help_text = self._translate_help_text_to_french(
+                                "in", verbose
+                            )
+                            options.append(
+                                {
+                                    "name": f"{fname}__in",
+                                    "lookup_expr": "in",
+                                    "help_text": help_text,
+                                    "filter_type": "ModelMultipleChoiceFilter",
+                                }
+                            )
+
+                        if options:
+                            grouped_filter_dict[fname] = {
+                                "field_name": fname,
+                                "is_nested": False,
+                                "related_model": getattr(
+                                    getattr(f, "related_model", None), "__name__", None
+                                ),
+                                "is_custom": False,
+                                "options": options,
+                            }
+                except Exception as e:
+                    logger.warning(
+                        f"Fallback filter construction failed for {model.__name__}: {e}"
+                    )
+
             result = list(grouped_filter_dict.values())
 
             # Sort filters: regular fields first, then nested, then custom
@@ -2707,7 +2918,7 @@ class ModelTableExtractor:
             normalized.append(path.replace(".", "__"))
         return normalized
 
-    @cache_metadata(timeout=1800, user_specific=False)
+    @cache_metadata(timeout=1, user_specific=False)
     def extract_model_table_metadata(
         self,
         app_name: str,
@@ -2782,7 +2993,7 @@ class ModelTableExtractor:
 
         # Field metadata: include concrete fields
         table_fields: List[TableFieldMetadata] = []
-        
+
         # For polymorphic models, we need to handle inheritance hierarchy properly
         # to ensure fields from all parent classes are included in child metadata
         if is_polymorphic_model and inheritance_info:
@@ -2790,12 +3001,13 @@ class ModelTableExtractor:
             all_fields = meta.get_fields(include_parents=True)
         else:
             all_fields = meta.get_fields()
-            
+
         for f in all_fields:
             # Skip auto-created reverse accessors
             if getattr(f, "auto_created", False) and getattr(f, "is_relation", False):
                 continue
             # Only include concrete or forward relation fields
+
             if (
                 f.name == "polymorphic_ctype"
                 or f.name == "id"
@@ -2865,6 +3077,7 @@ class ModelTableExtractor:
         filters: List[Dict[str, Any]] = []
         try:
             metadata_extractor = ModelMetadataExtractor(max_depth=self.max_depth)
+
             filters = metadata_extractor._extract_filter_metadata(model) or []
         except Exception as e:
             logger.warning(f"Error extracting base filters for {model_label}: {e}")

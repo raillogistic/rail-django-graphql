@@ -161,18 +161,58 @@ class MultiSchemaGraphQLView(GraphQLView):
         Returns:
             GraphQL schema instance
         """
-        # Check cache first
-        if schema_name in self._schema_cache:
-            return self._schema_cache[schema_name]
+        # In DEBUG mode, bypass view-level schema cache to avoid stale schemas
+        if getattr(settings, "DEBUG", False):
+            try:
+                from ..core.registry import schema_registry
+
+                builder = schema_registry.get_schema_builder(schema_name)
+                # Always get current schema (SchemaBuilder handles rebuilds on changes)
+                schema_instance = builder.get_schema()
+                logger.debug(
+                    f"DEBUG mode: bypassing schema cache for '{schema_name}' (version {builder.get_schema_version()})"
+                )
+                return schema_instance
+            except Exception as e:
+                logger.error(
+                    f"Error getting schema instance for '{schema_name}' in DEBUG mode: {e}"
+                )
+                raise
 
         try:
             from ..core.registry import schema_registry
 
             builder = schema_registry.get_schema_builder(schema_name)
-            schema_instance = builder.get_schema()
+            current_version = getattr(builder, "get_schema_version", lambda: 0)()
 
-            # Cache the schema
-            self._schema_cache[schema_name] = schema_instance
+            # If cached and version matches, return cached instance
+            cached_entry = self._schema_cache.get(schema_name)
+            if isinstance(cached_entry, dict):
+                cached_version = cached_entry.get("version", -1)
+                if cached_version == current_version:
+                    return cached_entry.get("schema")
+            elif cached_entry is not None:
+                # Backward compatibility: cached plain instance without version
+                # Refresh cache to include version metadata
+                schema_instance = builder.get_schema()
+                self._schema_cache[schema_name] = {
+                    "version": current_version,
+                    "schema": schema_instance,
+                }
+                logger.debug(
+                    f"Initialized versioned schema cache for '{schema_name}' (version {current_version})"
+                )
+                return schema_instance
+
+            # Not cached or version mismatch: fetch and cache fresh instance
+            schema_instance = builder.get_schema()
+            self._schema_cache[schema_name] = {
+                "version": current_version,
+                "schema": schema_instance,
+            }
+            logger.debug(
+                f"Schema cache refreshed for '{schema_name}' (version {current_version})"
+            )
             return schema_instance
 
         except Exception as e:

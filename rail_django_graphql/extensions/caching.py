@@ -35,7 +35,7 @@ class CacheConfig:
     # Cache général
     enabled: bool = True
     default_timeout: int = 300  # 5 minutes
-    cache_backend: str = 'default'
+    cache_backend: str = "default"
 
     # Cache de schéma
     schema_cache_enabled: bool = True
@@ -92,7 +92,7 @@ class CacheKeyGenerator:
         query_string: str,
         variables: Optional[Dict[str, Any]] = None,
         user_id: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Génère une clé de cache pour une requête GraphQL.
@@ -107,7 +107,7 @@ class CacheKeyGenerator:
             str: Clé de cache unique
         """
         # Normaliser la requête (supprimer les espaces, etc.)
-        normalized_query = ' '.join(query_string.split())
+        normalized_query = " ".join(query_string.split())
 
         # Créer un hash des variables
         variables_hash = ""
@@ -134,7 +134,7 @@ class CacheKeyGenerator:
         model_name: str,
         field_name: str,
         instance_id: Any,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
     ) -> str:
         """
         Génère une clé de cache pour un champ spécifique.
@@ -173,7 +173,9 @@ class CacheInvalidator:
         self.config = config
         self.cache_backend = caches[config.cache_backend]
 
-    def invalidate_model_cache(self, model: models.Model, instance_id: Optional[Any] = None):
+    def invalidate_model_cache(
+        self, model: models.Model, instance_id: Optional[Any] = None
+    ):
         """
         Invalide le cache pour un modèle spécifique.
 
@@ -226,13 +228,14 @@ class CacheInvalidator:
         # Pour Redis, on peut utiliser SCAN + DEL
         # Pour Memcached, il faut maintenir un index des clés
 
-        if hasattr(self.cache_backend, 'delete_pattern'):
+        if hasattr(self.cache_backend, "delete_pattern"):
             # Backend personnalisé avec support des patterns
             self.cache_backend.delete_pattern(pattern)
         else:
             # Fallback: invalider tout le cache (non optimal)
             logger.warning(
-                f"Pattern invalidation not supported, clearing all cache for pattern: {pattern}")
+                f"Pattern invalidation not supported, clearing all cache for pattern: {pattern}"
+            )
             # On pourrait maintenir un index des clés pour une invalidation plus précise
 
 
@@ -240,7 +243,23 @@ class GraphQLCacheManager:
     """Gestionnaire principal du cache GraphQL."""
 
     def __init__(self, config: Optional[CacheConfig] = None):
-        self.config = config or CacheConfig()
+        # Respect DEBUG mode by disabling caches unless explicitly configured
+        default_config = config or CacheConfig()
+        try:
+            debug_enabled = getattr(settings, "DEBUG", False)
+            if debug_enabled:
+                default_config.enabled = False
+                default_config.schema_cache_enabled = False
+                default_config.query_cache_enabled = False
+                default_config.field_cache_enabled = False
+                logger.debug(
+                    "DEBUG mode detected: GraphQL caching disabled (schema, query, field)."
+                )
+        except Exception:
+            # If settings access fails, keep provided defaults
+            pass
+
+        self.config = default_config
         self.cache_backend = caches[self.config.cache_backend]
         self.key_generator = CacheKeyGenerator()
         self.invalidator = CacheInvalidator(self.config)
@@ -255,7 +274,7 @@ class GraphQLCacheManager:
         query_string: str,
         variables: Optional[Dict[str, Any]] = None,
         user_id: Optional[int] = None,
-        context: Optional[Dict[str, Any]] = None
+        context: Optional[Dict[str, Any]] = None,
     ) -> Optional[Any]:
         """
         Récupère le résultat d'une requête depuis le cache.
@@ -269,7 +288,7 @@ class GraphQLCacheManager:
         Returns:
             Résultat de la requête ou None si pas en cache
         """
-        if not self.config.query_cache_enabled:
+        if not self.config.enabled or not self.config.query_cache_enabled:
             return None
 
         cache_key = self.key_generator.generate_query_key(
@@ -294,7 +313,7 @@ class GraphQLCacheManager:
         variables: Optional[Dict[str, Any]] = None,
         user_id: Optional[int] = None,
         context: Optional[Dict[str, Any]] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ):
         """
         Met en cache le résultat d'une requête.
@@ -307,7 +326,7 @@ class GraphQLCacheManager:
             context: Contexte supplémentaire
             timeout: Durée de vie du cache (optionnel)
         """
-        if not self.config.query_cache_enabled:
+        if not self.config.enabled or not self.config.query_cache_enabled:
             return
 
         cache_key = self.key_generator.generate_query_key(
@@ -327,7 +346,7 @@ class GraphQLCacheManager:
         model_name: str,
         field_name: str,
         instance_id: Any,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
     ) -> Optional[Any]:
         """
         Récupère la valeur d'un champ depuis le cache.
@@ -341,7 +360,7 @@ class GraphQLCacheManager:
         Returns:
             Valeur du champ ou None si pas en cache
         """
-        if not self.config.field_cache_enabled:
+        if not self.config.enabled or not self.config.field_cache_enabled:
             return None
 
         cache_key = self.key_generator.generate_field_key(
@@ -364,7 +383,7 @@ class GraphQLCacheManager:
         instance_id: Any,
         value: Any,
         user_id: Optional[int] = None,
-        timeout: Optional[int] = None
+        timeout: Optional[int] = None,
     ):
         """
         Met en cache la valeur d'un champ.
@@ -407,7 +426,7 @@ class GraphQLCacheManager:
     def clear_all(self):
         """Vide tout le cache GraphQL."""
         # Supprimer toutes les clés commençant par 'gql_'
-        self.invalidator._invalidate_by_pattern('gql_*')
+        self.invalidator._invalidate_by_pattern("gql_*")
         self.stats.deletes += 1
 
     def _connect_signals(self):
@@ -415,12 +434,12 @@ class GraphQLCacheManager:
 
         @receiver(post_save)
         def invalidate_on_save(sender, instance, **kwargs):
-            if hasattr(instance, '_meta'):
+            if hasattr(instance, "_meta"):
                 self.invalidate_model(sender, instance.pk)
 
         @receiver(post_delete)
         def invalidate_on_delete(sender, instance, **kwargs):
-            if hasattr(instance, '_meta'):
+            if hasattr(instance, "_meta"):
                 self.invalidate_model(sender, instance.pk)
 
 
@@ -445,7 +464,7 @@ def configure_cache(config: CacheConfig):
 def cache_query(
     timeout: Optional[int] = None,
     user_specific: bool = False,
-    context_keys: Optional[List[str]] = None
+    context_keys: Optional[List[str]] = None,
 ):
     """
     Décorateur pour mettre en cache les résultats de requêtes GraphQL.
@@ -455,22 +474,60 @@ def cache_query(
         user_specific: Si True, le cache est spécifique à l'utilisateur
         context_keys: Clés du contexte à inclure dans la clé de cache
     """
+
     def decorator(resolver_func: Callable) -> Callable:
         @wraps(resolver_func)
         def wrapper(root, info: graphene.ResolveInfo, **kwargs):
             cache_manager = get_cache_manager()
 
             # Construire la clé de cache
-            query_string = str(info.field_name)  # Simplification
             variables = kwargs
-            user_id = getattr(info.context.user, 'id', None) if user_specific else None
+            user_id = getattr(info.context.user, "id", None) if user_specific else None
 
             # Extraire le contexte pertinent
             context = {}
-            if context_keys and hasattr(info, 'context'):
+            if context_keys and hasattr(info, "context"):
                 for key in context_keys:
                     if hasattr(info.context, key):
                         context[key] = getattr(info.context, key)
+
+            # Tenter d'extraire le document GraphQL brut pour une clé robuste
+            query_document: Optional[str] = None
+            try:
+                raw_body = getattr(info.context, "body", None)
+                if raw_body:
+                    body_text = (
+                        raw_body if isinstance(raw_body, str) else raw_body.decode("utf-8", errors="ignore")
+                    )
+                    parsed = json.loads(body_text)
+                    if isinstance(parsed, dict):
+                        query_document = parsed.get("query")
+            except Exception:
+                # Ignore parsing errors and fallback to AST-based signature
+                query_document = None
+
+            # Fallback: construire une signature basée sur les sélections du champ
+            selection_names: List[str] = []
+            try:
+                field_nodes = getattr(info, "field_nodes", []) or []
+                for node in field_nodes:
+                    selection_set = getattr(node, "selection_set", None)
+                    if selection_set and getattr(selection_set, "selections", None):
+                        for sel in selection_set.selections:
+                            name = getattr(getattr(sel, "name", None), "value", None)
+                            if name:
+                                selection_names.append(str(name))
+            except Exception:
+                selection_names = []
+
+            # Définir une chaîne de requête robuste
+            if query_document:
+                query_string = query_document
+            else:
+                # Combine field name and selection names to reduce key collisions
+                base_name = str(getattr(info, "field_name", "unknown"))
+                signature = ",".join(sorted(selection_names)) if selection_names else ""
+                query_string = f"{base_name}|sel:[{signature}]"
 
             # Vérifier le cache
             cached_result = cache_manager.get_query_result(
@@ -491,13 +548,11 @@ def cache_query(
             return result
 
         return wrapper
+
     return decorator
 
 
-def cache_field(
-    timeout: Optional[int] = None,
-    user_specific: bool = False
-):
+def cache_field(timeout: Optional[int] = None, user_specific: bool = False):
     """
     Décorateur pour mettre en cache les valeurs de champs.
 
@@ -505,16 +560,19 @@ def cache_field(
         timeout: Durée de vie du cache en secondes
         user_specific: Si True, le cache est spécifique à l'utilisateur
     """
+
     def decorator(resolver_func: Callable) -> Callable:
         @wraps(resolver_func)
         def wrapper(root, info: graphene.ResolveInfo, **kwargs):
             cache_manager = get_cache_manager()
 
             # Identifier le modèle et le champ
-            model_name = root.__class__.__name__ if hasattr(root, '__class__') else 'Unknown'
+            model_name = (
+                root.__class__.__name__ if hasattr(root, "__class__") else "Unknown"
+            )
             field_name = info.field_name
-            instance_id = getattr(root, 'pk', None) or getattr(root, 'id', None)
-            user_id = getattr(info.context.user, 'id', None) if user_specific else None
+            instance_id = getattr(root, "pk", None) or getattr(root, "id", None)
+            user_id = getattr(info.context.user, "id", None) if user_specific else None
 
             if instance_id is None:
                 # Pas d'ID, on ne peut pas mettre en cache
@@ -539,4 +597,5 @@ def cache_field(
             return result
 
         return wrapper
+
     return decorator
