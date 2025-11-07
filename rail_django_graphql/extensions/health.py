@@ -15,11 +15,12 @@ from typing import Any, Dict, List, Optional, Tuple
 import psutil
 from django.apps import apps
 from django.conf import settings
-from django.core.cache import cache, caches
+# Cache monitoring disabled: remove Django cache imports
 from django.db import connection, connections
 from graphene import Boolean, Field, Float, Int
 from graphene import List as GrapheneList
 from graphene import ObjectType, String
+import graphene
 from graphql import build_schema, validate
 from graphql.error import GraphQLError
 
@@ -232,65 +233,8 @@ class HealthChecker:
         Returns:
             List[HealthStatus]: Health status for each cache backend
         """
-        health_statuses = []
-
-        for cache_alias in caches:
-            start_time = time.time()
-
-            try:
-                cache_backend = caches[cache_alias]
-
-                # Test cache operations
-                test_key = f"health_check_{int(time.time())}"
-                test_value = "health_check_value"
-
-                # Test set operation
-                cache_backend.set(test_key, test_value, timeout=60)
-
-                # Test get operation
-                retrieved_value = cache_backend.get(test_key)
-
-                # Test delete operation
-                cache_backend.delete(test_key)
-
-                if retrieved_value == test_value:
-                    # Get cache statistics if available
-                    cache_info = self._get_cache_info(cache_backend, cache_alias)
-
-                    health_statuses.append(
-                        HealthStatus(
-                            component=f"cache_{cache_alias}",
-                            status="healthy",
-                            message=f"Cache {cache_alias} operations successful",
-                            response_time_ms=(time.time() - start_time) * 1000,
-                            timestamp=datetime.now(timezone.utc),
-                            details=cache_info,
-                        )
-                    )
-                else:
-                    health_statuses.append(
-                        HealthStatus(
-                            component=f"cache_{cache_alias}",
-                            status="degraded",
-                            message=f"Cache {cache_alias} set/get operations inconsistent",
-                            response_time_ms=(time.time() - start_time) * 1000,
-                            timestamp=datetime.now(timezone.utc),
-                        )
-                    )
-
-            except Exception as e:
-                health_statuses.append(
-                    HealthStatus(
-                        component=f"cache_{cache_alias}",
-                        status="unhealthy",
-                        message=f"Cache {cache_alias} operations failed: {str(e)}",
-                        response_time_ms=(time.time() - start_time) * 1000,
-                        timestamp=datetime.now(timezone.utc),
-                        details={"error": str(e)},
-                    )
-                )
-
-        return health_statuses
+        # Cache health checks disabled; return empty list to avoid misleading status
+        return []
 
     def get_system_metrics(self) -> SystemMetrics:
         """
@@ -316,8 +260,8 @@ class HealthChecker:
             # Database connections
             active_connections = self._count_active_connections()
 
-            # Cache hit rate
-            cache_hit_rate = self._calculate_cache_hit_rate()
+            # Cache hit rate disabled
+            cache_hit_rate = 0.0
 
             # Uptime
             uptime_seconds = time.time() - self.start_time
@@ -401,6 +345,62 @@ class HealthChecker:
             ),
         }
 
+    def get_health_report(self) -> Dict[str, Any]:
+        """
+        
+        Purpose: Provide a backward-compatible health report wrapper.
+        
+        Args: None
+        
+        Returns: Dict[str, Any]: Health report with top-level component counters for
+            healthy_components, degraded_components, and unhealthy_components to
+            maintain compatibility with existing views/tests.
+        
+        Raises: None
+        
+        Example:
+            >>> checker = HealthChecker()
+            >>> report = checker.get_health_report()
+            >>> isinstance(report, dict)
+            True
+        """
+        try:
+            comprehensive = self.get_comprehensive_health_report()
+
+            summary = comprehensive.get("summary", {})
+            # Map summary counters to top-level keys expected by legacy callers
+            return {
+                "overall_status": comprehensive.get("overall_status"),
+                "timestamp": comprehensive.get("timestamp"),
+                "report_generation_time_ms": comprehensive.get(
+                    "report_generation_time_ms"
+                ),
+                "healthy_components": summary.get("healthy", 0),
+                "degraded_components": summary.get("degraded", 0),
+                "unhealthy_components": summary.get("unhealthy", 0),
+                "total_components": summary.get("total_components", 0),
+                "components": comprehensive.get("components", {}),
+                "system_metrics": comprehensive.get("system_metrics", {}),
+                "recommendations": comprehensive.get("recommendations", []),
+            }
+        except Exception as e:
+            logger.error(f"Failed to generate health report: {e}")
+            # Provide a minimal fallback structure
+            return {
+                "overall_status": "unhealthy",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "report_generation_time_ms": 0.0,
+                "healthy_components": 0,
+                "degraded_components": 0,
+                "unhealthy_components": 1,
+                "total_components": 1,
+                "components": {"schema": {}, "databases": [], "caches": []},
+                "system_metrics": asdict(self.get_system_metrics()),
+                "recommendations": [
+                    "Health report generation failed; check system logs for details"
+                ],
+            }
+
     def _get_database_info(self, conn, db_alias: str) -> Dict[str, Any]:
         """Get additional database information."""
         try:
@@ -480,13 +480,8 @@ class HealthChecker:
 
     def _calculate_cache_hit_rate(self) -> float:
         """Calculate cache hit rate."""
-        try:
-            total_requests = self._cache_stats["hits"] + self._cache_stats["misses"]
-            if total_requests == 0:
-                return 0.0
-            return (self._cache_stats["hits"] / total_requests) * 100
-        except Exception:
-            return 0.0
+        # Cache metrics disabled: always return 0.0
+        return 0.0
 
     def _generate_recommendations(
         self, statuses: List[HealthStatus], metrics: SystemMetrics
@@ -517,11 +512,7 @@ class HealthChecker:
                 "Disk space is running low. Clean up logs and temporary files"
             )
 
-        # Check cache performance
-        if metrics.cache_hit_rate < 70:
-            recommendations.append(
-                "Low cache hit rate. Review caching strategy and key patterns"
-            )
+        # Cache performance recommendations disabled
 
         # Check response times
         slow_components = [s for s in statuses if s.response_time_ms > 1000]
@@ -821,3 +812,112 @@ class HealthQuery(ObjectType):
                 cache_hit_rate=0.0,
                 uptime_seconds=0.0,
             )
+
+
+class RefreshSchemaMutation(graphene.Mutation):
+    """
+    Purpose: Allow authorized clients to refresh/rebuild the GraphQL schema and optionally
+        invalidate/warm metadata caches.
+    Args:
+        schema_name (str): Target schema name, defaults to "default".
+        app_label (Optional[str]): If provided, reload schema only for the specified app.
+        clear_cache (bool): When true, invalidate metadata caches.
+        warm_metadata (bool): When true, warm model metadata cache after refresh.
+    Returns:
+        success (bool): True if the operation succeeded.
+        message (str): Human-readable status message.
+        schema_version (int): New schema version after refresh.
+        apps_reloaded (List[str]): List of app labels reloaded.
+    Raises:
+        GraphQLError: If the user is not authorized or on unexpected errors.
+    Example:
+        >>> # Mutation
+        >>> mutation {
+        ...   refresh_schema(schemaName: "default", clearCache: true, warmMetadata: true) {
+        ...     success
+        ...     message
+        ...     schemaVersion
+        ...   }
+        ... }
+    """
+
+    class Arguments:
+        schema_name = String(required=False, default_value="default")
+        app_label = String(required=False)
+        clear_cache = Boolean(required=False, default_value=False)
+        warm_metadata = Boolean(required=False, default_value=False)
+
+    success = Boolean()
+    message = String()
+    schema_version = Int()
+    apps_reloaded = GrapheneList(String)
+
+    @staticmethod
+    def mutate(
+        root,
+        info,
+        schema_name: str = "default",
+        app_label: Optional[str] = None,
+        clear_cache: bool = False,
+        warm_metadata: bool = False,
+    ):
+        """
+        Purpose: Execute schema refresh with optional app scoping and cache operations.
+        Args: See class Args.
+        Returns: RefreshSchemaMutation: Mutation payload with status and version.
+        Raises: GraphQLError on permission or operational errors.
+        Example:
+            >>> # See class docstring for usage example
+        """
+        try:
+            user = getattr(info.context, "user", None)
+            if not user or not getattr(user, "is_authenticated", False) or not getattr(user, "is_staff", False):
+                raise GraphQLError(
+                    "Permission denied: staff authentication required to refresh schema"
+                )
+
+            # Perform schema refresh
+            from ..core.schema import get_schema_builder
+            builder = get_schema_builder(schema_name)
+
+            apps_reloaded: List[str] = []
+            if app_label:
+                builder.reload_app_schema(app_label)
+                apps_reloaded = [app_label]
+            else:
+                builder.rebuild_schema()
+
+            new_version = builder.get_schema_version()
+
+            # Optional cache invalidation
+            if clear_cache:
+                try:
+                    from .metadata import invalidate_metadata_cache
+                    invalidate_metadata_cache(model_name=None, app_name=app_label)
+                except Exception as cache_err:
+                    logger.warning(f"Cache invalidation failed: {cache_err}")
+
+            # Optional cache warm-up (metadata)
+            if warm_metadata:
+                try:
+                    from .metadata import warm_metadata_cache
+                    warm_metadata_cache(app_name=app_label, model_name=None, user=user)
+                except Exception as warm_err:
+                    logger.warning(f"Metadata warm-up failed: {warm_err}")
+
+            message = (
+                f"Schema refreshed for schema '{schema_name}'"
+                + (f", app '{app_label}' reloaded" if app_label else "")
+            )
+            return RefreshSchemaMutation(
+                success=True,
+                message=message,
+                schema_version=new_version,
+                apps_reloaded=apps_reloaded,
+            )
+        except GraphQLError:
+            # Re-raise expected GraphQL errors
+            raise
+        except Exception as e:
+            logger.error(f"Schema refresh failed: {e}", exc_info=True)
+            raise GraphQLError(f"Schema refresh failed: {e}")

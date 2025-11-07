@@ -39,6 +39,9 @@ class AppConfig(BaseAppConfig):
             # Initialize schema registry
             self._initialize_schema_registry()
 
+            # Optionally prebuild schemas on startup
+            self._prebuild_schemas_on_startup()
+
             # Invalidate metadata cache on startup
             self._invalidate_cache_on_startup()
 
@@ -53,9 +56,12 @@ class AppConfig(BaseAppConfig):
     def _setup_performance_monitoring(self):
         """Setup performance monitoring if enabled."""
         try:
-            from .conf import settings
+            # Use hierarchical settings proxy and new lowercase keys
+            from .conf import get_settings_proxy
 
-            if settings.MONITORING_SETTINGS.get("ENABLE_METRICS", False):
+            settings = get_settings_proxy()
+
+            if settings.get("monitoring_settings.enable_metrics", False):
                 from .middleware.performance import setup_performance_monitoring
 
                 setup_performance_monitoring()
@@ -68,9 +74,12 @@ class AppConfig(BaseAppConfig):
     def _setup_signals(self):
         """Configure Django signals for automatic schema generation."""
         try:
-            from .conf import settings
+            # Use hierarchical settings proxy and new lowercase keys
+            from .conf import get_settings_proxy
 
-            if settings.SCHEMA_REGISTRY.get("ENABLE_AUTO_DISCOVERY", True):
+            settings = get_settings_proxy()
+
+            if settings.get("schema_registry.enable_registry", False):
                 # Import signals to register them
                 from . import signals  # This will be created later
 
@@ -95,9 +104,12 @@ class AppConfig(BaseAppConfig):
     def _initialize_schema_registry(self):
         """Initialize the schema registry."""
         try:
-            from .conf import settings
+            # Use hierarchical settings proxy and new lowercase keys
+            from .conf import get_settings_proxy
 
-            if settings.SCHEMA_REGISTRY.get("ENABLE_AUTO_DISCOVERY", True):
+            settings = get_settings_proxy()
+
+            if settings.get("schema_registry.enable_registry", False):
                 from .core.registry import schema_registry
 
                 schema_registry.discover_schemas()
@@ -106,6 +118,23 @@ class AppConfig(BaseAppConfig):
             logger.debug(f"Schema registry not available: {e}")
         except Exception as e:
             logger.warning(f"Could not initialize schema registry: {e}")
+
+    def _prebuild_schemas_on_startup(self):
+        """Prebuild GraphQL schemas on server startup if enabled in settings."""
+        try:
+            from .core.schema import get_schema_builder
+            from .core.settings import SchemaSettings
+
+            schema_settings = SchemaSettings.from_schema("default")
+            if schema_settings.prebuild_on_startup:
+                builder = get_schema_builder("default")
+                # Build the schema once at startup
+                builder.get_schema()
+                logger.info("Prebuilt GraphQL schema 'default' on startup")
+        except ImportError as e:
+            logger.debug(f"Could not prebuild schema on startup: {e}")
+        except Exception as e:
+            logger.warning(f"Error during schema prebuild on startup: {e}")
 
     def _is_debug_mode(self):
         """Check if we're in debug mode."""

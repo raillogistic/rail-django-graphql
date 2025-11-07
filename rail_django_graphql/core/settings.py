@@ -61,7 +61,35 @@ def _get_global_settings(schema_name: str) -> Dict[str, Any]:
         Dict[str, Any]: Global settings for the schema
     """
     rail_settings = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
-    return rail_settings.get(schema_name, {})
+    # Primary: schema-scoped settings (e.g., {"default": { ... }})
+    if schema_name in rail_settings:
+        return rail_settings.get(schema_name, {})
+
+    # Fallback: legacy/global settings (unscoped)
+    # If the dictionary already looks like a settings block with known keys,
+    # return it directly so projects that didn't namespace by schema keep working.
+    known_section_keys = {
+        "schema_settings",
+        "query_settings",
+        "mutation_settings",
+        "TYPE_SETTINGS",
+        "FILTERING",
+        "PAGINATION",
+        "SECURITY",
+        "PERFORMANCE",
+        "CUSTOM_SCALARS",
+        "FIELD_CONVERTERS",
+        "SCHEMA_HOOKS",
+        "MIDDLEWARE",
+        "NESTED_OPERATIONS",
+        "RELATIONSHIP_HANDLING",
+        "DEVELOPMENT",
+        "I18N",
+    }
+    if any(k in rail_settings for k in known_section_keys):
+        return rail_settings
+
+    return {}
 
 
 def _get_library_defaults() -> Dict[str, Any]:
@@ -316,7 +344,16 @@ class SchemaSettings:
     enable_graphiql: bool = True
 
     # Auto-refresh schema when models change
-    auto_refresh_on_model_change: bool = True
+    auto_refresh_on_model_change: bool = False
+
+    # Auto-refresh schema after Django migrations
+    auto_refresh_on_migration: bool = True
+
+    # Prebuild GraphQL schema on server startup (AppConfig.ready)
+    prebuild_on_startup: bool = False
+
+    # Require authentication for the schema by default
+    authentication_required: bool = True
 
     # Enable pagination support
     enable_pagination: bool = True

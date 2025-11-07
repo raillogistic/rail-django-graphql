@@ -9,6 +9,7 @@ from .types import TypeGenerator
 from .nested_operations import NestedOperationHandler
 from .introspector import MethodInfo, ModelIntrospector
 from ..core.settings import MutationGeneratorSettings
+from ..core.meta import get_model_graphql_meta
 from ..core.security import get_auth_manager, get_authz_manager, get_input_validator
 from ..core.performance import get_query_optimizer
 from ..core.error_handling import get_error_handler
@@ -100,6 +101,10 @@ class MutationGenerator:
             model, mutation_type="create"
         )
         model_name = model.__name__
+        graphql_meta = get_model_graphql_meta(model)
+        graphql_meta = get_model_graphql_meta(model)
+        graphql_meta = get_model_graphql_meta(model)
+        read_only_fields = set(getattr(graphql_meta.field_config, "read_only", []) or [])
 
         class CreateMutation(graphene.Mutation):
             class Arguments:
@@ -116,6 +121,7 @@ class MutationGenerator:
                 cls, root: Any, info: graphene.ResolveInfo, input: Dict[str, Any]
             ) -> "CreateMutation":
                 try:
+                    graphql_meta.ensure_operation_access("create", info=info)
                     # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
 
@@ -124,6 +130,12 @@ class MutationGenerator:
 
                     # Process dual fields with automatic priority handling
                     input = cls._process_dual_fields(input, model)
+                    if read_only_fields:
+                        input = {
+                            key: value
+                            for key, value in input.items()
+                            if key not in read_only_fields
+                        }
 
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
@@ -408,6 +420,8 @@ class MutationGenerator:
             model, partial=True, mutation_type="update"
         )
         model_name = model.__name__
+        graphql_meta = get_model_graphql_meta(model)
+        read_only_fields = set(getattr(graphql_meta.field_config, "read_only", []) or [])
 
         class UpdateMutation(graphene.Mutation):
             class Arguments:
@@ -437,6 +451,12 @@ class MutationGenerator:
 
                     # Process dual fields with automatic priority handling
                     input = cls._process_dual_fields(input, model)
+                    if read_only_fields:
+                        input = {
+                            key: value
+                            for key, value in input.items()
+                            if key not in read_only_fields
+                        }
 
                     # Decode GraphQL ID to database ID if needed
                     try:
@@ -452,6 +472,8 @@ class MutationGenerator:
                         except Exception:
                             # If all else fails, raise the original error
                             instance = model.objects.get(pk=id)
+
+                    graphql_meta.ensure_operation_access("update", info=info, instance=instance)
 
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
@@ -744,6 +766,8 @@ class MutationGenerator:
         """
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__
+        graphql_meta = get_model_graphql_meta(model)
+        graphql_meta = get_model_graphql_meta(model)
 
         class DeleteMutation(graphene.Mutation):
             class Arguments:
@@ -761,6 +785,7 @@ class MutationGenerator:
             ) -> "DeleteMutation":
                 try:
                     instance = model.objects.get(pk=id)
+                    graphql_meta.ensure_operation_access("delete", info=info, instance=instance)
                     deleted_instance = instance  # Store reference before deletion
                     instance.delete()
                     return cls(ok=True, object=deleted_instance, errors=[])
@@ -816,6 +841,7 @@ class MutationGenerator:
                 cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]
             ) -> "BulkCreateMutation":
                 try:
+                    graphql_meta.ensure_operation_access("bulk_create", info=info)
                     instances = []
                     for input_data in inputs:
                         # Normalize enum inputs (GraphQL Enum -> underlying Django values)
@@ -941,9 +967,11 @@ class MutationGenerator:
                 cls, root: Any, info: graphene.ResolveInfo, inputs: List[Dict[str, Any]]
             ) -> "BulkUpdateMutation":
                 try:
+                    graphql_meta.ensure_operation_access("bulk_update", info=info)
                     instances = []
                     for input_data in inputs:
                         instance = model.objects.get(pk=input_data["id"])
+                        graphql_meta.ensure_operation_access("bulk_update", info=info, instance=instance)
                         # Normalize enum inputs for update payload
                         update_data = cls._normalize_enum_inputs(
                             input_data["data"], model
@@ -1013,6 +1041,7 @@ class MutationGenerator:
                 cls, root: Any, info: graphene.ResolveInfo, ids: List[str]
             ) -> "BulkDeleteMutation":
                 try:
+                    graphql_meta.ensure_operation_access("bulk_delete", info=info)
                     instances = model.objects.filter(pk__in=ids)
                     if len(instances) != len(ids):
                         found_ids = set(str(instance.pk) for instance in instances)
@@ -1026,6 +1055,8 @@ class MutationGenerator:
                         )
 
                     deleted_instances = list(instances)  # Store before deletion
+                    for inst in deleted_instances:
+                        graphql_meta.ensure_operation_access("bulk_delete", info=info, instance=inst)
                     instances.delete()
                     return cls(ok=True, objects=deleted_instances, errors=[])
 

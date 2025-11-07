@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.signals import request_started
 from django.dispatch import receiver
 
@@ -54,8 +53,6 @@ class RuntimeConfigManager:
         self._change_callbacks: Dict[str, List[Callable]] = {}
         self._change_history: List[ConfigurationChange] = []
         self._lock = threading.RLock()
-        self._cache_prefix = "runtime_config:"
-        self._cache_timeout = 600  # 10 minutes
         self._max_history_size = 1000
         self._load_initial_config()
 
@@ -89,11 +86,7 @@ class RuntimeConfigManager:
         Returns:
             Valeur de configuration ou valeur par défaut
         """
-        if use_cache:
-            cache_key = f"{self._cache_prefix}{key}"
-            cached_value = cache.get(cache_key)
-            if cached_value is not None:
-                return cached_value
+        # Removed external cache; always read from in-memory config
 
         with self._lock:
             # Support des clés imbriquées (ex: "mutation_settings.nested_relations")
@@ -106,11 +99,6 @@ class RuntimeConfigManager:
                         value = value[k]
                     else:
                         return default
-
-                # Mettre en cache si demandé
-                if use_cache:
-                    cache_key = f"{self._cache_prefix}{key}"
-                    cache.set(cache_key, value, self._cache_timeout)
 
                 return value
 
@@ -155,9 +143,7 @@ class RuntimeConfigManager:
                 # Mettre à jour la valeur finale
                 config_ref[keys[-1]] = value
 
-                # Invalider le cache
-                cache_key = f"{self._cache_prefix}{key}"
-                cache.delete(cache_key)
+                # External cache removed; no cache invalidation needed
 
                 # Enregistrer le changement
                 change = ConfigurationChange(
@@ -210,8 +196,7 @@ class RuntimeConfigManager:
                         file_config = json.load(f)
                         self._config_cache.update(file_config)
 
-                # Vider le cache
-                self._clear_config_cache()
+                # External cache removed; nothing to clear
 
                 # Notifier les changements
                 self._notify_config_reload(old_config, self._config_cache)
@@ -408,14 +393,8 @@ class RuntimeConfigManager:
                 self._notify_change_callbacks(key, old_value, new_value)
 
     def _clear_config_cache(self) -> None:
-        """Vide le cache de configuration."""
-        try:
-            # Vider le cache Redis pour toutes les clés de configuration
-            cache_pattern = f"{self._cache_prefix}*"
-            # Note: Cette implémentation dépend du backend de cache utilisé
-            cache.clear()  # Méthode simple, peut être optimisée
-        except Exception as e:
-            logger.warning(f"Impossible de vider le cache de configuration: {e}")
+        """No-op: external cache removed."""
+        return
 
     def _persist_config_change(self, key: str, value: Any) -> None:
         """Persiste un changement de configuration dans un fichier."""

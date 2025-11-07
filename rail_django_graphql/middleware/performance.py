@@ -19,12 +19,10 @@ from typing import Any, Callable, Deque, Dict, List, Optional
 
 import graphene
 from django.conf import settings
-from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 from django.views import View
 
-from ..extensions.caching import get_cache_manager
 from ..extensions.optimization import get_performance_monitor
 
 logger = logging.getLogger(__name__)
@@ -297,7 +295,6 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         super().__init__(get_response)
         self.aggregator = get_performance_aggregator()
         self.performance_monitor = get_performance_monitor()
-        self.cache_manager = get_cache_manager()
 
     def process_request(self, request):
         """Traite le début d'une requête."""
@@ -328,10 +325,9 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         metrics.end_time = end_time
         metrics.execution_time = end_time - metrics.start_time
 
-        # Récupérer les statistiques de cache
-        cache_stats = self.cache_manager.get_stats()
-        metrics.cache_hits = cache_stats.hits
-        metrics.cache_misses = cache_stats.misses
+        # No cache in project: set cache metrics to zero
+        metrics.cache_hits = 0
+        metrics.cache_misses = 0
 
         # Ajouter les métriques à l'agrégateur
         self.aggregator.add_metrics(metrics)
@@ -339,7 +335,6 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         # Ajouter des headers de performance si configuré
         if getattr(settings, "GRAPHQL_PERFORMANCE_HEADERS", False):
             response["X-GraphQL-Execution-Time"] = f"{metrics.execution_time:.3f}"
-            response["X-GraphQL-Cache-Hit-Rate"] = f"{cache_stats.hit_rate:.1f}"
             if metrics.query_complexity:
                 response["X-GraphQL-Query-Complexity"] = str(metrics.query_complexity)
 

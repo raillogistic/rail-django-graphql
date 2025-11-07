@@ -6,12 +6,12 @@ features at runtime without code changes or server restarts.
 """
 
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
@@ -66,6 +66,8 @@ class FeatureFlagManager:
         self._flags: Dict[str, FeatureFlag] = {}
         self._cache_prefix = "feature_flag:"
         self._cache_timeout = 300  # 5 minutes
+        # Ephemeral in-memory cache: {key: (value, expires_at)}
+        self._runtime_cache: Dict[str, Any] = {}
         self._load_flags_from_settings()
 
     def _load_flags_from_settings(self) -> None:
@@ -115,12 +117,20 @@ class FeatureFlagManager:
         Returns:
             True si le flag est activé, False sinon
         """
-        # Vérifier le cache d'abord
+        # Check in-memory cache first
         cache_key = f"{self._cache_prefix}{flag_name}"
-        cached_value = cache.get(cache_key)
+        cached_entry = self._runtime_cache.get(cache_key)
 
-        if cached_value is not None:
-            return self._evaluate_flag_with_context(flag_name, cached_value, user, context)
+        if cached_entry is not None:
+            try:
+                value, expires_at = cached_entry
+                if time.time() < expires_at:
+                    return self._evaluate_flag_with_context(flag_name, value, user, context)
+                # Expired entry; remove
+                del self._runtime_cache[cache_key]
+            except Exception:
+                # Malformed cache entry; remove
+                self._runtime_cache.pop(cache_key, None)
 
         # Récupérer depuis la configuration
         flag = self._flags.get(flag_name)
@@ -138,8 +148,8 @@ class FeatureFlagManager:
         if current_env not in flag.environments:
             return False
 
-        # Mettre en cache et retourner
-        cache.set(cache_key, flag.enabled, self._cache_timeout)
+        # Store in in-memory cache and return
+        self._runtime_cache[cache_key] = (flag.enabled, time.time() + self._cache_timeout)
         return self._evaluate_flag_with_context(flag_name, flag.enabled, user, context)
 
     def get_value(self, flag_name: str, default=None, user=None, context: Optional[Dict[str, Any]] = None) -> Any:
@@ -174,7 +184,7 @@ class FeatureFlagManager:
             cache_only: Si True, ne modifie que le cache
         """
         cache_key = f"{self._cache_prefix}{flag_name}"
-        cache.set(cache_key, enabled, self._cache_timeout)
+        self._runtime_cache[cache_key] = (enabled, time.time() + self._cache_timeout)
 
         if not cache_only and flag_name in self._flags:
             self._flags[flag_name].enabled = enabled
@@ -209,12 +219,10 @@ class FeatureFlagManager:
         """
         if flag_name:
             cache_key = f"{self._cache_prefix}{flag_name}"
-            cache.delete(cache_key)
+            self._runtime_cache.pop(cache_key, None)
         else:
-            # Vider tous les flags du cache
-            for flag_name in self._flags.keys():
-                cache_key = f"{self._cache_prefix}{flag_name}"
-                cache.delete(cache_key)
+            # Clear all flags from in-memory cache
+            self._runtime_cache.clear()
 
         logger.info(
             f"Cache des feature flags vidé {'pour ' + flag_name if flag_name else 'complètement'}")

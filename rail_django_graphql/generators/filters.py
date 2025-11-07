@@ -34,7 +34,7 @@ from django_filters import (
     NumberFilter,
 )
 
-from ..core.meta import get_model_graphql_meta
+from ..core.meta import GraphQLMeta, get_model_graphql_meta
 from .introspector import ModelIntrospector
 
 logger = logging.getLogger(__name__)
@@ -615,6 +615,9 @@ class AdvancedFilterGenerator:
                     field_filters = self._generate_field_filters(
                         field, current_depth, allow_nested=True
                     )
+                    field_filters = self._apply_field_config_overrides(
+                        field.name, field_filters, graphql_meta
+                    )
                     filters.update(field_filters)
 
             # Add custom filters from GraphQLMeta
@@ -622,44 +625,24 @@ class AdvancedFilterGenerator:
                 custom_filters = graphql_meta.get_custom_filters()
                 filters.update(custom_filters)
 
-            # Always add a 'quick' filter.
-            # Purpose: Ensure the 'quick' keyword is integrated for all models,
-            # even when GraphQLMeta does not explicitly configure quick filters.
-            # Strategy:
-            # - Prefer GraphQLMeta.quick_filter_fields if present
-            # - Else prefer GraphQLMeta.filters['quick']
-            # - Else fall back to default searchable text fields
-            # - If no fields can be determined, still register a no-op quick filter
-            #   so the argument is exposed consistently in query generation
+            # Always add a 'quick' filter argument. When no fields are explicitly
+            # provided and auto-detection is enabled, fall back to default text fields.
             try:
-                quick_fields = []
-                if graphql_meta is not None:
-                    # Use explicit quick filter fields when provided
-                    quick_fields = (
-                        getattr(graphql_meta, "quick_filter_fields", None) or []
-                    )
-                    if not quick_fields:
-                        # Legacy/alternative configuration using filters dict
-                        quick_fields = graphql_meta.filters.get("quick", [])
-                    if not quick_fields and graphql_meta.filter_fields.get("quick"):
-                        # If 'quick' is enabled but no fields specified,
-                        # fall back to default searchable fields
-                        quick_fields = self._get_default_quick_filter_fields(model)
-
-                # If still empty (no GraphQLMeta or no suitable fields),
-                # try default searchable fields
-                if not quick_fields:
+                quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
+                if not quick_fields and getattr(
+                    graphql_meta.filtering, "auto_detect_quick", True
+                ):
                     quick_fields = self._get_default_quick_filter_fields(model)
 
-                # Generate and register the quick filter (no-op when fields list is empty)
                 quick_filter = self._generate_quick_filter(model, quick_fields)
                 if quick_filter:
                     filters["quick"] = quick_filter
             except Exception as e:
-                # In case of any error during quick filter setup, log and continue
                 logger.warning(
                     f"Failed to configure quick filter for {model.__name__}: {e}"
                 )
+            # Development-only verbose print removed to avoid console spam and slowdown
+            # Use logger.debug if trace is needed:
 
             # Generate reverse relationship count filters
             reverse_count_filters = self._generate_reverse_relationship_count_filters(
@@ -1086,6 +1069,45 @@ class AdvancedFilterGenerator:
                 )
 
         return filters
+
+    def _apply_field_config_overrides(
+        self,
+        field_name: str,
+        field_filters: Dict[str, django_filters.Filter],
+        graphql_meta: GraphQLMeta,
+    ) -> Dict[str, django_filters.Filter]:
+        """
+        Restrict auto-generated filters based on GraphQLMeta.filtering.fields configuration.
+        """
+
+        field_config = graphql_meta.filtering.fields.get(field_name)
+        if not field_config:
+            return field_filters
+
+        allowed_lookups = set(field_config.lookups or [])
+        if allowed_lookups:
+            for filter_name, filter_instance in list(field_filters.items()):
+                lookup_expr = getattr(filter_instance, "lookup_expr", None)
+                if not lookup_expr:
+                    lookup_expr = "exact"
+                if lookup_expr == "exact" and "__" in filter_name:
+                    lookup_expr = filter_name.split("__")[-1]
+                if lookup_expr not in allowed_lookups:
+                    del field_filters[filter_name]
+
+        if field_config.choices:
+            normalized_choices = []
+            for value in field_config.choices:
+                label = getattr(value, "label", None)
+                if label is None and isinstance(value, (tuple, list)) and len(value) >= 2:
+                    normalized_choices.append((value[0], value[1]))
+                else:
+                    normalized_choices.append((value, label or str(value)))
+
+            for filter_instance in field_filters.values():
+                filter_instance.extra.pop("choices", None)
+
+        return field_filters
 
     def _generate_count_filter_methods(
         self, model: Type[models.Model], filters: Dict[str, django_filters.Filter]

@@ -8,13 +8,14 @@ complex forms with nested fields.
 
 import hashlib
 import logging
+import threading
+import time
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
 from django.apps import apps
-from django.core.cache import cache
 from django.db import models
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
@@ -23,7 +24,7 @@ from graphql import GraphQLError
 from ..conf import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
-from .caching import CacheConfig, get_cache_manager
+# Caching removed: no cache imports
 
 # Remove imports that cause AppRegistryNotReady error
 # from ..core.security import AuthorizationManager
@@ -31,36 +32,81 @@ from .caching import CacheConfig, get_cache_manager
 
 logger = logging.getLogger(__name__)
 
-# Cache configuration for metadata
-# Disable cache automatically when DEBUG is True.
-# In non-debug mode, allow enabling via Django settings:
-# RAIL_DJANGO_GRAPHQL = { 'METADATA': { 'enable_cache': True } }
-_metadata_cache_enabled = False
-try:
-    from django.conf import settings as django_settings  # type: ignore
+## Metadata cache configuration removed: caching is not supported.
 
-    debug_mode = bool(getattr(django_settings, "DEBUG", False))
-    if debug_mode:
-        _metadata_cache_enabled = False
-    else:
-        rdg_config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
-        metadata_config = rdg_config.get("METADATA", {})
-        _metadata_cache_enabled = bool(metadata_config.get("enable_cache", False))
-except Exception:
-    # If settings are not available, keep cache disabled
-    _metadata_cache_enabled = False
+# Lightweight, targeted cache for model_table metadata only
+_table_cache_lock = threading.RLock()
+_table_cache: Dict[str, Dict[str, Any]] = {}
+_table_cache_stats = {
+    "hits": 0,
+    "misses": 0,
+    "sets": 0,
+    "deletes": 0,
+    "invalidations": 0,
+}
 
-METADATA_CACHE_CONFIG = CacheConfig(
-    enabled=_metadata_cache_enabled,
-    # Use sane, explicit TTLs. A timeout of 0 in Django caches can mean "cache forever"
-    # on some backends (e.g., Memcached). We avoid that to prevent stale metadata.
-    default_timeout=1800,  # 30 minutes for metadata
-    schema_cache_timeout=24 * 60 * 60,  # 24 hours for schema metadata
-    query_cache_timeout=15 * 60,  # 15 minutes for query metadata
-    field_cache_timeout=20 * 60,  # 20 minutes for field metadata
-    cache_hit_logging=True,
-    cache_stats_enabled=False,
-)
+
+def _get_table_cache_timeout() -> int:
+    """
+    Purpose: Resolve TTL for model_table metadata cache from Django settings.
+    Args: None
+    Returns: int: Timeout in seconds; defaults to 600 (10 minutes) if not set
+    Raises: None
+    Example:
+        >>> _get_table_cache_timeout()
+        600
+    """
+    try:
+        from django.conf import settings as django_settings
+        config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
+        metadata_cfg = config.get("METADATA", {}) or {}
+        timeout_val = int(metadata_cfg.get("table_cache_timeout_seconds", 600))
+        return timeout_val if timeout_val > 0 else 600
+    except Exception:
+        return 600
+
+
+def _normalize_custom_fields(custom_fields: Optional[List[str]]) -> List[str]:
+    """
+    Purpose: Normalize custom_fields for cache key stability.
+    Args: custom_fields: Optional[List[str]] list of field paths
+    Returns: List[str] sorted and de-duplicated custom fields
+    Raises: None
+    Example:
+        >>> _normalize_custom_fields(["a.b", "b.a", "a.b"]) 
+        ['a.b', 'b.a']
+    """
+    if not custom_fields:
+        return []
+    unique = sorted(set([str(f).strip() for f in custom_fields if f]))
+    return unique
+
+
+def _make_table_cache_key(
+    schema_name: str,
+    app_name: str,
+    model_name: str,
+    custom_fields: Optional[List[str]],
+    counts: bool,
+    max_depth: int,
+) -> str:
+    """
+    Purpose: Build a stable cache key for model_table metadata.
+    Args:
+        schema_name: str schema identifier
+        app_name: str Django app label
+        model_name: str Django model name
+        custom_fields: Optional[List[str]] custom field accessors
+        counts: bool include reverse relationship counts
+        max_depth: int maximum custom field resolution depth
+    Returns: str: cache key
+    Raises: None
+    Example:
+        >>> _make_table_cache_key('default','app','Model',['a.b'],False,0)
+        'model-table:default:app:Model:counts=0:depth=0:cf=a.b'
+    """
+    cf = ",".join(_normalize_custom_fields(custom_fields))
+    return f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}:depth={max_depth}:cf={cf}"
 
 
 def cache_metadata(
@@ -69,79 +115,19 @@ def cache_metadata(
     invalidate_on_model_change: bool = True,
 ):
     """
-    Decorator for caching metadata extraction methods.
+    Decorator retained for API compatibility. Caching is removed; this is a no-op
+    that simply executes the wrapped function.
 
     Args:
-        timeout: Cache timeout in seconds (uses default if None)
-        user_specific: Whether to include user ID in cache key
-        invalidate_on_model_change: Whether to invalidate cache when model changes
+        timeout: Ignored
+        user_specific: Ignored
+        invalidate_on_model_change: Ignored
     """
 
     def decorator(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            if not METADATA_CACHE_CONFIG.enabled:
-                return func(self, *args, **kwargs)
-
-            # Generate cache key based on function name, args, and user
-            cache_key_parts = [
-                f"metadata_{func.__name__}",
-                str(hash(str(args))),
-                str(hash(str(sorted(kwargs.items())))),
-            ]
-
-            # Add user ID if user_specific and user is available
-            if user_specific and len(args) > 0:
-                # Try to find user in args or kwargs
-                user = None
-                if "user" in kwargs:
-                    user = kwargs["user"]
-                elif len(args) >= 3 and hasattr(
-                    args[2], "id"
-                ):  # Common pattern: (self, app_name, model_name, user)
-                    user = args[2]
-
-                if user and hasattr(user, "id"):
-                    cache_key_parts.append(f"user_{user.id}")
-
-            # Create final cache key
-            cache_key_raw = "_".join(cache_key_parts)
-            cache_key = f"metadata_{hashlib.md5(cache_key_raw.encode()).hexdigest()}"
-
-            # Try to get from cache
-            cache_manager = get_cache_manager()
-            cached_result = cache.get(cache_key)
-
-            if cached_result is not None:
-                if METADATA_CACHE_CONFIG.cache_hit_logging:
-                    logger.debug(f"Cache hit for metadata: {func.__name__}")
-                return cached_result
-
-            # Execute function and cache result
-            result = func(self, *args, **kwargs)
-
-            if result is not None:
-                # Compute effective timeout. If timeout resolves to <= 0, skip caching to
-                # prevent accidental "cache forever" behavior across different backends.
-                cache_timeout = (
-                    timeout
-                    if timeout is not None
-                    else METADATA_CACHE_CONFIG.default_timeout
-                )
-
-                if isinstance(cache_timeout, int) and cache_timeout > 0:
-                    cache.set(cache_key, result, cache_timeout)
-                    if METADATA_CACHE_CONFIG.cache_hit_logging:
-                        logger.debug(
-                            f"Cached metadata result: {func.__name__} (timeout: {cache_timeout}s)"
-                        )
-                else:
-                    if METADATA_CACHE_CONFIG.cache_hit_logging:
-                        logger.debug(
-                            f"Skipping cache set for metadata: {func.__name__} (timeout disabled)"
-                        )
-
-            return result
+            return func(self, *args, **kwargs)
 
         return wrapper
 
@@ -150,51 +136,38 @@ def cache_metadata(
 
 def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
     """
-    Invalidate metadata cache for specific model or all models.
-
+    Purpose: Invalidate cached metadata. Currently focuses on model_table cache.
     Args:
-        model_name: Specific model name to invalidate (optional)
-        app_name: Specific app name to invalidate (optional)
+        model_name: Optional[str] model name to invalidate
+        app_name: Optional[str] app label to scope invalidation
+    Returns: None
+    Raises: None
+    Example:
+        >>> invalidate_metadata_cache(model_name="Product", app_name="inventory")
     """
-    cache_manager = get_cache_manager()
-
-    if model_name and app_name:
-        # Invalidate specific model cache
-        pattern = f"metadata_*{app_name}*{model_name}*"
-        logger.info(f"Invalidating metadata cache for {app_name}.{model_name}")
-    elif app_name:
-        # Invalidate app cache
-        pattern = f"metadata_*{app_name}*"
-        logger.info(f"Invalidating metadata cache for app {app_name}")
-    else:
-        # Invalidate all metadata cache
-        pattern = "metadata_*"
-        logger.info("Invalidating all metadata cache")
-
-    # Clear cache entries matching pattern
-    try:
-        cache_manager.invalidate_cache(pattern)
-    except AttributeError:
-        logger.warning(
-            f"Failed to invalidate cache pattern {pattern}: 'GraphQLCacheManager' object has no attribute 'invalidate_cache'"
-        )
-        # Fallback: clear specific cache keys or all cache
-        if model_name and app_name:
-            cache.delete_many(
-                [
-                    f"metadata_{app_name}_{model_name}_model",
-                    f"metadata_{app_name}_{model_name}_fields",
-                    f"metadata_{app_name}_{model_name}_relationships",
-                    f"metadata_{app_name}_{model_name}_filters",
-                    f"metadata_{app_name}_{model_name}_mutations",
-                ]
-            )
-        else:
-            cache.clear()
-    except Exception as e:
-        logger.warning(f"Failed to invalidate cache pattern {pattern}: {e}")
-        # Fallback: clear all cache
-        cache.clear()
+    global _table_cache
+    with _table_cache_lock:
+        if not _table_cache:
+            return
+        for schema_name, inner in _table_cache.items():
+            keys_to_delete = []
+            for k in list(inner.keys()):
+                parts = k.split(":")
+                # Format: model-table:schema:app:model:counts=X:depth=Y:cf=...
+                cache_app = parts[3] if len(parts) > 3 else None
+                cache_model = parts[4] if len(parts) > 4 else None
+                if model_name or app_name:
+                    if (
+                        (not app_name or app_name == cache_app)
+                        and (not model_name or model_name == cache_model)
+                    ):
+                        keys_to_delete.append(k)
+                else:
+                    keys_to_delete.append(k)
+            for k in keys_to_delete:
+                inner.pop(k, None)
+                _table_cache_stats["deletes"] += 1
+        _table_cache_stats["invalidations"] += 1
 
 
 def invalidate_cache_on_startup() -> None:
@@ -209,34 +182,16 @@ def invalidate_cache_on_startup() -> None:
     """
     try:
         from django.conf import settings as django_settings
-    except Exception:
-        # Settings may not be available in certain script contexts
-        logger.debug("Django settings unavailable; skipping startup cache invalidation")
-        return
-
-    # Configuration flags
-    config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {})
-    metadata_config = config.get("METADATA", {})
-
-    clear_on_start = bool(metadata_config.get("clear_cache_on_start", False))
-    debug_only = bool(metadata_config.get("clear_cache_on_start_debug_only", False))
-    debug_mode = bool(getattr(django_settings, "DEBUG", False))
-
-    # Determine whether to clear cache
-    should_clear = clear_on_start and (not debug_only or debug_mode)
-
-    if not should_clear:
-        logger.info(
-            "Startup cache invalidation disabled by configuration (RAIL_DJANGO_GRAPHQL.METADATA)"
-        )
-        return
-
-    try:
-        # Invalidate all metadata cache entries
-        invalidate_metadata_cache()
-        logger.info("Metadata cache invalidated on application startup")
-    except Exception as exc:
-        logger.warning(f"Failed to invalidate metadata cache on startup: {exc}")
+        config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
+        metadata_config = config.get("METADATA", {}) or {}
+        clear_on_start = bool(metadata_config.get("clear_cache_on_start", False))
+        debug_only = bool(metadata_config.get("clear_cache_on_start_debug_only", False))
+        debug_mode = bool(getattr(django_settings, "DEBUG", False))
+        if clear_on_start and (not debug_only or debug_mode):
+            invalidate_metadata_cache()
+            logger.info("Metadata cache invalidated on application startup")
+    except Exception as e:
+        logger.debug(f"Skipping startup cache invalidation: {e}")
 
 
 # Use lazy import to avoid AppRegistryNotReady error
@@ -2793,6 +2748,7 @@ class ModelTableExtractor:
         is_related = isinstance(
             field, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)
         )
+
         return TableFieldMetadata(
             name=field.name,
             accessor=field.name,
@@ -2927,6 +2883,29 @@ class ModelTableExtractor:
         counts: bool = False,
         user=None,
     ) -> Optional[ModelTableMetadata]:
+        # TTL cache lookup for model_table metadata
+        try:
+            cache_key = _make_table_cache_key(
+                self.schema_name,
+                app_name,
+                model_name,
+                custom_fields,
+                counts,
+                self.max_depth,
+            )
+            now = time.time()
+            with _table_cache_lock:
+                entry = _table_cache.get(cache_key)
+                if entry and entry.get("expires_at", 0) > now:
+                    _table_cache_stats["hits"] += 1
+                    cached = entry.get("value")
+                    if cached is not None:
+                        return cached
+                _table_cache_stats["misses"] += 1
+        except Exception:
+            # Do not fail metadata resolution due to cache issues
+            pass
+
         model = self._get_model(app_name, model_name)
         if not model:
             return None
@@ -3029,12 +3008,55 @@ class ModelTableExtractor:
                     table_fields.append(self._build_table_field_from_django_field(f))
                 except Exception as e:
                     logger.warning(f"Unable to build field metadata for {f.name}: {e}")
-
-        # Properties from introspector
+        # Properties from introspector should not surface polymorphic/internal links
+        # In polymorphic/multi-table inheritance contexts, also hide properties that
+        # correspond to OneToOne relations (parent_link or explicit), as they are
+        # implementation details rather than user-facing table fields.
         try:
-            for prop_name, prop_info in getattr(introspector, "properties", {}).items():
-                if prop_name == "pk":
+            properties_dict = getattr(introspector, "properties", {}) or {}
+            # Build a set of OneToOne relation names and reverse accessor names
+            # to filter property exposure in polymorphic contexts
+            one_to_one_relation_names = set()
+            reverse_relation_names = set()
+            try:
+                relationships_dict = getattr(introspector, "relationships", {}) or {}
+                for rel_name, rel_info in relationships_dict.items():
+                    if getattr(rel_info, "relationship_type", "") == "OneToOneField":
+                        one_to_one_relation_names.add(rel_name)
+            except Exception:
+                # Be resilient if relationships are not available
+                pass
+
+            # Collect reverse relation accessor names (includes reverse OneToOne)
+            try:
+                if hasattr(introspector, "get_reverse_relations"):
+                    reverse_relations = introspector.get_reverse_relations() or {}
+                    for accessor_name in reverse_relations.keys():
+                        reverse_relation_names.add(str(accessor_name))
+            except Exception:
+                pass
+
+            existing_names = {getattr(tf, "name", None) for tf in table_fields}
+            for prop_name, prop_info in properties_dict.items():
+                # Skip internal/polymorphic properties and duplicates
+                if (
+                    prop_name == "pk"
+                    or prop_name == "polymorphic_ctype"
+                    or str(prop_name).endswith("_ptr")
+                    or (
+                        is_polymorphic_model
+                        and (
+                            prop_name in one_to_one_relation_names
+                            or prop_name in reverse_relation_names
+                        )
+                    )
+                ):
                     continue
+
+                if prop_name in existing_names:
+                    # Avoid duplicating a field already captured from Django model fields
+                    continue
+
                 verbose = getattr(prop_info, "verbose_name", prop_name)
                 return_type = getattr(prop_info, "return_type", None)
                 table_fields.append(
@@ -3042,10 +3064,13 @@ class ModelTableExtractor:
                         prop_name, return_type, verbose
                     )
                 )
-        except Exception:
+        except Exception as E:
             # Properties may not be available; ignore quietly
+            logger.debug(
+                f"Properties extraction unavailable for {model.__name__}: {E}"
+            )
             pass
-
+        
         # Reverse relationship count field if counts is True
         if counts:
             table_fields.extend(
@@ -3072,6 +3097,7 @@ class ModelTableExtractor:
                     is_related=True,
                 )
             )
+        
 
         # Filters: reuse existing extractor and append custom ones
         filters: List[Dict[str, Any]] = []
@@ -3116,9 +3142,8 @@ class ModelTableExtractor:
                     "options": options,
                 }
             )
-
         # Assemble final metadata
-        return ModelTableMetadata(
+        metadata = ModelTableMetadata(
             app=app_label,
             model=model_label,
             verboseName=verbose_name,
@@ -3133,6 +3158,27 @@ class ModelTableExtractor:
             fields=table_fields,
             filters=filters,
         )
+        # Store in TTL cache
+        try:
+            timeout = _get_table_cache_timeout()
+            cache_key = _make_table_cache_key(
+                self.schema_name,
+                app_name,
+                model_name,
+                custom_fields,
+                counts,
+                self.max_depth,
+            )
+            with _table_cache_lock:
+                _table_cache[cache_key] = {
+                    "value": metadata,
+                    "expires_at": time.time() + timeout,
+                }
+                _table_cache_stats["sets"] += 1
+        except Exception:
+            # Do not prevent returning metadata due to cache issues
+            pass
+        return metadata
 
 
 class ModelMetadataQuery(graphene.ObjectType):
@@ -3212,7 +3258,6 @@ class ModelMetadataQuery(graphene.ObjectType):
         # Check core schema settings gating
         # Get user from context and require authentication
         user = getattr(info.context, "user", None)
-        print("mmmmmmmmmmmmmmmmmmmmmmmm", user)
         if not user or not getattr(user, "is_authenticated", False):
             permissions_included = False
 
@@ -3515,26 +3560,42 @@ def warm_metadata_cache(app_name: str = None, model_name: str = None, user=None)
 
 def get_cache_stats() -> Dict[str, Any]:
     """
-    Get metadata cache statistics.
-
+    Purpose: Return TTL cache statistics for model table metadata.
+    
+    Args:
+        None
+    
     Returns:
-        Dictionary with cache statistics
+        Dict[str, Any]: Cache statistics including hits, misses, hit rate, sets,
+        deletes, invalidations, default timeout, and current cache size.
+    
+    Raises:
+        None
+    
+    Example:
+        >>> stats = get_cache_stats()
+        >>> stats["hits"]
+        0
     """
-    cache_manager = get_cache_manager()
-    stats = cache_manager.get_stats()
+    # Safely snapshot current stats and size under lock
+    with _table_cache_lock:
+        stats_snapshot = dict(_table_cache_stats)
+        cache_size = len(_table_cache)
+
+    total_requests = stats_snapshot.get("hits", 0) + stats_snapshot.get("misses", 0)
+    hit_rate = (
+        (stats_snapshot.get("hits", 0) / total_requests) if total_requests else 0.0
+    )
 
     return {
-        "enabled": METADATA_CACHE_CONFIG.enabled,
-        "hit_rate": stats.hit_rate,
-        "hits": stats.hits,
-        "misses": stats.misses,
-        "sets": stats.sets,
-        "deletes": stats.deletes,
-        "invalidations": stats.invalidations,
-        "default_timeout": METADATA_CACHE_CONFIG.default_timeout,
-        "schema_cache_timeout": METADATA_CACHE_CONFIG.schema_cache_timeout,
-        "query_cache_timeout": METADATA_CACHE_CONFIG.query_cache_timeout,
-        "field_cache_timeout": METADATA_CACHE_CONFIG.field_cache_timeout,
+        "hits": stats_snapshot.get("hits", 0),
+        "misses": stats_snapshot.get("misses", 0),
+        "hit_rate": hit_rate,
+        "sets": stats_snapshot.get("sets", 0),
+        "deletes": stats_snapshot.get("deletes", 0),
+        "invalidations": stats_snapshot.get("invalidations", 0),
+        "default_timeout": _get_table_cache_timeout(),
+        "size": cache_size,
     }
 
 

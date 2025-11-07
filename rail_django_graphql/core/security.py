@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Set, Union
 from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
-from django.core.cache import cache
 from django.utils import timezone
 
 from ..conf import get_setting
@@ -29,7 +28,7 @@ class SecuritySettings:
 
     enable_authentication: bool = True
     enable_authorization: bool = True
-    enable_rate_limiting: bool = True
+    enable_rate_limiting: bool = False
     rate_limit_requests_per_minute: int = 60
     rate_limit_requests_per_hour: int = 1000
     enable_query_depth_limiting: bool = True
@@ -224,34 +223,7 @@ class RateLimiter:
         Returns:
             True if within limits, False if rate limited
         """
-        if not self.settings.enable_rate_limiting:
-            return True
-
-        current_time = int(time.time())
-
-        if window == "minute":
-            window_size = 60
-            max_requests = self.settings.rate_limit_requests_per_minute
-        elif window == "hour":
-            window_size = 3600
-            max_requests = self.settings.rate_limit_requests_per_hour
-        else:
-            return True
-
-        # Calculate window start
-        window_start = current_time - (current_time % window_size)
-
-        # Cache key for this window
-        cache_key = f"rate_limit:{self.schema_name or 'default'}:{identifier}:{window}:{window_start}"
-
-        # Get current count
-        current_count = cache.get(cache_key, 0)
-
-        if current_count >= max_requests:
-            return False
-
-        # Increment count
-        cache.set(cache_key, current_count + 1, window_size)
+        # Rate limiting disabled: always allow
         return True
 
     def get_client_identifier(self, request: Any) -> str:

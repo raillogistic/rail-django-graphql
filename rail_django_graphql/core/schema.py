@@ -179,8 +179,10 @@ class SchemaBuilder:
         """
         Connects Django signals for automatic schema rebuilding.
         """
-        post_migrate.connect(self._handle_post_migrate)
-        if self._get_schema_setting("auto_refresh_on_model_change", True):
+        # Only rebuild after migrations if enabled in schema settings
+        if self._get_schema_setting("auto_refresh_on_migration", True):
+            post_migrate.connect(self._handle_post_migrate)
+        if self._get_schema_setting("auto_refresh_on_model_change", False):
             post_save.connect(self._handle_model_change)
             post_delete.connect(self._handle_model_change)
 
@@ -431,53 +433,75 @@ class SchemaBuilder:
                 query_attrs.update(self._query_fields)
 
                 # Add security-related queries with proper resolver binding
+                # Import each extension class individually to avoid a single missing module
+                # preventing all security queries from being integrated.
+                security_query_classes = []
                 try:
                     from ..extensions.auth import MeQuery
-                    from ..extensions.permissions import PermissionQuery
-                    from ..extensions.rate_limiting import SecurityQuery
-                    from ..extensions.validation import ValidationQuery
-
-                    # Merge security queries and bind their resolvers to the root Query
-                    for query_class in [
-                        MeQuery,
-                        PermissionQuery,
-                        ValidationQuery,
-                        SecurityQuery,
-                    ]:
-                        # Create an instance to access bound resolver methods
-                        query_instance = query_class()
-
-                        for field_name, field in query_class._meta.fields.items():
-                            resolver_method_name = f"resolve_{field_name}"
-                            if hasattr(query_instance, resolver_method_name):
-                                resolver_method = getattr(
-                                    query_instance, resolver_method_name
-                                )
-
-                                # Create a wrapper that adapts (root, info, **kwargs) to (info, **kwargs)
-                                def create_resolver_wrapper(method):
-                                    def wrapper(root, info, **kwargs):
-                                        return method(info, **kwargs)
-
-                                    return wrapper
-
-                                # Recreate the field on the root Query with the bound resolver
-                                query_attrs[field_name] = graphene.Field(
-                                    field.type,
-                                    description=field.description,
-                                    resolver=create_resolver_wrapper(resolver_method),
-                                    **field.args,
-                                )
-                            else:
-                                # Fallback: copy field if no resolver method is defined
-                                query_attrs[field_name] = field
-
-                    logger.info(
-                        f"Security extensions integrated into schema '{self.schema_name}' with resolver binding"
-                    )
+                    security_query_classes.append(MeQuery)
                 except ImportError as e:
                     logger.warning(
-                        f"Could not import security extensions for schema '{self.schema_name}': {e}"
+                        f"Could not import MeQuery for schema '{self.schema_name}': {e}"
+                    )
+
+                try:
+                    from ..extensions.permissions import PermissionQuery
+                    security_query_classes.append(PermissionQuery)
+                except ImportError as e:
+                    logger.warning(
+                        f"Could not import PermissionQuery for schema '{self.schema_name}': {e}"
+                    )
+
+                try:
+                    from ..extensions.validation import ValidationQuery
+                    security_query_classes.append(ValidationQuery)
+                except ImportError as e:
+                    logger.warning(
+                        f"Could not import ValidationQuery for schema '{self.schema_name}': {e}"
+                    )
+
+                # rate_limiting is optional; include if present
+                try:
+                    from ..extensions.rate_limiting import SecurityQuery
+                    security_query_classes.append(SecurityQuery)
+                except ImportError as e:
+                    logger.info(
+                        f"Rate limiting SecurityQuery not available for schema '{self.schema_name}': {e}"
+                    )
+
+                # Merge security queries and bind their resolvers to the root Query
+                for query_class in security_query_classes:
+                    # Create an instance to access bound resolver methods
+                    query_instance = query_class()
+
+                    for field_name, field in query_class._meta.fields.items():
+                        resolver_method_name = f"resolve_{field_name}"
+                        if hasattr(query_instance, resolver_method_name):
+                            resolver_method = getattr(
+                                query_instance, resolver_method_name
+                            )
+
+                            # Create a wrapper that adapts (root, info, **kwargs) to (info, **kwargs)
+                            def create_resolver_wrapper(method):
+                                def wrapper(root, info, **kwargs):
+                                    return method(info, **kwargs)
+
+                                return wrapper
+
+                            # Recreate the field on the root Query with the bound resolver
+                            query_attrs[field_name] = graphene.Field(
+                                field.type,
+                                description=field.description,
+                                resolver=create_resolver_wrapper(resolver_method),
+                                args=getattr(field, "args", None),
+                            )
+                        else:
+                            # Fallback: copy field if no resolver method is defined
+                            query_attrs[field_name] = field
+
+                if security_query_classes:
+                    logger.info(
+                        f"Security extensions integrated into schema '{self.schema_name}' with resolver binding"
                     )
 
                 # Add health monitoring queries
@@ -508,7 +532,7 @@ class SchemaBuilder:
                                 field.type,
                                 description=field.description,
                                 resolver=create_resolver_wrapper(resolver_method),
-                                **field.args,
+                                args=getattr(field, "args", None),
                             )
                         else:
                             query_attrs[field_name] = field
@@ -552,7 +576,7 @@ class SchemaBuilder:
                                     field.type,
                                     description=field.description,
                                     resolver=create_resolver_wrapper(resolver_method),
-                                    **field.args,
+                                    args=getattr(field, "args", None),
                                 )
                             else:
                                 query_attrs[field_name] = field
@@ -607,8 +631,23 @@ class SchemaBuilder:
                         f"Could not import security mutations for schema '{self.schema_name}': {e}"
                     )
 
+                # Add health/maintenance mutations
+                extension_mutations: Dict[str, Any] = {}
+                try:
+                    from ..extensions.health import RefreshSchemaMutation
+                    extension_mutations.update({
+                        "refresh_schema": RefreshSchemaMutation.Field(),
+                    })
+                    logger.info(
+                        f"Health extension mutations integrated into schema '{self.schema_name}'"
+                    )
+                except ImportError as e:
+                    logger.warning(
+                        f"Could not import health extension mutations for schema '{self.schema_name}': {e}"
+                    )
+
                 # Combine all mutations
-                all_mutations = {**self._mutation_fields, **security_mutations}
+                all_mutations = {**self._mutation_fields, **security_mutations, **extension_mutations}
 
                 if all_mutations:
                     # logger.info(

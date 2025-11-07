@@ -15,11 +15,11 @@ from datetime import datetime, timezone
 from doctest import debug
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+import time
 
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db import models
 from django.http import HttpRequest
 from django.utils import timezone as django_timezone
@@ -140,6 +140,11 @@ class AuditLogger:
                 "suspicious_activity_window": 300,  # 5 minutes
             },
         )
+
+        # In-memory counters for failed login tracking (per-process)
+        # Structure: {key: [count, window_start_ts]}
+        self._failed_login_ip_state: Dict[str, List[float]] = {}
+        self._failed_login_user_state: Dict[str, List[float]] = {}
 
     def log_event(self, event: AuditEvent) -> None:
         """
@@ -475,23 +480,31 @@ class AuditLogger:
         Args:
             event: L'événement d'audit à vérifier
         """
-        cache_key = f"failed_logins_ip_{event.client_ip}"
-        failed_count = cache.get(cache_key, 0) + 1
-        cache.set(
-            cache_key,
-            failed_count,
-            timeout=self.alert_thresholds["suspicious_activity_window"],
-        )
+        key = str(event.client_ip)
+        now = time.time()
+        window = float(self.alert_thresholds.get("suspicious_activity_window", 300))
+        state = self._failed_login_ip_state.get(key, [0.0, now])
+        count = int(state[0])
+        window_start = float(state[1])
+
+        # Reset window if expired
+        if now - window_start >= window:
+            count = 0
+            window_start = now
+
+        # Increment counter
+        count += 1
+        self._failed_login_ip_state[key] = [float(count), window_start]
 
         # En mode debug, on enregistre mais on ne déclenche pas d'alerte
         if self.debug:
             logger.debug(
-                f"Debug mode: Failed login attempt #{failed_count} from IP {event.client_ip} - Alert suppressed"
+                f"Debug mode: Failed login attempt #{count} from IP {event.client_ip} - Alert suppressed"
             )
             return
 
-        threshold = self.alert_thresholds.get("failed_logins_per_ip", 10)
-        if failed_count >= threshold and not self.debug:
+        threshold = int(self.alert_thresholds.get("failed_logins_per_ip", 10))
+        if count >= threshold and not self.debug:
             self._trigger_security_alert(
                 event,
                 f"Trop de tentatives de connexion échouées depuis l'IP {event.client_ip}",
@@ -508,26 +521,34 @@ class AuditLogger:
         if not event.username:
             return
 
-        cache_key = f"failed_logins_user_{event.username}"
-        failed_count = cache.get(cache_key, 0) + 1
-        cache.set(
-            cache_key,
-            failed_count,
-            timeout=self.alert_thresholds["suspicious_activity_window"],
-        )
+        key = str(event.username)
+        now = time.time()
+        window = float(self.alert_thresholds.get("suspicious_activity_window", 300))
+        state = self._failed_login_user_state.get(key, [0.0, now])
+        count = int(state[0])
+        window_start = float(state[1])
+
+        # Reset window if expired
+        if now - window_start >= window:
+            count = 0
+            window_start = now
+
+        # Increment counter
+        count += 1
+        self._failed_login_user_state[key] = [float(count), window_start]
 
         # En mode debug, on enregistre mais on ne déclenche pas d'alerte
         if self.debug:
             logger.debug(
-                f"Debug mode: Failed login attempt #{failed_count} for user {event.username} - Alert suppressed"
+                f"Debug mode: Failed login attempt #{count} for user {event.username} - Alert suppressed"
             )
             return
 
-        threshold = self.alert_thresholds.get("failed_logins_per_user", 5)
-        if failed_count >= threshold:
+        threshold = int(self.alert_thresholds.get("failed_logins_per_user", 5))
+        if count >= threshold:
             self._trigger_security_alert(
                 event,
-                f"Utilisateur {event.username} a échoué {failed_count} tentatives de connexion",
+                f"Utilisateur {event.username} a échoué {count} tentatives de connexion",
             )
 
     def _trigger_security_alert(

@@ -17,7 +17,6 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
-from django.core.cache import cache
 from django.core.exceptions import FieldDoesNotExist
 from django.db import connection, models
 from django.db.models import Prefetch, QuerySet
@@ -30,7 +29,7 @@ from django.db.models.fields.reverse_related import (
 from graphql import GraphQLResolveInfo
 from graphql.execution.collect_fields import collect_fields
 
-from ..extensions.caching import cache_field, cache_query, get_cache_manager
+# Caching removed from project: no cache imports
 
 logger = logging.getLogger(__name__)
 
@@ -384,145 +383,7 @@ class QueryOptimizer:
         return prefetch_objects
 
 
-class CacheManager:
-    """Manages multi-level caching for GraphQL queries and schema."""
-
-    def __init__(self, config: QueryOptimizationConfig):
-        self.config = config
-        self._schema_cache: Dict[str, Any] = {}
-        self._query_cache: Dict[str, Any] = {}
-        self._field_cache: Dict[str, Any] = {}
-
-    def get_cached_schema(self, cache_key: str) -> Optional[Any]:
-        """Get cached schema object."""
-        if not self.config.enable_schema_caching:
-            return None
-
-        return self._schema_cache.get(cache_key)
-
-    def cache_schema(self, cache_key: str, schema_object: Any) -> None:
-        """Cache schema object."""
-        if not self.config.enable_schema_caching:
-            return
-
-        self._schema_cache[cache_key] = schema_object
-        logger.debug(f"Cached schema object: {cache_key}")
-
-    def get_cached_query_result(self, cache_key: str) -> Optional[Any]:
-        """Get cached query result."""
-        if not self.config.enable_query_caching:
-            return None
-
-        cached_result = cache.get(cache_key)
-        if cached_result:
-            logger.debug(f"Cache hit for query: {cache_key}")
-            return cached_result
-
-        logger.debug(f"Cache miss for query: {cache_key}")
-        return None
-
-    def cache_query_result(self, cache_key: str, result: Any) -> None:
-        """Cache query result."""
-        if not self.config.enable_query_caching:
-            return
-
-        cache.set(cache_key, result, self.config.cache_timeout)
-        logger.debug(f"Cached query result: {cache_key}")
-
-    def get_cached_field_value(self, cache_key: str) -> Optional[Any]:
-        """Get cached field value."""
-        if not self.config.enable_field_caching:
-            return None
-
-        return self._field_cache.get(cache_key)
-
-    def cache_field_value(self, cache_key: str, value: Any) -> None:
-        """Cache field value."""
-        if not self.config.enable_field_caching:
-            return
-
-        self._field_cache[cache_key] = value
-
-    def get_query_result(
-        self,
-        query_string: str,
-        variables: Optional[Dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-    ) -> Optional[Any]:
-        """Get cached query result with support for variables and user-specific caching."""
-        if not self.config.enable_query_caching:
-            return None
-
-        # Generate cache key based on query string, variables, and user
-        import hashlib
-
-        cache_key_parts = [query_string]
-        if variables:
-            # Sort variables for consistent cache keys
-            sorted_vars = json.dumps(variables, sort_keys=True)
-            cache_key_parts.append(sorted_vars)
-        if user_id:
-            cache_key_parts.append(f"user_{user_id}")
-
-        # Create a safe cache key by hashing
-        cache_key_raw = "_".join(cache_key_parts)
-        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
-
-        cached_result = cache.get(cache_key)
-        if cached_result:
-            logger.debug(f"Cache hit for query: {cache_key}")
-            return cached_result
-
-        logger.debug(f"Cache miss for query: {cache_key}")
-        return None
-
-    def set_query_result(
-        self,
-        query_string: str,
-        result: Any,
-        variables: Optional[Dict[str, Any]] = None,
-        user_id: Optional[int] = None,
-        timeout: Optional[int] = None,
-    ) -> None:
-        """Cache query result with support for variables and user-specific caching."""
-        if not self.config.enable_query_caching:
-            return
-
-        # Generate cache key based on query string, variables, and user
-        import hashlib
-
-        cache_key_parts = [query_string]
-        if variables:
-            # Sort variables for consistent cache keys
-            sorted_vars = json.dumps(variables, sort_keys=True)
-            cache_key_parts.append(sorted_vars)
-        if user_id:
-            cache_key_parts.append(f"user_{user_id}")
-
-        # Create a safe cache key by hashing
-        cache_key_raw = "_".join(cache_key_parts)
-        cache_key = hashlib.md5(cache_key_raw.encode()).hexdigest()
-
-        # Use provided timeout or default from config
-        cache_timeout = timeout if timeout is not None else self.config.cache_timeout
-        cache.set(cache_key, result, cache_timeout)
-        logger.debug(f"Cached query result: {cache_key} (timeout: {cache_timeout}s)")
-
-    def invalidate_cache(self, pattern: str = None) -> None:
-        """Invalidate cache entries matching pattern."""
-        if pattern:
-            # Invalidate specific pattern
-            keys_to_delete = [key for key in self._query_cache.keys() if pattern in key]
-            for key in keys_to_delete:
-                del self._query_cache[key]
-        else:
-            # Clear all caches
-            self._schema_cache.clear()
-            self._query_cache.clear()
-            self._field_cache.clear()
-            cache.clear()
-
-        logger.info(f"Cache invalidated: {pattern or 'all'}")
+## CacheManager removed: caching functionality is not supported in this project.
 
 
 class PerformanceMonitor:
@@ -656,7 +517,7 @@ class PerformanceMonitor:
 
 
 def optimize_query(
-    enable_caching: bool = True,
+    enable_caching: bool = False,
     cache_timeout: Optional[int] = None,
     user_specific_cache: bool = False,
     complexity_limit: Optional[int] = None,
@@ -689,50 +550,12 @@ def optimize_query(
                             f"Query complexity {analysis.complexity_score} exceeds limit {complexity_limit}"
                         )
 
-                # Vérifier le cache si activé
-                if enable_caching:
-                    cache_manager = get_cache_manager()
-                    query_string = str(info.field_name)
-                    user_id = (
-                        getattr(info.context.user, "id", None)
-                        if user_specific_cache
-                        else None
-                    )
-
-                    cached_result = cache_manager.get_query_result(
-                        query_string, kwargs, user_id
-                    )
-
-                    if cached_result is not None:
-                        # Enregistrer le hit de cache
-                        execution_time = time.time() - start_time
-                        performance_monitor.record_query_performance(
-                            query_name=info.field_name,
-                            execution_time=execution_time,
-                            cache_hit=True,
-                        )
-                        return cached_result
-
                 # Exécuter la requête
                 result = resolver_func(root, info, **kwargs)
 
                 # Optimize queryset if it's a QuerySet
                 if isinstance(result, QuerySet) and hasattr(result, "model"):
                     result = optimizer.optimize_queryset(result, info, result.model)
-
-                # Mettre en cache le résultat si activé
-                if enable_caching:
-                    cache_manager = get_cache_manager()
-                    query_string = str(info.field_name)
-                    user_id = (
-                        getattr(info.context.user, "id", None)
-                        if user_specific_cache
-                        else None
-                    )
-
-                    cache_manager.set_query_result(
-                        query_string, result, kwargs, user_id, timeout=cache_timeout
-                    )
 
                 # Enregistrer les métriques de performance
                 execution_time = time.time() - start_time
@@ -760,38 +583,12 @@ def optimize_query(
     return decorator
 
 
-def cache_result(timeout: int = 300, key_func: Callable = None):
-    """Decorator to cache GraphQL query results."""
-
-    def decorator(resolver_func: Callable) -> Callable:
-        @wraps(resolver_func)
-        def wrapper(root, info: GraphQLResolveInfo, **kwargs):
-            # Generate cache key
-            if key_func:
-                cache_key = key_func(root, info, **kwargs)
-            else:
-                cache_key = f"graphql:{resolver_func.__name__}:{hash(str(kwargs))}"
-
-            # Try to get from cache
-            cached_result = cache.get(cache_key)
-            if cached_result is not None:
-                return cached_result
-
-            # Execute resolver and cache result
-            result = resolver_func(root, info, **kwargs)
-            cache.set(cache_key, result, timeout)
-
-            return result
-
-        return wrapper
-
-    return decorator
+## cache_result decorator removed: no caching in project
 
 
 # Global optimization manager instance
 _optimization_config = QueryOptimizationConfig()
 _query_optimizer = QueryOptimizer(_optimization_config)
-_cache_manager = CacheManager(_optimization_config)
 _performance_monitor = PerformanceMonitor(_optimization_config)
 
 
@@ -800,9 +597,7 @@ def get_optimizer() -> QueryOptimizer:
     return _query_optimizer
 
 
-def get_cache_manager() -> CacheManager:
-    """Get the global cache manager instance."""
-    return _cache_manager
+## get_cache_manager removed: caching not supported
 
 
 def get_performance_monitor() -> PerformanceMonitor:
@@ -812,11 +607,10 @@ def get_performance_monitor() -> PerformanceMonitor:
 
 def configure_optimization(config: QueryOptimizationConfig) -> None:
     """Configure global optimization settings."""
-    global _optimization_config, _query_optimizer, _cache_manager, _performance_monitor
+    global _optimization_config, _query_optimizer, _performance_monitor
 
     _optimization_config = config
     _query_optimizer = QueryOptimizer(config)
-    _cache_manager = CacheManager(config)
     _performance_monitor = PerformanceMonitor(config)
 
     logger.info("Performance optimization configured")

@@ -17,7 +17,6 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.contrib.contenttypes.models import ContentType
-from django.core.cache import cache
 from django.db import models
 from graphql import GraphQLError
 
@@ -172,20 +171,14 @@ class RoleManager:
         Returns:
             Liste des noms de rôles
         """
-        cache_key = f"user_roles:{user.id}"
-        roles = cache.get(cache_key)
+        # Retrieve roles directly from Django groups
+        roles = list(user.groups.values_list('name', flat=True))
 
-        if roles is None:
-            # Récupérer depuis les groupes Django
-            roles = list(user.groups.values_list('name', flat=True))
-
-            # Ajouter les rôles système si applicable
-            if user.is_superuser:
-                roles.append('superadmin')
-            elif user.is_staff:
-                roles.append('admin')
-
-            cache.set(cache_key, roles, 300)  # Cache 5 minutes
+        # Add system roles if applicable
+        if user.is_superuser:
+            roles.append('superadmin')
+        elif user.is_staff:
+            roles.append('admin')
 
         return roles
 
@@ -201,30 +194,21 @@ class RoleManager:
         Returns:
             Ensemble des permissions effectives
         """
-        cache_key = f"user_permissions:{user.id}"
-        if context:
-            cache_key += f":{hash(str(context))}"
+        permissions = set()
+        user_roles = self.get_user_roles(user)
 
-        permissions = cache.get(cache_key)
+        for role_name in user_roles:
+            role_def = self.get_role_definition(role_name)
+            if role_def:
+                permissions.update(role_def.permissions)
 
-        if permissions is None:
-            permissions = set()
-            user_roles = self.get_user_roles(user)
+                # Add parent role permissions
+                parent_permissions = self._get_inherited_permissions(role_name)
+                permissions.update(parent_permissions)
 
-            for role_name in user_roles:
-                role_def = self.get_role_definition(role_name)
-                if role_def:
-                    permissions.update(role_def.permissions)
-
-                    # Ajouter les permissions des rôles parents
-                    parent_permissions = self._get_inherited_permissions(role_name)
-                    permissions.update(parent_permissions)
-
-            # Permissions Django natives
-            django_permissions = user.get_all_permissions()
-            permissions.update(django_permissions)
-
-            cache.set(cache_key, permissions, 300)  # Cache 5 minutes
+        # Native Django permissions
+        django_permissions = user.get_all_permissions()
+        permissions.update(django_permissions)
 
         return permissions
 
@@ -402,11 +386,7 @@ class RoleManager:
         group, created = Group.objects.get_or_create(name=role_name)
         user.groups.add(group)
 
-        # Invalider le cache
-        cache_key = f"user_roles:{user.id}"
-        cache.delete(cache_key)
-        cache_key = f"user_permissions:{user.id}"
-        cache.delete(cache_key)
+        # Cache removed: no invalidation needed
 
         logger.info(f"Rôle '{role_name}' assigné à l'utilisateur {user.username}")
 
@@ -422,11 +402,7 @@ class RoleManager:
             group = Group.objects.get(name=role_name)
             user.groups.remove(group)
 
-            # Invalider le cache
-            cache_key = f"user_roles:{user.id}"
-            cache.delete(cache_key)
-            cache_key = f"user_permissions:{user.id}"
-            cache.delete(cache_key)
+            # Cache removed: no invalidation needed
 
             logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user.username}")
         except Group.DoesNotExist:

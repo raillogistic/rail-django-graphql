@@ -15,7 +15,6 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from django.db import models
 from graphene import Field, ObjectType
 from graphql import GraphQLError

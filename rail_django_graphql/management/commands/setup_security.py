@@ -360,30 +360,21 @@ MFA_ENABLED = False
         content += """
 
 # =============================================================================
-# CONFIGURATION DE CACHE (REQUIS POUR LA LIMITATION DE DÉBIT)
+# CONFIGURATION DE CACHE
 # =============================================================================
+
+# Note: Les fonctionnalités GraphQL internes n'exigent pas de cache externe.
+# Utilisez LocMemCache pendant le développement/test si votre projet a besoin
+# d'un cache pour d'autres composants. Les vérifications de santé utilisent
+# des caches en mémoire par processus avec TTL.
 
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-        },
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'KEY_PREFIX': 'graphql_security',
         'TIMEOUT': 3600,
     }
 }
-
-# Alternative avec Memcached
-# CACHES = {
-#     'default': {
-#         'BACKEND': 'django.core.cache.backends.memcached.PyMemcacheCache',
-#         'LOCATION': '127.0.0.1:11211',
-#         'KEY_PREFIX': 'graphql_security',
-#         'TIMEOUT': 3600,
-#     }
-# }
 
 # =============================================================================
 # LOGGING SÉCURISÉ

@@ -42,9 +42,9 @@ LIBRARY_NAME = __title__
 # Lazy imports to avoid circular dependencies and improve startup time
 def get_settings():
     """Get library settings with lazy import."""
-    from .conf import settings
+    from .conf import settings_proxy
 
-    return settings
+    return settings_proxy
 
 
 def get_schema_settings(schema_name: str):
@@ -131,9 +131,10 @@ def __getattr__(name):
 
         return ConfigLoader
     elif name == "settings":
-        from .conf import settings
+        # Export the hierarchical SettingsProxy as 'settings'
+        from .conf import settings_proxy
 
-        return settings
+        return settings_proxy
     else:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 

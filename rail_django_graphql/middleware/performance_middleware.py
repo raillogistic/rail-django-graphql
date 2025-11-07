@@ -11,7 +11,6 @@ import time
 import tracemalloc
 from typing import Any, Dict, Optional
 
-from django.core.cache import cache
 from django.db import connection
 from django.utils.deprecation import MiddlewareMixin
 from graphql import GraphQLError
@@ -62,10 +61,9 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
             # Compter les requêtes DB initiales
             request._graphql_initial_queries = len(connection.queries)
 
-            # Compter les hits/misses de cache initiaux
-            cache_stats = getattr(cache, "_cache", {})
-            request._graphql_initial_cache_hits = getattr(cache_stats, "hits", 0)
-            request._graphql_initial_cache_misses = getattr(cache_stats, "misses", 0)
+            # Caching removed: initialize cache metrics to zero
+            request._graphql_initial_cache_hits = 0
+            request._graphql_initial_cache_misses = 0
 
     def process_response(self, request, response):
         """Collecte les métriques de performance à la fin de la requête."""
@@ -129,13 +127,9 @@ class GraphQLPerformanceMiddleware(MiddlewareMixin):
         # Calculer les requêtes DB
         db_queries = len(connection.queries) - request._graphql_initial_queries
 
-        # Calculer les statistiques de cache
-        cache_stats = getattr(cache, "_cache", {})
-        current_cache_hits = getattr(cache_stats, "hits", 0)
-        current_cache_misses = getattr(cache_stats, "misses", 0)
-
-        cache_hits = current_cache_hits - request._graphql_initial_cache_hits
-        cache_misses = current_cache_misses - request._graphql_initial_cache_misses
+        # Caching removed: report zero cache hits/misses
+        cache_hits = 0
+        cache_misses = 0
 
         # Obtenir l'ID utilisateur si disponible
         user_id = None

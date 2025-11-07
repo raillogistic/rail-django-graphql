@@ -25,6 +25,7 @@ if DJANGO_FILTER_INSTALLED:
 from datetime import date
 
 from ..conf import get_mutation_generator_settings, get_type_generator_settings
+from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
 from ..core.scalars import get_custom_scalar, get_enabled_scalars
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
@@ -134,6 +135,7 @@ class TypeGenerator:
         ] = {}
         # Registry for generated GraphQL Enums for choice fields
         self._enum_registry: Dict[str, Type[graphene.Enum]] = {}
+        self._meta_cache: Dict[Type[models.Model], Any] = {}
 
     def _update_field_type_map(self) -> None:
         """Update field type map with custom scalars based on settings."""
@@ -180,43 +182,81 @@ class TypeGenerator:
             self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars["Decimal"]
 
     def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
-        """Get excluded fields for a specific model."""
+        """Get excluded fields for a specific model.
+
+        Filters out names that are not real Django model fields to avoid Graphene warnings
+        (e.g., excluding reverse relations like 'user_set' or non-existent fields).
+        """
         model_name = model.__name__
-        excluded = set()
+        excluded: set[str] = set()
 
-        # Always exclude polymorphic model internal fields
-        # These fields are automatically managed by django-polymorphic and should not be exposed
-        polymorphic_fields = {"polymorphic_ctype"}
-        excluded.update(polymorphic_fields)
-
-        # Also exclude any field ending with '_ptr' which are typically OneToOneField pointers in inheritance
+        # Introspect actual model fields once
         from rail_django_graphql.generators.introspector import ModelIntrospector
 
         introspector = ModelIntrospector(model)
         all_fields = introspector.get_model_fields()
-        for field_name in all_fields.keys():
+        valid_field_names = set(all_fields.keys())
+
+        # Exclude polymorphic internal field only if present on this model
+        if "polymorphic_ctype" in valid_field_names:
+            excluded.add("polymorphic_ctype")
+
+        # Also exclude any field ending with '_ptr' which are typically OneToOneField pointers in inheritance
+        for field_name in valid_field_names:
             if field_name.endswith("_ptr"):
                 excluded.add(field_name)
 
         # Check both exclude_fields and excluded_fields (alias)
         # Handle case where settings might be a list instead of dict
-
+        configured_excludes: set[str] = set()
         if isinstance(self.settings.exclude_fields, dict):
-            excluded.update(self.settings.exclude_fields.get(model_name, []))
+            configured_excludes.update(self.settings.exclude_fields.get(model_name, []))
         elif isinstance(self.settings.exclude_fields, list):
-            excluded.update(self.settings.exclude_fields)
+            configured_excludes.update(self.settings.exclude_fields)
 
         if isinstance(self.settings.excluded_fields, dict):
-            excluded.update(self.settings.excluded_fields.get(model_name, []))
+            configured_excludes.update(self.settings.excluded_fields.get(model_name, []))
         elif isinstance(self.settings.excluded_fields, list):
-            excluded.update(self.settings.excluded_fields)
-        return list(excluded)
+            configured_excludes.update(self.settings.excluded_fields)
+
+        # Only keep excludes that match actual model fields to prevent noisy warnings
+        excluded.update(name for name in configured_excludes if name in valid_field_names)
+        meta = self._get_model_meta(model)
+        if meta:
+            excluded.update(
+                name
+                for name in getattr(meta, "exclude_fields", []) or []
+                if name in valid_field_names
+            )
+        return list(sorted(excluded))
 
     def _get_included_fields(self, model: Type[models.Model]) -> Optional[List[str]]:
         """Get included fields for a specific model."""
+        meta = self._get_model_meta(model)
+        if meta and meta.include_fields is not None:
+            valid_field_names = {
+                f.name for f in model._meta.get_fields() if hasattr(f, "name")
+            }
+            return [
+                name for name in meta.include_fields if name in valid_field_names
+            ]
         if self.settings.include_fields is None:
             return None
-        return self.settings.include_fields.get(model.__name__, None)
+        include_list = self.settings.include_fields.get(model.__name__, None)
+        if include_list is None:
+            return None
+        return list(include_list)
+
+    def _get_model_meta(self, model: Type[models.Model]) -> Any:
+        """
+        Retrieve (and cache) the GraphQL meta helper for a model.
+        """
+        if model not in self._meta_cache:
+            try:
+                self._meta_cache[model] = get_model_graphql_meta(model)
+            except Exception:
+                self._meta_cache[model] = None
+        return self._meta_cache[model]
 
     def _should_field_be_required_for_create(
         self,
@@ -290,7 +330,9 @@ class TypeGenerator:
 
         return []
 
-    def _should_include_field(self, model: Type[models.Model], field_name: str) -> bool:
+    def _should_include_field(
+        self, model: Type[models.Model], field_name: str, *, for_input: bool = False
+    ) -> bool:
         # Exclude polymorphic model internal fields
         # These fields are automatically managed by django-polymorphic and should not be exposed in mutations
         polymorphic_fields = {"polymorphic_ctype"}
@@ -305,6 +347,10 @@ class TypeGenerator:
         included_fields = self._get_included_fields(model)
         if included_fields is not None:
             return field_name in included_fields
+
+        meta = self._get_model_meta(model)
+        if meta and not meta.should_expose_field(field_name, for_input=for_input):
+            return False
 
         return True
 
@@ -693,7 +739,9 @@ class TypeGenerator:
         input_fields = {}
 
         for field_name, field_info in fields.items():
-            if not self._should_include_field(model, field_name):
+            if not self._should_include_field(
+                model, field_name, for_input=True
+            ):
                 continue
 
             # Skip id field for create and update mutations (id is passed as separate argument for updates)
@@ -746,7 +794,9 @@ class TypeGenerator:
 
         # Add forward relationship fields with automatic dual field generation
         for field_name, rel_info in relationships.items():
-            if not self._should_include_field(model, field_name):
+            if not self._should_include_field(
+                model, field_name, for_input=True
+            ):
                 continue
 
             # Get the actual Django field to check its requirements
@@ -837,7 +887,9 @@ class TypeGenerator:
         if include_reverse_relations:
             reverse_relations = self._get_reverse_relations(model)
             for field_name, related_model in reverse_relations.items():
-                if not self._should_include_field(model, field_name):
+                if not self._should_include_field(
+                    model, field_name, for_input=True
+                ):
                     continue
 
                 # Always generate both direct ID list and nested fields for reverse relations
@@ -1197,7 +1249,9 @@ class TypeGenerator:
 
         # Add regular fields
         for field_name, field_info in fields.items():
-            if not self._should_include_field(model, field_name):
+            if not self._should_include_field(
+                model, field_name, for_input=True
+            ):
                 continue
 
             # Skip id field for create mutations
@@ -1237,7 +1291,9 @@ class TypeGenerator:
 
         # Add only essential relationship fields (avoid deep nesting)
         for field_name, rel_info in relationships.items():
-            if not self._should_include_field(model, field_name):
+            if not self._should_include_field(
+                model, field_name, for_input=True
+            ):
                 continue
 
             # Skip the parent field to prevent circular references

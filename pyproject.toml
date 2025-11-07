@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rail-django-graphql"
-version = "1.1.6"
+version = "1.1.7"
 description = "A powerful Django library for automatic GraphQL API generation with advanced features"
 readme = "README.md"
 license = {text = "MIT"}
@@ -97,8 +97,38 @@ postgres = [
     "psycopg2-binary>=2.9.0",
 ]
 full = [
-    "rail-django-graphql[dev,performance,postgres]",
+    # Development
+    "pytest>=7.0.0",
+    "pytest-django>=4.5.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "factory-boy>=3.2.0",
+    "tox>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "flake8-docstrings>=1.7.0",
+    "flake8-import-order>=0.18.0",
+    "flake8-bugbear>=23.0.0",
+    "mypy>=1.0.0",
+    "bandit>=1.7.0",
+    "safety>=2.3.0",
+    "pre-commit>=3.0.0",
+    "sphinx>=6.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+    "sphinx-autodoc-typehints>=1.20.0",
+    "ipython>=8.0.0",
+    "ipdb>=0.13.0",
+
+    # Performance
+    "redis>=4.0.0",
+    "django-redis>=5.2.0",
+    "celery>=5.2.0",
+
+    # Postgres
+    "psycopg2-binary>=2.9.0"
 ]
+
 
 [project.urls]
 Homepage = "https://github.com/raillogistic/rail-django-graphql"

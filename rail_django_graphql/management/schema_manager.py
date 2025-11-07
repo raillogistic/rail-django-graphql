@@ -9,15 +9,15 @@ import hashlib
 import json
 import logging
 import threading
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Union, Tuple
 
 from django.conf import settings
-from django.core.cache import cache
 from django.db import transaction
 from graphql import GraphQLSchema, build_ast_schema, validate
 
@@ -123,6 +123,9 @@ class SchemaManager:
 
         # Schema storage
         self._schemas: Dict[str, GraphQLSchema] = {}
+        # In-memory per-process cache with TTL for quick schema access
+        # Format: {name: (schema, expires_at_epoch_seconds)}
+        self._schema_cache: Dict[str, Tuple[GraphQLSchema, float]] = {}
         self._metadata: Dict[str, SchemaMetadata] = {}
         self._lifecycle_events: List[SchemaLifecycleEvent] = []
         self._health_status: Dict[str, SchemaHealth] = {}
@@ -567,16 +570,20 @@ class SchemaManager:
     def get_schema(self, name: str, use_cache: bool = True) -> Optional[GraphQLSchema]:
         """Get schema by name."""
         if use_cache and self.enable_caching:
-            cache_key = f"schema:{name}"
-            cached_schema = cache.get(cache_key)
-            if cached_schema:
-                return cached_schema
+            # Check in-memory cache first
+            cached = self._schema_cache.get(name)
+            if cached:
+                schema, expires_at = cached
+                if expires_at > time.time():
+                    return schema
+                # Expired entry: remove it
+                self._schema_cache.pop(name, None)
 
         schema = self._schemas.get(name)
 
         if schema and use_cache and self.enable_caching:
-            cache_key = f"schema:{name}"
-            cache.set(cache_key, schema, self.cache_timeout)
+            # Store in in-memory cache with TTL
+            self._schema_cache[name] = (schema, time.time() + float(self.cache_timeout))
 
         return schema
 
@@ -905,8 +912,8 @@ class SchemaManager:
 
     def _clear_schema_cache(self, name: str):
         """Clear schema cache."""
-        cache_key = f"schema:{name}"
-        cache.delete(cache_key)
+        # Remove from in-memory cache
+        self._schema_cache.pop(name, None)
 
     def _start_health_monitoring(self):
         """Start background health monitoring."""

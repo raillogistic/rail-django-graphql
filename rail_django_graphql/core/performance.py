@@ -2,7 +2,8 @@
 Performance optimization utilities for Rail Django GraphQL.
 
 This module implements performance-related settings from LIBRARY_DEFAULTS
-including query optimization, caching, and dataloader functionality.
+including query optimization and dataloader functionality. Caching has been
+fully removed from this project.
 """
 
 import logging
@@ -10,7 +11,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type, Union
 
 from django.conf import settings as django_settings
-from django.core.cache import cache
 from django.db import models
 
 from ..conf import get_setting
@@ -27,9 +27,7 @@ class PerformanceSettings:
     enable_prefetch_related: bool = True
     enable_only_fields: bool = True
     enable_defer_fields: bool = False
-    enable_query_caching: bool = True
-    cache_timeout: int = 300  # 5 minutes
-    cache_key_prefix: str = "graphql_query"
+    # Caching removed; related settings removed
     enable_dataloader: bool = True
     dataloader_batch_size: int = 100
     max_query_depth: int = 10
@@ -57,15 +55,7 @@ class PerformanceSettings:
         filtered_settings = {k: v for k, v in merged_settings.items() if k in valid_fields}
 
         # Auto-disable query caching in DEBUG mode to avoid stale results during development
-        try:
-            if getattr(django_settings, "DEBUG", False):
-                filtered_settings["enable_query_caching"] = False
-                logger.debug(
-                    "PerformanceSettings: DEBUG=True detected, disabling query caching for development."
-                )
-        except Exception:
-            # If settings are unavailable, proceed without modification
-            pass
+        # No caching: no DEBUG-based cache overrides needed
 
         return cls(**filtered_settings)
 
@@ -160,47 +150,7 @@ class QueryOptimizer:
         return defer_fields
 
 
-class QueryCache:
-    """Query caching utilities."""
-
-    def __init__(self, schema_name: Optional[str] = None):
-        self.schema_name = schema_name
-        self.settings = PerformanceSettings.from_schema(schema_name)
-
-    def get_cache_key(self, query: str, variables: Dict[str, Any] = None) -> str:
-        """Generate cache key for a GraphQL query."""
-        import hashlib
-
-        # Create a hash of the query and variables
-        content = f"{query}:{variables or {}}"
-        query_hash = hashlib.md5(content.encode()).hexdigest()
-
-        return f"{self.settings.cache_key_prefix}:{self.schema_name or 'default'}:{query_hash}"
-
-    def get_cached_result(self, query: str, variables: Dict[str, Any] = None) -> Optional[Any]:
-        """Get cached query result."""
-        if not self.settings.enable_query_caching:
-            return None
-
-        cache_key = self.get_cache_key(query, variables)
-        return cache.get(cache_key)
-
-    def cache_result(self, query: str, result: Any, variables: Dict[str, Any] = None) -> None:
-        """Cache query result."""
-        if not self.settings.enable_query_caching:
-            return
-
-        cache_key = self.get_cache_key(query, variables)
-        cache.set(cache_key, result, self.settings.cache_timeout)
-
-    def invalidate_cache(self, pattern: str = None) -> None:
-        """Invalidate cached queries."""
-        if pattern:
-            # This would require a cache backend that supports pattern deletion
-            logger.warning("Pattern-based cache invalidation not implemented")
-        else:
-            # Clear all cache entries with our prefix
-            cache.clear()
+## QueryCache removed: caching is not supported.
 
 
 class QueryComplexityAnalyzer:
@@ -261,7 +211,6 @@ class QueryComplexityAnalyzer:
 
 # Global instances
 query_optimizer = QueryOptimizer()
-query_cache = QueryCache()
 complexity_analyzer = QueryComplexityAnalyzer()
 
 
@@ -270,9 +219,7 @@ def get_query_optimizer(schema_name: Optional[str] = None) -> QueryOptimizer:
     return QueryOptimizer(schema_name)
 
 
-def get_query_cache(schema_name: Optional[str] = None) -> QueryCache:
-    """Get query cache instance for schema."""
-    return QueryCache(schema_name)
+## get_query_cache removed
 
 
 def get_complexity_analyzer(schema_name: Optional[str] = None) -> QueryComplexityAnalyzer:

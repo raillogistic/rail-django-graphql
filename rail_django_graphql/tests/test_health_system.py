@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from django.conf import settings
-from django.core.cache import cache
 from django.db import connection
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -35,7 +34,6 @@ class HealthCheckerTestCase(TestCase):
     def setUp(self):
         """Configuration initiale pour les tests."""
         self.health_checker = HealthChecker()
-        cache.clear()
 
     def test_health_status_dataclass(self):
         """Test de la dataclass HealthStatus."""
@@ -73,65 +71,77 @@ class HealthCheckerTestCase(TestCase):
 
     def test_check_schema_health_success(self):
         """Test de vérification de santé du schéma GraphQL."""
-        with patch("rail_django_graphql.extensions.health.build_schema") as mock_build:
-            mock_build.return_value = MagicMock()
+        # Mock the schema returned by get_schema to simulate a healthy introspection
+        with patch(
+            "rail_django_graphql.core.schema.get_schema"
+        ) as mock_get_schema:
+            fake_schema = MagicMock()
+
+            class FakeResult:
+                errors = None
+                data = {"__schema": {"types": ["Query", "Mutation"]}}
+
+            fake_schema.execute.return_value = FakeResult()
+            mock_get_schema.return_value = fake_schema
 
             result = self.health_checker.check_schema_health()
 
-            self.assertIsInstance(result, dict)
-            self.assertEqual(result["component"], "GraphQL Schema")
-            self.assertEqual(result["status"], "healthy")
-            self.assertIn("response_time_ms", result)
-            self.assertIn("timestamp", result)
+            self.assertIsInstance(result, HealthStatus)
+            self.assertEqual(result.component, "schema")
+            self.assertEqual(result.status, "healthy")
+            self.assertIsInstance(result.response_time_ms, float)
+            self.assertIsInstance(result.timestamp, datetime)
 
     def test_check_schema_health_failure(self):
         """Test de vérification de santé du schéma avec erreur."""
-        with patch("rail_django_graphql.extensions.health.build_schema") as mock_build:
-            mock_build.side_effect = Exception("Schema build failed")
+        with patch(
+            "rail_django_graphql.core.schema.get_schema"
+        ) as mock_get_schema:
+            mock_get_schema.side_effect = Exception("Schema build failed")
 
             result = self.health_checker.check_schema_health()
 
-            self.assertEqual(result["status"], "unhealthy")
-            self.assertIn("Schema build failed", result["message"])
+            self.assertIsInstance(result, HealthStatus)
+            self.assertEqual(result.status, "unhealthy")
+            self.assertIn("Schema build failed", result.message)
 
     def test_check_database_health_success(self):
         """Test de vérification de santé de la base de données."""
         result = self.health_checker.check_database_health()
 
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["component"], "Database")
-        self.assertEqual(result["status"], "healthy")
-        self.assertIn("response_time_ms", result)
-        self.assertGreater(result["response_time_ms"], 0)
+        self.assertIsInstance(result, list)
+        self.assertGreater(len(result), 0)
+        self.assertIsInstance(result[0], HealthStatus)
+        self.assertTrue(result[0].component.startswith("database_"))
+        self.assertIn(result[0].status, {"healthy", "degraded", "unhealthy"})
 
     def test_check_database_health_failure(self):
         """Test de vérification de santé de la base de données avec erreur."""
-        with patch("django.db.connection.cursor") as mock_cursor:
-            mock_cursor.side_effect = Exception("Database connection failed")
+        # Patch the connections mapping used by HealthChecker to simulate a failing cursor
+        failing_conn = MagicMock()
+        failing_conn.cursor.side_effect = Exception("Database connection failed")
 
+        with patch(
+            "rail_django_graphql.extensions.health.connections",
+            {"default": failing_conn},
+        ):
             result = self.health_checker.check_database_health()
 
-            self.assertEqual(result["status"], "unhealthy")
-            self.assertIn("Database connection failed", result["message"])
+            self.assertIsInstance(result, list)
+            self.assertEqual(result[0].status, "unhealthy")
+            self.assertIn("Database connection failed", result[0].message)
 
     def test_check_cache_health_success(self):
-        """Test de vérification de santé du cache."""
+        """Test de vérification de santé du cache (désactivé)."""
         result = self.health_checker.check_cache_health()
 
-        self.assertIsInstance(result, dict)
-        self.assertEqual(result["component"], "Cache")
-        self.assertEqual(result["status"], "healthy")
-        self.assertIn("response_time_ms", result)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 0)
 
-    def test_check_cache_health_failure(self):
-        """Test de vérification de santé du cache avec erreur."""
-        with patch("django.core.cache.cache.set") as mock_set:
-            mock_set.side_effect = Exception("Cache operation failed")
-
-            result = self.health_checker.check_cache_health()
-
-            self.assertEqual(result["status"], "unhealthy")
-            self.assertIn("Cache operation failed", result["message"])
+    def test_check_cache_health_disabled(self):
+        """Vérifie que la vérification du cache est désactivée et sûre."""
+        result = self.health_checker.check_cache_health()
+        self.assertEqual(result, [])
 
     def test_get_system_metrics(self):
         """Test de récupération des métriques système."""
@@ -144,15 +154,18 @@ class HealthCheckerTestCase(TestCase):
                 used=1024 * 1024 * 1024,  # 1GB en bytes
                 available=2048 * 1024 * 1024,  # 2GB en bytes
             )
-            mock_disk.return_value = MagicMock(percent=45.0)
+            # psutil.disk_usage returns an object with used/total attributes
+            mock_disk.return_value = MagicMock(
+                used=45 * 1024 * 1024,
+                total=100 * 1024 * 1024,
+            )
 
             result = self.health_checker.get_system_metrics()
 
-            self.assertIsInstance(result, dict)
-            self.assertEqual(result["cpu_usage_percent"], 25.5)
-            self.assertEqual(result["memory_usage_percent"], 60.0)
-            self.assertEqual(result["disk_usage_percent"], 45.0)
-            self.assertIn("uptime_seconds", result)
+            self.assertIsInstance(result, SystemMetrics)
+            self.assertEqual(result.cpu_usage_percent, 25.5)
+            self.assertEqual(result.memory_usage_percent, 60.0)
+            self.assertGreaterEqual(result.uptime_seconds, 0.0)
 
     def test_get_health_report(self):
         """Test de génération du rapport de santé complet."""
@@ -163,10 +176,32 @@ class HealthCheckerTestCase(TestCase):
         ) as mock_db, patch.object(
             self.health_checker, "check_cache_health"
         ) as mock_cache:
-            # Configuration des mocks
-            mock_schema.return_value = {"status": "healthy"}
-            mock_db.return_value = {"status": "healthy"}
-            mock_cache.return_value = {"status": "degraded"}
+            # Configuration des mocks avec objets dataclass
+            mock_schema.return_value = HealthStatus(
+                component="schema",
+                status="healthy",
+                message="",
+                response_time_ms=10.0,
+                timestamp=datetime.now(timezone.utc),
+            )
+            mock_db.return_value = [
+                HealthStatus(
+                    component="database_default",
+                    status="healthy",
+                    message="",
+                    response_time_ms=5.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
+            mock_cache.return_value = [
+                HealthStatus(
+                    component="cache_default",
+                    status="degraded",
+                    message="",
+                    response_time_ms=2.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
 
             result = self.health_checker.get_health_report()
 
@@ -187,9 +222,31 @@ class HealthCheckerTestCase(TestCase):
             self.health_checker, "check_cache_health"
         ) as mock_cache:
             # Tous les composants sont sains
-            mock_schema.return_value = {"status": "healthy"}
-            mock_db.return_value = {"status": "healthy"}
-            mock_cache.return_value = {"status": "healthy"}
+            mock_schema.return_value = HealthStatus(
+                component="schema",
+                status="healthy",
+                message="",
+                response_time_ms=10.0,
+                timestamp=datetime.now(timezone.utc),
+            )
+            mock_db.return_value = [
+                HealthStatus(
+                    component="database_default",
+                    status="healthy",
+                    message="",
+                    response_time_ms=5.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
+            mock_cache.return_value = [
+                HealthStatus(
+                    component="cache_default",
+                    status="healthy",
+                    message="",
+                    response_time_ms=2.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
 
             result = self.health_checker.get_health_report()
 
@@ -208,9 +265,31 @@ class HealthCheckerTestCase(TestCase):
             self.health_checker, "check_cache_health"
         ) as mock_cache:
             # Un composant défaillant
-            mock_schema.return_value = {"status": "unhealthy"}
-            mock_db.return_value = {"status": "healthy"}
-            mock_cache.return_value = {"status": "degraded"}
+            mock_schema.return_value = HealthStatus(
+                component="schema",
+                status="unhealthy",
+                message="",
+                response_time_ms=10.0,
+                timestamp=datetime.now(timezone.utc),
+            )
+            mock_db.return_value = [
+                HealthStatus(
+                    component="database_default",
+                    status="healthy",
+                    message="",
+                    response_time_ms=5.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
+            mock_cache.return_value = [
+                HealthStatus(
+                    component="cache_default",
+                    status="degraded",
+                    message="",
+                    response_time_ms=2.0,
+                    timestamp=datetime.now(timezone.utc),
+                )
+            ]
 
             result = self.health_checker.get_health_report()
 
@@ -228,7 +307,6 @@ class HealthViewsTestCase(TestCase):
     def setUp(self):
         """Configuration initiale pour les tests."""
         self.client = Client()
-        cache.clear()
 
     def test_health_dashboard_view_get(self):
         """Test de la vue du tableau de bord de santé."""
@@ -410,7 +488,6 @@ class HealthSystemIntegrationTestCase(TestCase):
     def setUp(self):
         """Configuration initiale pour les tests d'intégration."""
         self.client = Client()
-        cache.clear()
 
     def test_full_health_check_workflow(self):
         """Test du workflow complet de vérification de santé."""

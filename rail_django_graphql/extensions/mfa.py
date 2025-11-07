@@ -19,7 +19,6 @@ import graphene
 import pyotp
 import qrcode
 from django.conf import settings
-from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone as django_timezone
@@ -67,6 +66,8 @@ class MFAManager:
         self.sms_token_validity = getattr(
             settings, "MFA_SMS_TOKEN_VALIDITY", 300
         )  # 5 minutes
+        # In-memory SMS token store: {"userId_deviceId": (token, expires_ts)}
+        self._sms_tokens: Dict[str, Tuple[str, float]] = {}
 
     def setup_totp_device(self, user: "AbstractUser", device_name: str) -> Tuple["MFADevice", str]:
         """
@@ -162,9 +163,12 @@ class MFAManager:
             [str(secrets.randbelow(10)) for _ in range(self.sms_token_length)]
         )
 
-        # Stocker le token en cache
+        # Stocker le token en mémoire (TTL)
         cache_key = f"sms_token_{device.user.id}_{device.id}"
-        cache.set(cache_key, token, self.sms_token_validity)
+        self._sms_tokens[cache_key] = (
+            token,
+            django_timezone.now().timestamp() + float(self.sms_token_validity),
+        )
 
         # Envoyer le SMS (implémentation dépendante du fournisseur)
         return self._send_sms(device.phone_number, token)
@@ -189,6 +193,18 @@ class MFAManager:
             devices = devices.filter(id=device_id)
 
         for device in devices:
+            if device.device_type == "sms":
+                key = f"sms_token_{user.id}_{device.id}"
+                stored = self._sms_tokens.get(key)
+                if stored:
+                    stored_token, expires_ts = stored
+                    if django_timezone.now().timestamp() <= expires_ts and stored_token == token:
+                        # consume token
+                        self._sms_tokens.pop(key, None)
+                        device.last_used = django_timezone.now()
+                        device.save()
+                        return True
+            # Fallback to device's verify for non-SMS or if no stored token
             if device.verify_token(token):
                 device.last_used = django_timezone.now()
                 device.save()

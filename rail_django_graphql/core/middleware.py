@@ -14,7 +14,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.utils import timezone
 
 from ..conf import get_setting
-from .performance import get_complexity_analyzer, get_query_cache
+from .performance import get_complexity_analyzer
 from .security import get_auth_manager, get_input_validator, get_rate_limiter
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,6 @@ class MiddlewareSettings:
     enable_performance_middleware: bool = True
     enable_error_handling_middleware: bool = True
     enable_rate_limiting_middleware: bool = True
-    enable_caching_middleware: bool = True
     enable_validation_middleware: bool = True
     enable_cors_middleware: bool = True
     log_queries: bool = True
@@ -58,15 +57,7 @@ class MiddlewareSettings:
         valid_fields = set(cls.__dataclass_fields__.keys())
         filtered_settings = {k: v for k, v in merged_settings.items() if k in valid_fields}
 
-        # Auto-disable caching middleware in DEBUG mode to avoid serving stale query results
-        try:
-            if getattr(django_settings, "DEBUG", False):
-                filtered_settings["enable_caching_middleware"] = False
-                logger.debug(
-                    "MiddlewareSettings: DEBUG=True detected, disabling caching middleware for development."
-                )
-        except Exception:
-            pass
+        # No caching middleware in project
 
         return cls(**filtered_settings)
 
@@ -224,42 +215,7 @@ class RateLimitingMiddleware(BaseMiddleware):
         return next_resolver(root, info, **kwargs)
 
 
-class CachingMiddleware(BaseMiddleware):
-    """Middleware for query caching."""
-
-    def __init__(self, schema_name: Optional[str] = None):
-        super().__init__(schema_name)
-        self.query_cache = get_query_cache(schema_name)
-
-    def resolve(self, next_resolver: Callable, root: Any, info: Any, **kwargs) -> Any:
-        """Cache GraphQL query results."""
-        if not self.settings.enable_caching_middleware:
-            return next_resolver(root, info, **kwargs)
-
-        # Only cache queries, not mutations
-        operation_type = info.operation.operation.value if info.operation else "unknown"
-        if operation_type != "query":
-            return next_resolver(root, info, **kwargs)
-
-        # Generate cache key
-        query_string = str(info.operation)
-        variables = getattr(info, 'variable_values', {})
-
-        # Check cache
-        cached_result = self.query_cache.get_cached_result(query_string, variables)
-        if cached_result is not None:
-            return cached_result
-
-        # Execute resolver and cache result
-        result = next_resolver(root, info, **kwargs)
-
-        # Cache the result (only if it's serializable)
-        try:
-            self.query_cache.cache_result(query_string, result, variables)
-        except Exception as e:
-            logger.warning(f"Failed to cache query result: {e}")
-
-        return result
+## CachingMiddleware removed: caching is not supported in this project.
 
 
 class ValidationMiddleware(BaseMiddleware):

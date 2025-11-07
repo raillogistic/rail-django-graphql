@@ -13,7 +13,6 @@ import logging
 from typing import Any, Dict, List
 
 from django.conf import settings
-from django.core.cache import cache
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
@@ -403,7 +402,7 @@ class Command(BaseCommand):
 
     def _check_cache_configuration(self) -> Dict[str, Any]:
         """
-        Vérifie la configuration du cache.
+        Vérifie la configuration du cache (sans dépendance au cache Django).
 
         Returns:
             Résultats de la vérification du cache
@@ -416,29 +415,40 @@ class Command(BaseCommand):
         }
 
         try:
-            # Tester le cache
-            cache.set('security_check_test', 'test_value', 60)
-            test_value = cache.get('security_check_test')
-
-            if test_value != 'test_value':
-                result['critical_issues'].append("Le cache ne fonctionne pas correctement")
-            else:
-                cache.delete('security_check_test')
-
-            # Vérifier la configuration du cache
+            # Vérifier la configuration du cache dans settings
             cache_config = getattr(settings, 'CACHES', {})
             default_cache = cache_config.get('default', {})
 
-            if default_cache.get('BACKEND') == 'django.core.cache.backends.dummy.DummyCache':
-                result['warnings'].append("Cache dummy utilisé - non recommandé pour la production")
+            backend = default_cache.get('BACKEND')
 
-            if default_cache.get('BACKEND') == 'django.core.cache.backends.locmem.LocMemCache':
+            if backend:
+                # Le projet utilise désormais des caches en mémoire par processus.
+                # Les backends externes ne sont généralement pas nécessaires.
+                if backend not in (
+                    'django.core.cache.backends.dummy.DummyCache',
+                    'django.core.cache.backends.locmem.LocMemCache',
+                ):
+                    result['warnings'].append(
+                        "Backend de cache Django externe détecté. Le projet utilise des caches en mémoire; "
+                        "vérifiez que ce backend est réellement requis"
+                    )
+                elif backend == 'django.core.cache.backends.dummy.DummyCache':
+                    result['warnings'].append(
+                        "Backend DummyCache utilisé. Assurez-vous que l'absence de cache persistant est intentionnelle"
+                    )
+                else:
+                    result['recommendations'].append(
+                        "LocMemCache détecté. Cela convient aux environnements de développement; pour la production, "
+                        "évaluez si un backend persistant est nécessaire (souvent non requis ici)"
+                    )
+            else:
                 result['recommendations'].append(
-                    "Considérer l'utilisation de Redis ou Memcached pour la production"
+                    "Aucun backend de cache Django configuré. Le projet fonctionne avec des caches en mémoire par "
+                    "processus — configuration acceptable"
                 )
 
         except Exception as e:
-            result['critical_issues'].append(f"Erreur de cache: {e}")
+            result['critical_issues'].append(f"Erreur de configuration du cache: {e}")
 
         if result['critical_issues']:
             result['status'] = 'critical'

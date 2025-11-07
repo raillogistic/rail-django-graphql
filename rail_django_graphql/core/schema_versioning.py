@@ -13,7 +13,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import graphene
 from django.conf import settings
-from django.core.cache import cache
 from django.db import models, transaction
 from django.utils import timezone
 from graphene import Schema
@@ -63,6 +62,8 @@ class SchemaVersionManager:
     def __init__(self):
         self.cache_key_prefix = "graphql_schema_version"
         self.cache_timeout = getattr(settings, "GRAPHQL_SCHEMA_CACHE_TIMEOUT", 3600)
+        # In-memory per-process cache: {key: (schema_version_dict, expires_ts)}
+        self._version_cache: Dict[str, Tuple[Dict[str, Any], float]] = {}
 
     def generate_schema_hash(self, schema: Schema) -> str:
         """Génère un hash unique pour un schéma GraphQL."""
@@ -168,10 +169,11 @@ class SchemaVersionManager:
     def get_active_version(self) -> Optional[SchemaVersion]:
         """Récupère la version active du schéma."""
         cache_key = f"{self.cache_key_prefix}_active"
-        cached_version = cache.get(cache_key)
-
-        if cached_version:
-            return SchemaVersion(**cached_version)
+        cached = self._version_cache.get(cache_key)
+        if cached:
+            cached_version, expires_ts = cached
+            if timezone.now().timestamp() < expires_ts:
+                return SchemaVersion(**cached_version)
 
         try:
             version_model = SchemaVersionModel.objects.filter(is_active=True).first()
@@ -190,8 +192,11 @@ class SchemaVersionManager:
                 metadata=version_model.metadata,
             )
 
-            # Mettre en cache
-            cache.set(cache_key, asdict(schema_version), self.cache_timeout)
+            # Mettre en cache (in-memory)
+            self._version_cache[cache_key] = (
+                asdict(schema_version),
+                timezone.now().timestamp() + float(self.cache_timeout),
+            )
 
             return schema_version
 
@@ -202,10 +207,11 @@ class SchemaVersionManager:
     def get_version(self, version: str) -> Optional[SchemaVersion]:
         """Récupère une version spécifique du schéma."""
         cache_key = f"{self.cache_key_prefix}_{version}"
-        cached_version = cache.get(cache_key)
-
-        if cached_version:
-            return SchemaVersion(**cached_version)
+        cached = self._version_cache.get(cache_key)
+        if cached:
+            cached_version, expires_ts = cached
+            if timezone.now().timestamp() < expires_ts:
+                return SchemaVersion(**cached_version)
 
         try:
             version_model = SchemaVersionModel.objects.get(version=version)
@@ -222,8 +228,11 @@ class SchemaVersionManager:
                 metadata=version_model.metadata,
             )
 
-            # Mettre en cache
-            cache.set(cache_key, asdict(schema_version), self.cache_timeout)
+            # Mettre en cache (in-memory)
+            self._version_cache[cache_key] = (
+                asdict(schema_version),
+                timezone.now().timestamp() + float(self.cache_timeout),
+            )
 
             return schema_version
 
@@ -411,13 +420,8 @@ class SchemaVersionManager:
     def _invalidate_cache(self):
         """Invalide le cache des versions."""
         try:
-            # Invalider le cache de la version active
-            cache.delete(f"{self.cache_key_prefix}_active")
-
-            # Invalider le cache de toutes les versions
-            # (pattern matching n'est pas supporté par tous les backends de cache)
-            # Pour une solution complète, vous pourriez maintenir une liste des clés en cache
-
+            # Clear in-memory cache entirely
+            self._version_cache.clear()
         except Exception as e:
             logger.error(f"Erreur lors de l'invalidation du cache: {e}")
 

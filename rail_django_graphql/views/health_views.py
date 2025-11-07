@@ -43,7 +43,8 @@ class HealthDashboardView(View):
             health_checker = HealthChecker()
             initial_data = {
                 "health_status": health_checker.get_health_report(),
-                "system_metrics": health_checker.get_system_metrics(),
+                # Convert dataclass to plain dict for JSON serialization
+                "system_metrics": health_checker.get_system_metrics().__dict__,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -92,12 +93,20 @@ class HealthAPIView(View):
             health_checker = HealthChecker()
 
             # Obtenir toutes les métriques de santé
+            schema_health = health_checker.check_schema_health()
+            database_health = health_checker.check_database_health()
+            cache_health = health_checker.check_cache_health()
+
             health_data = {
                 "health_status": health_checker.get_health_report(),
-                "system_metrics": health_checker.get_system_metrics(),
-                "schema_health": health_checker.check_schema_health(),
-                "database_health": health_checker.check_database_health(),
-                "cache_health": health_checker.check_cache_health(),
+                "system_metrics": health_checker.get_system_metrics().__dict__,
+                "schema_health": getattr(schema_health, "to_dict", lambda: schema_health)(),
+                "database_health": [
+                    getattr(status, "to_dict", lambda: status)() for status in database_health
+                ],
+                "cache_health": [
+                    getattr(status, "to_dict", lambda: status)() for status in cache_health
+                ],
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "server_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
@@ -142,23 +151,24 @@ class HealthAPIView(View):
 
             if "systemMetrics" in query:
                 response_data["data"]["systemMetrics"] = (
-                    health_checker.get_system_metrics()
+                    health_checker.get_system_metrics().__dict__
                 )
 
             if "schemaHealth" in query:
-                response_data["data"]["schemaHealth"] = (
-                    health_checker.check_schema_health()
-                )
+                sh = health_checker.check_schema_health()
+                response_data["data"]["schemaHealth"] = getattr(sh, "to_dict", lambda: sh)()
 
             if "databaseHealth" in query:
-                response_data["data"]["databaseHealth"] = (
-                    health_checker.check_database_health()
-                )
+                dbh = health_checker.check_database_health()
+                response_data["data"]["databaseHealth"] = [
+                    getattr(status, "to_dict", lambda: status)() for status in dbh
+                ]
 
             if "cacheHealth" in query:
-                response_data["data"]["cacheHealth"] = (
-                    health_checker.check_cache_health()
-                )
+                ch = health_checker.check_cache_health()
+                response_data["data"]["cacheHealth"] = [
+                    getattr(status, "to_dict", lambda: status)() for status in ch
+                ]
 
             return JsonResponse(response_data)
 

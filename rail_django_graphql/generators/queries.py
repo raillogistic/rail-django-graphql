@@ -19,7 +19,8 @@ except Exception:
     DjangoFilterConnectionField = None  # Fallback when Relay field is unavailable
 
 from ..conf import get_query_generator_settings
-from ..core.performance import get_query_cache, get_query_optimizer
+from ..core.meta import get_model_graphql_meta
+from ..core.performance import get_query_optimizer
 from ..core.security import get_authz_manager
 from ..core.settings import QueryGeneratorSettings
 from ..extensions.optimization import (
@@ -102,7 +103,6 @@ class QueryGenerator:
 
         # Initialize performance and security components
         self.query_optimizer = get_query_optimizer(schema_name)
-        self.query_cache = get_query_cache(schema_name)
         self.authorization_manager = get_authz_manager(schema_name)
 
         self._query_registry: Dict[Type[models.Model], Dict[str, Any]] = {}
@@ -196,6 +196,25 @@ class QueryGenerator:
 
         return queryset, new_order_by
 
+    def _normalize_ordering_specs(self, order_by: Optional[List[str]], ordering_config) -> List[str]:
+        """
+        Apply default ordering and validate specs against GraphQLMeta configuration.
+        """
+
+        normalized = [spec for spec in (order_by or []) if spec]
+        if not normalized and ordering_config.default:
+            normalized = list(ordering_config.default)
+
+        allowed = getattr(ordering_config, "allowed", None) or []
+        if allowed and normalized:
+            invalid = [spec for spec in normalized if spec.lstrip("-") not in allowed]
+            if invalid:
+                raise ValueError(
+                    f"Unsupported ordering fields for {self.schema_name}: {', '.join(invalid)}"
+                )
+
+        return normalized
+
     def _split_order_specs(self, model: Type[models.Model], order_by: List[str]) -> (List[str], List[str]):
         """Split order_by specs into DB fields and property-based fields."""
         if not order_by:
@@ -261,11 +280,15 @@ class QueryGenerator:
         # The polymorphic_type field will indicate the actual class
         model_type = self.type_generator.generate_object_type(model)
 
+        graphql_meta = get_model_graphql_meta(model)
+
         def resolve_single(root, info, id):
             """Resolver for single object queries."""
             try:
                 manager = getattr(model, manager_name)
-                return manager.get(pk=id)
+                instance = manager.get(pk=id)
+                graphql_meta.ensure_operation_access("retrieve", info=info, instance=instance)
+                return instance
             except model.DoesNotExist:
                 return None
 
@@ -292,6 +315,12 @@ class QueryGenerator:
         # Regular list query for non-polymorphic models
         model_type = self.type_generator.generate_object_type(model)
         model_name = model.__name__.lower()
+        graphql_meta = get_model_graphql_meta(model)
+        ordering_config = getattr(graphql_meta, "ordering_config", None)
+        if ordering_config is None:
+            ordering_config = type(
+                "OrderingConfig", (), {"allowed": [], "default": []}
+            )()
         filter_class = self.filter_generator.generate_filter_set(model)
         complex_filter_input = self.filter_generator.generate_complex_filter_input(
             model
@@ -311,6 +340,7 @@ class QueryGenerator:
             ) -> List[models.Model]:
                 manager = getattr(model, manager_name)
                 queryset = manager.all()
+                graphql_meta.ensure_operation_access("list", info=info)
 
                 # Apply query optimization first
                 queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -333,10 +363,14 @@ class QueryGenerator:
                     queryset = filterset.qs
 
                 # Apply ordering
-                order_by = kwargs.get("order_by")
+                order_by = self._normalize_ordering_specs(
+                    kwargs.get("order_by"), ordering_config
+                )
                 items: Optional[List[Any]] = None
                 if order_by:
-                    queryset, order_by = self._apply_count_annotations_for_ordering(queryset, model, order_by)
+                    queryset, order_by = self._apply_count_annotations_for_ordering(
+                        queryset, model, order_by
+                    )
                     db_specs, prop_specs = self._split_order_specs(model, order_by)
                     if db_specs:
                         queryset = queryset.order_by(*db_specs)
@@ -419,9 +453,13 @@ class QueryGenerator:
 
             # Add ordering arguments
             if self.settings.enable_ordering:
+                order_desc = "Fields to order by (prefix with - for descending)"
+                if ordering_config.allowed:
+                    order_desc += f". Allowed: {', '.join(ordering_config.allowed)}"
                 arguments["order_by"] = graphene.List(
                     graphene.String,
-                    description="Fields to order by (prefix with - for descending)",
+                    description=order_desc,
+                    default_value=ordering_config.default or None,
                 )
 
             return graphene.List(
@@ -462,6 +500,12 @@ class QueryGenerator:
                 ),
             },
         )
+        graphql_meta = get_model_graphql_meta(model)
+        ordering_config = getattr(graphql_meta, "ordering_config", None)
+        if ordering_config is None:
+            ordering_config = type(
+                "OrderingConfig", (), {"allowed": [], "default": []}
+            )()
 
         @optimize_query()
         def resolver(
@@ -469,6 +513,7 @@ class QueryGenerator:
         ) -> PaginatedConnection:
             manager = getattr(model, manager_name)
             queryset = manager.all()
+            graphql_meta.ensure_operation_access("paginated", info=info)
 
             # Apply query optimization first
             queryset = self.optimizer.optimize_queryset(queryset, info, model)
@@ -511,9 +556,13 @@ class QueryGenerator:
 
             # Apply ordering (same as list queries)
             items: Optional[List[Any]] = None
-            order_by = kwargs.get("order_by")
+            order_by = self._normalize_ordering_specs(
+                kwargs.get("order_by"), ordering_config
+            )
             if order_by:
-                queryset, order_by = self._apply_count_annotations_for_ordering(queryset, model, order_by)
+                queryset, order_by = self._apply_count_annotations_for_ordering(
+                    queryset, model, order_by
+                )
                 db_specs, prop_specs = self._split_order_specs(model, order_by)
                 if db_specs:
                     queryset = queryset.order_by(*db_specs)
@@ -612,9 +661,13 @@ class QueryGenerator:
 
         # Add ordering arguments (same as list queries)
         if self.settings.enable_ordering:
+            order_desc = "Fields to order by (prefix with - for descending)"
+            if ordering_config.allowed:
+                order_desc += f". Allowed: {', '.join(ordering_config.allowed)}"
             arguments["order_by"] = graphene.List(
                 graphene.String,
-                description="Fields to order by (prefix with - for descending)",
+                description=order_desc,
+                default_value=ordering_config.default or None,
             )
 
         return graphene.Field(

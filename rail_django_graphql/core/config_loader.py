@@ -59,7 +59,8 @@ class ConfigLoader:
         environment = getattr(settings, "ENVIRONMENT", "development")
 
         # Merge with defaults using the new hierarchical structure
-        return get_merged_settings(user_settings, environment=environment)
+        # Pass user_settings as custom_settings to ensure proper merging order
+        return get_merged_settings(custom_settings=user_settings, environment=environment)
 
     @staticmethod
     def get_schema_specific_settings(
@@ -79,8 +80,10 @@ class ConfigLoader:
             environment = getattr(settings, "ENVIRONMENT", "development")
 
         user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
+        # Pass user_settings as custom_settings to ensure proper merging and avoid
+        # passing a dict as schema_name which causes TypeError: unhashable type: 'dict'
         return get_merged_settings(
-            user_settings, schema_name=schema_name, environment=environment
+            custom_settings=user_settings, schema_name=schema_name, environment=environment
         )
 
     @staticmethod
@@ -98,7 +101,8 @@ class ConfigLoader:
             environment = getattr(settings, "ENVIRONMENT", "development")
 
         user_settings = getattr(settings, "RAIL_DJANGO_GRAPHQL", {})
-        return get_merged_settings(user_settings, environment=environment)
+        # Pass user_settings as custom_settings to ensure proper merging order
+        return get_merged_settings(custom_settings=user_settings, environment=environment)
 
     @staticmethod
     def get_core_schema_settings(

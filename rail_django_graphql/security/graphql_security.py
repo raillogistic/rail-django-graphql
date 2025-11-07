@@ -18,7 +18,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Union
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
 from graphql import (
     DocumentNode,
     FieldNode,
@@ -470,6 +469,8 @@ def create_security_middleware(config: SecurityConfig = None):
         Fonction middleware
     """
     analyzer = GraphQLSecurityAnalyzer(config)
+    # In-memory rate limit state: {user_id: (count, window_start_ts)}
+    rate_limit_state: Dict[int, List[float]] = {}
 
     def security_middleware(next_middleware, root, info: GraphQLResolveInfo, **args):
         """
@@ -484,16 +485,25 @@ def create_security_middleware(config: SecurityConfig = None):
         Returns:
             Résultat du middleware suivant
         """
-        # Vérifier le rate limiting
+        # Rate limiting without Django cache (in-memory per-process)
         user = getattr(info.context, 'user', None)
         if user and user.is_authenticated:
-            cache_key = f"graphql_rate_limit:{user.id}"
-            current_count = cache.get(cache_key, 0)
+            now = time.time()
+            # state: [count, window_start_ts]
+            state = rate_limit_state.get(user.id, [0.0, now])
+            count = int(state[0])
+            window_start = float(state[1])
 
-            if current_count >= config.rate_limit_per_minute:
+            # Reset window if older than 60s
+            if now - window_start >= 60.0:
+                count = 0
+                window_start = now
+
+            if count >= config.rate_limit_per_minute:
                 raise GraphQLError("Limite de taux dépassée")
 
-            cache.set(cache_key, current_count + 1, 60)  # 1 minute
+            # Increment and store
+            rate_limit_state[user.id] = [float(count + 1), window_start]
 
         # Analyser la requête si c'est le champ racine
         if info.path.key == info.operation.selection_set.selections[0].name.value:

@@ -2,140 +2,704 @@
 GraphQL Meta Configuration System
 
 This module provides the GraphQLMeta class for configuring GraphQL behavior
-on Django models, including custom resolvers, filters, and advanced filtering options.
+for Django models. The configuration is grouped by functional areas such as
+filtering, field exposure, ordering, and custom resolvers so that model authors
+can describe their API surface declaratively from a single place.
 """
 
-import logging
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from __future__ import annotations
 
+import logging
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Type, Union
+
+from django.apps import apps
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
 from django.db.models import Q
+from graphql import GraphQLError
 
 logger = logging.getLogger(__name__)
+
+_SECURITY_COMPONENTS: Optional[Dict[str, Any]] = None
+
+
+def _load_security_components() -> Dict[str, Any]:
+    global _SECURITY_COMPONENTS
+    if _SECURITY_COMPONENTS is None:
+        from rail_django_graphql.security import (
+            FieldAccessLevel,
+            FieldPermissionRule,
+            FieldVisibility,
+            RoleDefinition,
+            RoleType,
+            field_permission_manager,
+            role_manager,
+        )
+
+        _SECURITY_COMPONENTS = {
+            "FieldAccessLevel": FieldAccessLevel,
+            "FieldPermissionRule": FieldPermissionRule,
+            "FieldVisibility": FieldVisibility,
+            "RoleDefinition": RoleDefinition,
+            "RoleType": RoleType,
+            "field_permission_manager": field_permission_manager,
+            "role_manager": role_manager,
+        }
+    return _SECURITY_COMPONENTS
+
+
+@dataclass
+class FilterFieldConfig:
+    """
+    Declarative configuration for a single filterable field.
+
+    Attributes:
+        lookups: List of Django lookup expressions allowed for the field.
+                 When empty, the generator keeps its default lookup set.
+        choices: Optional iterable of allowed values (for __in filters, enums, etc.).
+        help_text: Optional help text to describe the filter when generating docs.
+    """
+
+    lookups: List[str] = field(default_factory=list)
+    choices: Optional[Sequence[Any]] = None
+    help_text: Optional[str] = None
+
+
+@dataclass
+class FilteringConfig:
+    """
+    Grouped configuration for everything related to filtering.
+
+    Attributes:
+        quick: List of field paths that participate in the quick filter.
+        quick_lookup: Lookup used for quick filter comparison (default: icontains).
+        auto_detect_quick: Whether quick filter fields should be auto-derived when
+                           none are provided explicitly.
+        fields: Mapping of field names to FilterFieldConfig.
+        custom: Mapping of custom filter names to callables or model method names.
+    """
+
+    quick: List[str] = field(default_factory=list)
+    quick_lookup: str = "icontains"
+    auto_detect_quick: bool = True
+    fields: Dict[str, FilterFieldConfig] = field(default_factory=dict)
+    custom: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+
+
+@dataclass
+class FieldExposureConfig:
+    """
+    Configuration for selecting which fields are exposed via GraphQL.
+
+    Attributes:
+        include: Optional allow-list; when set only these fields are exposed.
+        exclude: Fields to hide entirely from both queries and mutations.
+        read_only: Fields only exposed on queries (removed from mutation inputs).
+        write_only: Fields only exposed on mutations (hidden from object types).
+    """
+
+    include: Optional[List[str]] = None
+    exclude: List[str] = field(default_factory=list)
+    read_only: List[str] = field(default_factory=list)
+    write_only: List[str] = field(default_factory=list)
+
+
+@dataclass
+class OrderingConfig:
+    """
+    Ordering configuration for list queries.
+
+    Attributes:
+        allowed: Allowed field names for order_by (without +/- prefixes).
+        default: Default ordering applied when no client value is provided.
+        allow_related: Whether related/path based ordering is permitted.
+    """
+
+    allowed: List[str] = field(default_factory=list)
+    default: List[str] = field(default_factory=list)
+    allow_related: bool = True
+
+
+@dataclass
+class ResolverConfig:
+    """
+    Custom resolver registration.
+
+    Attributes:
+        queries: Mapping of resolver slots (e.g. "list", "retrieve", "custom_name")
+                 to callables or method names.
+        mutations: Mapping of mutation names to callables/method names.
+        fields: Mapping of field names to custom resolver callables.
+    """
+
+    queries: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+    mutations: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+    fields: Dict[str, Union[str, Callable]] = field(default_factory=dict)
+
+
+@dataclass
+class RoleConfig:
+    """Declarative role configuration scoped to a GraphQL model."""
+
+    name: str = ""
+    description: str = ""
+    role_type: str = "business"
+    permissions: List[str] = field(default_factory=list)
+    parent_roles: List[str] = field(default_factory=list)
+    is_system_role: bool = False
+    max_users: Optional[int] = None
+
+
+@dataclass
+class OperationGuardConfig:
+    """
+    Operation-level guard definition.
+    """
+
+    name: str = ""
+    roles: List[str] = field(default_factory=list)
+    permissions: List[str] = field(default_factory=list)
+    condition: Optional[Union[str, Callable]] = None
+    require_authentication: bool = True
+    allow_anonymous: bool = False
+    match: str = "any"  # 'any' or 'all'
+    deny_message: Optional[str] = None
+
+
+@dataclass
+class FieldGuardConfig:
+    """
+    Field-level guard definition.
+    """
+
+    field: str
+    access: str = "read"
+    visibility: str = "visible"
+    roles: List[str] = field(default_factory=list)
+    permissions: List[str] = field(default_factory=list)
+    mask_value: Any = None
+    condition: Optional[Union[str, Callable]] = None
+
+
+@dataclass
+class AccessControlConfig:
+    """
+    Access control configuration bundle.
+    """
+
+    roles: Dict[str, RoleConfig] = field(default_factory=dict)
+    operations: Dict[str, OperationGuardConfig] = field(default_factory=dict)
+    fields: List[FieldGuardConfig] = field(default_factory=list)
 
 
 class GraphQLMeta:
     """
-    Meta class for configuring GraphQL behavior on Django models.
+    Meta helper for configuring GraphQL behavior on Django models.
 
-    This class provides configuration options for:
-    - Custom resolvers that can intercept and modify model queries
-    - Custom filters for advanced filtering capabilities
-    - Quick filter for primitive model values across nested relationships
-    - Field-specific configurations
+    Models can declare an inner ``GraphqlMeta`` (or ``GraphQLMeta``) class and
+    describe their configuration using grouped sections:
 
-    Usage:
         class MyModel(models.Model):
-            name = models.CharField(max_length=100)
-            email = models.EmailField()
-            created_at = models.DateTimeField(auto_now_add=True)
+            ...
 
-            class GraphQLMeta:
-                # Custom resolvers
-                custom_resolvers = {
-                    'active_users': 'get_active_users_resolver',
-                    'recent_posts': lambda queryset, info, **kwargs: queryset.filter(created_at__gte=timezone.now() - timedelta(days=7))
-                }
-
-                # Custom filters
-                custom_filters = {
-                    'is_premium': lambda queryset, value: queryset.filter(subscription__type='premium') if value else queryset,
-                    'has_posts': lambda queryset, value: queryset.filter(posts__isnull=not value).distinct()
-                }
-
-                # Quick filter configuration
-                filters = {
-                    'quick': ['name', 'email', 'profile__bio', 'posts__title']
-                }
-
-                # Field configurations
-                filter_fields = {
-                    'name': ['exact', 'icontains', 'startswith'],
-                    'email': ['exact', 'icontains'],
-                    'created_at': ['exact', 'gte', 'lte', 'range']
-                }
-
-                # Ordering configuration
-                ordering = ['name', 'created_at', '-created_at']
+            class GraphqlMeta(GraphQLMeta):
+                filtering = GraphQLMeta.Filtering(
+                    quick=["name", "email"],
+                    fields={
+                        "name": GraphQLMeta.FilterField(lookups=["icontains", "exact"]),
+                        "status": GraphQLMeta.FilterField(lookups=["exact", "in"]),
+                    },
+                )
+                fields = GraphQLMeta.Fields(
+                    include=["id", "name", "email", "status"],
+                    read_only=["status"],
+                )
+                ordering = GraphQLMeta.Ordering(
+                    allowed=["name", "created_at"],
+                    default=["-created_at"],
+                )
+                resolvers = GraphQLMeta.Resolvers(
+                    queries={"list": "resolve_custom_list"}
+                )
     """
+
+    FilterField = FilterFieldConfig
+    Filtering = FilteringConfig
+    Fields = FieldExposureConfig
+    Ordering = OrderingConfig
+    Resolvers = ResolverConfig
+    Role = RoleConfig
+    FieldGuard = FieldGuardConfig
+    OperationGuard = OperationGuardConfig
+    AccessControl = AccessControlConfig
 
     def __init__(self, model_class: Type[models.Model]):
         """
         Initialize GraphQLMeta configuration for a model.
 
         Args:
-            model_class: The Django model class this meta is attached to
+            model_class: The Django model class this meta is attached to.
         """
+
         self.model_class = model_class
-        self._meta_config = getattr(model_class, "GraphQLMeta", None)
+        self._meta_config = self._resolve_meta_class(model_class)
 
-        # Initialize configuration attributes
-        self.custom_resolvers = self._get_config_attr("custom_resolvers", {})
-        self.custom_filters = self._get_config_attr("custom_filters", {})
-        self.filters = self._get_config_attr("filters", {})
-        self.filter_fields = self._get_config_attr("filter_fields", {})
-        self.ordering = self._get_config_attr("ordering", [])
-        self.exclude_fields = self._get_config_attr("exclude_fields", [])
-        self.include_fields = self._get_config_attr("include_fields", None)
+        self.filtering: FilteringConfig = self._build_filtering_config()
+        self.field_config: FieldExposureConfig = self._build_field_config()
+        self.ordering_config: OrderingConfig = self._build_ordering_config()
+        self.resolvers: ResolverConfig = self._build_resolver_config()
+        self.access_config: AccessControlConfig = self._build_access_control_config()
 
-        # Validate configuration
+        # Backwards-compatible attribute aliases
+        self.custom_filters = self.filtering.custom
+        self.custom_resolvers = self.resolvers.queries
+        self.quick_filter_fields = list(self.filtering.quick)
+        self.filters = {"quick": self.quick_filter_fields}
+        self.filter_fields = {
+            name: cfg.lookups[:] for name, cfg in self.filtering.fields.items()
+        }
+        self.ordering = list(
+            self.ordering_config.allowed or self.ordering_config.default
+        )
+        self.include_fields = (
+            list(self.field_config.include) if self.field_config.include else None
+        )
+        self.exclude_fields = list(self.field_config.exclude)
+
+        # Internal sets for quick membership checks
+        self._include_fields_set = (
+            set(self.field_config.include) if self.field_config.include else None
+        )
+        self._exclude_fields_set = set(self.field_config.exclude)
+        self._read_only_fields = set(self.field_config.read_only)
+        self._write_only_fields = set(self.field_config.write_only)
+        self._operation_guards = self._index_operation_guards()
+
+        self._register_roles()
+        self._register_field_permissions()
+
         self._validate_configuration()
 
-    def _get_config_attr(self, attr_name: str, default: Any) -> Any:
-        """
-        Get configuration attribute from the model's GraphQLMeta class.
+    def _resolve_meta_class(self, model_class: Type[models.Model]) -> Any:
+        """Return the declared GraphQL meta configuration class if it exists."""
 
-        Args:
-            attr_name: Name of the attribute to retrieve
-            default: Default value if attribute is not found
+        return getattr(model_class, "GraphQLMeta", None) or getattr(
+            model_class, "GraphqlMeta", None
+        )
 
-        Returns:
-            The attribute value or default
-        """
-        if self._meta_config and hasattr(self._meta_config, attr_name):
-            return getattr(self._meta_config, attr_name)
-        return default
+    def _build_filtering_config(self) -> FilteringConfig:
+        """Construct filtering configuration with legacy fallbacks."""
 
-    def _validate_configuration(self) -> None:
-        """
-        Validate the GraphQLMeta configuration for common errors.
+        if not self._meta_config:
+            return FilteringConfig()
 
-        Raises:
-            ValueError: If configuration is invalid
-        """
-        # Validate custom resolvers
-        if not isinstance(self.custom_resolvers, dict):
-            raise ValueError(
-                f"custom_resolvers must be a dictionary, got {type(self.custom_resolvers)}"
+        raw = getattr(self._meta_config, "filtering", None)
+        if isinstance(raw, FilteringConfig):
+            config = FilteringConfig(
+                quick=list(raw.quick),
+                quick_lookup=raw.quick_lookup,
+                auto_detect_quick=raw.auto_detect_quick,
+                fields={
+                    name: self._coerce_filter_field_config(value)
+                    for name, value in raw.fields.items()
+                },
+                custom=dict(raw.custom),
             )
-
-        # Validate custom filters
-        if not isinstance(self.custom_filters, dict):
-            raise ValueError(
-                f"custom_filters must be a dictionary, got {type(self.custom_filters)}"
+        elif isinstance(raw, dict):
+            config = FilteringConfig(
+                quick=list(raw.get("quick", [])),
+                quick_lookup=raw.get("quick_lookup", "icontains"),
+                auto_detect_quick=raw.get("auto_detect_quick", True),
+                fields={
+                    name: self._coerce_filter_field_config(value)
+                    for name, value in raw.get("fields", {}).items()
+                },
+                custom=dict(raw.get("custom", {})),
             )
+        else:
+            config = FilteringConfig()
 
-        # Validate filters configuration
-        if not isinstance(self.filters, dict):
-            raise ValueError(f"filters must be a dictionary, got {type(self.filters)}")
+        if not config.custom:
+            legacy_custom = getattr(self._meta_config, "custom_filters", {})
+            if isinstance(legacy_custom, dict):
+                config.custom = dict(legacy_custom)
 
-        # Validate quick filter fields
-        quick_fields = self.filters.get("quick", [])
-        if quick_fields and not isinstance(quick_fields, list):
-            raise ValueError(
-                f"filters['quick'] must be a list, got {type(quick_fields)}"
-            )
+        if not config.quick:
+            legacy_quick = getattr(self._meta_config, "quick_filter_fields", None)
+            if legacy_quick:
+                config.quick = list(legacy_quick)
 
-        # Validate quick filter field paths
-        for field_path in quick_fields:
-            if not isinstance(field_path, str):
-                raise ValueError(
-                    f"Quick filter field paths must be strings, got {type(field_path)} for {field_path}"
+        legacy_filters = getattr(self._meta_config, "filters", {})
+        if isinstance(legacy_filters, dict):
+            for name, value in legacy_filters.items():
+                config.fields.setdefault(
+                    name, self._coerce_filter_field_config(value)
                 )
 
-            # Validate field path exists on model
+        legacy_filter_fields = getattr(self._meta_config, "filter_fields", {})
+        if isinstance(legacy_filter_fields, dict):
+            for name, value in legacy_filter_fields.items():
+                if name == "quick" and not config.quick:
+                    if isinstance(value, (list, tuple)):
+                        config.quick = list(value)
+                    elif isinstance(value, str):
+                        config.quick = [value]
+                    continue
+                config.fields.setdefault(
+                    name, self._coerce_filter_field_config(value)
+                )
+
+        return config
+
+    def _build_field_config(self) -> FieldExposureConfig:
+        """Construct field exposure configuration."""
+
+        if not self._meta_config:
+            return FieldExposureConfig()
+
+        raw = getattr(self._meta_config, "fields", None)
+        if isinstance(raw, FieldExposureConfig):
+            return FieldExposureConfig(
+                include=list(raw.include) if raw.include else None,
+                exclude=list(raw.exclude),
+                read_only=list(raw.read_only),
+                write_only=list(raw.write_only),
+            )
+        if isinstance(raw, dict):
+            include = raw.get("include")
+            if include is not None:
+                include = list(include)
+            return FieldExposureConfig(
+                include=include,
+                exclude=list(raw.get("exclude", [])),
+                read_only=list(raw.get("read_only", [])),
+                write_only=list(raw.get("write_only", [])),
+            )
+
+        include_fields = getattr(self._meta_config, "include_fields", None)
+        if include_fields is not None:
+            include_fields = list(include_fields)
+
+        return FieldExposureConfig(
+            include=include_fields,
+            exclude=list(getattr(self._meta_config, "exclude_fields", [])),
+        )
+
+    def _build_ordering_config(self) -> OrderingConfig:
+        """Construct ordering configuration."""
+
+        if not self._meta_config:
+            return OrderingConfig()
+
+        raw = getattr(self._meta_config, "ordering", None)
+        if isinstance(raw, OrderingConfig):
+            return OrderingConfig(
+                allowed=list(raw.allowed),
+                default=list(raw.default),
+                allow_related=raw.allow_related,
+            )
+
+        if isinstance(raw, dict):
+            return OrderingConfig(
+                allowed=list(raw.get("allowed", [])),
+                default=list(raw.get("default", [])),
+                allow_related=raw.get("allow_related", True),
+            )
+
+        if isinstance(raw, (list, tuple)):
+            values = list(raw)
+            return OrderingConfig(allowed=values, default=values)
+
+        return OrderingConfig()
+
+    def _build_resolver_config(self) -> ResolverConfig:
+        """Construct resolver configuration."""
+
+        if not self._meta_config:
+            return ResolverConfig()
+
+        raw = getattr(self._meta_config, "resolvers", None)
+        if isinstance(raw, ResolverConfig):
+            return ResolverConfig(
+                queries=dict(raw.queries),
+                mutations=dict(raw.mutations),
+                fields=dict(raw.fields),
+            )
+        if isinstance(raw, dict):
+            return ResolverConfig(
+                queries=dict(raw.get("queries", {})),
+                mutations=dict(raw.get("mutations", {})),
+                fields=dict(raw.get("fields", {})),
+            )
+
+        legacy_resolvers = getattr(self._meta_config, "custom_resolvers", {})
+        if isinstance(legacy_resolvers, dict):
+            return ResolverConfig(queries=dict(legacy_resolvers))
+
+        return ResolverConfig()
+
+    def _build_access_control_config(self) -> AccessControlConfig:
+        """Construct access control configuration."""
+
+        if not self._meta_config:
+            return AccessControlConfig()
+
+        raw = getattr(self._meta_config, "access", None)
+        if isinstance(raw, AccessControlConfig):
+            roles = {
+                name: self._coerce_role_config(name, role)
+                for name, role in raw.roles.items()
+            }
+            operations = {
+                name: self._coerce_operation_guard(name, guard)
+                for name, guard in raw.operations.items()
+            }
+            fields = [self._coerce_field_guard(guard) for guard in raw.fields]
+            return AccessControlConfig(roles=roles, operations=operations, fields=fields)
+
+        if isinstance(raw, dict):
+            roles = {}
+            for name, cfg in (raw.get("roles") or {}).items():
+                roles[name] = self._coerce_role_config(name, cfg)
+
+            operations = {}
+            for name, cfg in (raw.get("operations") or {}).items():
+                operations[name] = self._coerce_operation_guard(name, cfg)
+
+            field_guards = [
+                self._coerce_field_guard(cfg) for cfg in raw.get("fields", [])
+            ]
+            return AccessControlConfig(roles=roles, operations=operations, fields=field_guards)
+
+        return AccessControlConfig()
+
+    def _coerce_role_config(self, name: str, value: Any) -> RoleConfig:
+        if isinstance(value, RoleConfig):
+            if not value.name:
+                value.name = name
+            return value
+        if isinstance(value, dict):
+            return RoleConfig(
+                name=value.get("name") or name,
+                description=value.get("description", ""),
+                role_type=self._coerce_role_type(value.get("role_type")),
+                permissions=list(value.get("permissions", [])),
+                parent_roles=list(value.get("parent_roles", [])),
+                is_system_role=value.get("is_system_role", False),
+                max_users=value.get("max_users"),
+            )
+        raise ValueError(f"Unsupported role configuration for '{name}': {value}")
+
+    def _coerce_operation_guard(self, name: str, value: Any) -> OperationGuardConfig:
+        if isinstance(value, OperationGuardConfig):
+            if not value.name:
+                value.name = name
+            return value
+        if isinstance(value, dict):
+            return OperationGuardConfig(
+                name=name,
+                roles=list(value.get("roles", [])),
+                permissions=list(value.get("permissions", [])),
+                condition=value.get("condition"),
+                require_authentication=value.get("require_authentication", True),
+                allow_anonymous=value.get("allow_anonymous", False),
+                match=value.get("match", "any"),
+                deny_message=value.get("deny_message"),
+            )
+        if isinstance(value, (list, tuple)):
+            # Treat list as roles shortcut
+            return OperationGuardConfig(name=name, roles=list(value))
+        raise ValueError(f"Unsupported operation guard configuration for '{name}': {value}")
+
+    def _coerce_field_guard(self, value: Any) -> FieldGuardConfig:
+        if isinstance(value, FieldGuardConfig):
+            return value
+        if isinstance(value, dict):
+            return FieldGuardConfig(
+                field=value.get("field"),
+                access=value.get("access", "read"),
+                visibility=value.get("visibility", "visible"),
+                roles=list(value.get("roles", [])),
+                permissions=list(value.get("permissions", [])),
+                mask_value=value.get("mask") or value.get("mask_value"),
+                condition=value.get("condition"),
+            )
+        raise ValueError(f"Unsupported field guard configuration: {value}")
+
+    def _coerce_role_type(self, role_type: Any) -> str:
+        if isinstance(role_type, str) and role_type.strip():
+            return role_type.strip().lower()
+        return "business"
+
+    def _convert_role_type(self, value: str, role_type_cls: Any):
+        normalized = (value or "business").strip().lower()
+        for candidate in role_type_cls:
+            if candidate.value == normalized or candidate.name.lower() == normalized:
+                return candidate
+        return getattr(role_type_cls, "BUSINESS", list(role_type_cls)[0])
+
+    def _index_operation_guards(self) -> Dict[str, OperationGuardConfig]:
+        guards: Dict[str, OperationGuardConfig] = {}
+        for name, guard in self.access_config.operations.items():
+            guards[name] = (
+                guard if isinstance(guard, OperationGuardConfig) else self._coerce_operation_guard(name, guard)
+            )
+        return guards
+
+    def _register_roles(self) -> None:
+        components = _load_security_components()
+        RoleDefinition = components["RoleDefinition"]
+        role_mgr = components["role_manager"]
+        RoleTypeCls = components["RoleType"]
+        for role in self.access_config.roles.values():
+            try:
+                role_definition = RoleDefinition(
+                    name=role.name,
+                    description=role.description,
+                    role_type=self._convert_role_type(role.role_type, RoleTypeCls),
+                    permissions=role.permissions,
+                    parent_roles=role.parent_roles or None,
+                    is_system_role=role.is_system_role,
+                    max_users=role.max_users,
+                )
+                role_mgr.register_role(role_definition)
+            except Exception as exc:
+                logger.warning(
+                    "Could not register GraphQLMeta role '%s' for %s: %s",
+                    role.name,
+                    self.model_class.__name__,
+                    exc,
+                )
+
+    def _register_field_permissions(self) -> None:
+        components = _load_security_components()
+        FieldPermissionRule = components["FieldPermissionRule"]
+        field_permission_mgr = components["field_permission_manager"]
+        for guard in self.access_config.fields:
+            if not guard.field:
+                continue
+            access_level = self._coerce_access_level(guard.access, components)
+            visibility = self._coerce_visibility(guard.visibility, components)
+            condition = self._resolve_condition_callable(guard.condition)
+            rule = FieldPermissionRule(
+                field_name=guard.field,
+                model_name=self.model_class.__name__,
+                access_level=access_level,
+                visibility=visibility,
+                condition=condition,
+                mask_value=guard.mask_value,
+                roles=guard.roles or None,
+                permissions=guard.permissions or None,
+            )
+            try:
+                field_permission_mgr.register_field_rule(rule)
+            except Exception as exc:
+                logger.warning(
+                    "Could not register field guard for %s.%s: %s",
+                    self.model_class.__name__,
+                    guard.field,
+                    exc,
+                )
+
+    def _coerce_access_level(self, value: str, components: Dict[str, Any]):
+        FieldAccessLevel = components["FieldAccessLevel"]
+        if isinstance(value, FieldAccessLevel):
+            return value
+        mapping = {
+            "none": FieldAccessLevel.NONE,
+            "read": FieldAccessLevel.READ,
+            "write": FieldAccessLevel.WRITE,
+            "admin": FieldAccessLevel.ADMIN,
+        }
+        return mapping.get(str(value).lower(), FieldAccessLevel.READ)
+
+    def _coerce_visibility(self, value: str, components: Dict[str, Any]):
+        FieldVisibility = components["FieldVisibility"]
+        if isinstance(value, FieldVisibility):
+            return value
+        mapping = {
+            "visible": FieldVisibility.VISIBLE,
+            "hidden": FieldVisibility.HIDDEN,
+            "masked": FieldVisibility.MASKED,
+            "redacted": FieldVisibility.REDACTED,
+        }
+        return mapping.get(str(value).lower(), FieldVisibility.VISIBLE)
+
+    def _resolve_condition_callable(
+        self, condition: Optional[Union[str, Callable]]
+    ) -> Optional[Callable]:
+        if condition is None:
+            return None
+        if callable(condition):
+            return condition
+        if isinstance(condition, str) and hasattr(self.model_class, condition):
+            candidate = getattr(self.model_class, condition)
+            if callable(candidate):
+                return candidate
+        return None
+
+    def _coerce_filter_field_config(self, value: Any) -> FilterFieldConfig:
+        """Normalize legacy filter definitions into FilterFieldConfig."""
+
+        if isinstance(value, FilterFieldConfig):
+            return FilterFieldConfig(
+                lookups=list(value.lookups),
+                choices=list(value.choices) if value.choices is not None else None,
+                help_text=value.help_text,
+            )
+
+        if value is None:
+            return FilterFieldConfig()
+
+        if isinstance(value, (list, tuple, set)):
+            return FilterFieldConfig(lookups=list(value))
+
+        if isinstance(value, str):
+            return FilterFieldConfig(lookups=[value])
+
+        if isinstance(value, dict):
+            choices = value.get("choices")
+            help_text = value.get("help_text")
+
+            if "lookups" in value:
+                lookups = value.get("lookups") or []
+            else:
+                lookups: List[str] = []
+                for lookup, definition in value.items():
+                    if lookup in {"choices", "help_text"}:
+                        continue
+                    if isinstance(definition, bool):
+                        if definition:
+                            lookups.append(lookup)
+                    else:
+                        lookups.append(lookup)
+                        if (
+                            lookup == "in"
+                            and choices is None
+                            and isinstance(definition, (list, tuple, set))
+                        ):
+                            choices = list(definition)
+
+            if isinstance(choices, (list, tuple, set)):
+                choices = list(choices)
+
+            return FilterFieldConfig(
+                lookups=list(lookups),
+                choices=choices,
+                help_text=help_text,
+            )
+
+        return FilterFieldConfig()
+
+    def _validate_configuration(self) -> None:
+        """Validate quick filter paths and ensure referenced fields exist."""
+
+        for field_path in self.quick_filter_fields:
             self._validate_field_path(field_path)
+
+        for field_name in self.filtering.fields.keys():
+            self._validate_field_path(field_name)
 
     def _validate_field_path(self, field_path: str) -> None:
         """
@@ -147,6 +711,10 @@ class GraphQLMeta:
         Raises:
             ValueError: If field path is invalid
         """
+
+        if not field_path:
+            return
+
         try:
             current_model = self.model_class
             field_parts = field_path.split("__")
@@ -155,7 +723,6 @@ class GraphQLMeta:
                 try:
                     field = current_model._meta.get_field(field_name)
 
-                    # If this is not the last part, it should be a relation
                     if i < len(field_parts) - 1:
                         if hasattr(field, "related_model"):
                             current_model = field.related_model
@@ -163,16 +730,127 @@ class GraphQLMeta:
                             raise ValueError(
                                 f"Field '{field_name}' in path '{field_path}' is not a relation"
                             )
-
-                except FieldDoesNotExist:
+                except FieldDoesNotExist as exc:
                     raise ValueError(
                         f"Field '{field_name}' does not exist on model {current_model.__name__}"
-                    )
+                    ) from exc
 
-        except Exception as e:
+        except Exception as exc:  # pragma: no cover - defensive logging
             logger.warning(
-                f"Could not validate field path '{field_path}' on model {self.model_class.__name__}: {e}"
+                "Could not validate field path '%s' on model %s: %s",
+                field_path,
+                self.model_class.__name__,
+                exc,
             )
+
+    def ensure_operation_access(
+        self,
+        operation: str,
+        info: Any,
+        *,
+        instance: Optional[models.Model] = None,
+    ) -> None:
+        """
+        Enforce the configured access guard for a given operation.
+
+        Raises:
+            GraphQLError when the current user is not allowed to perform the operation.
+        """
+
+        guard = self._operation_guards.get(operation) or self._operation_guards.get("*")
+        if not guard:
+            return
+
+        security = _load_security_components()
+        role_mgr = security["role_manager"]
+
+        context = getattr(info, "context", None)
+        user = getattr(context, "user", None)
+
+        if guard.allow_anonymous:
+            return
+
+        if guard.require_authentication and not (user and user.is_authenticated):
+            raise GraphQLError(
+                guard.deny_message
+                or f"Authentication required to perform '{operation}' on {self.model_class.__name__}"
+            )
+
+        criteria_results: List[bool] = []
+
+        if guard.roles:
+            try:
+                user_roles = set(role_mgr.get_user_roles(user))
+            except Exception:
+                user_roles = set()
+            criteria_results.append(bool(user_roles & set(guard.roles)))
+
+        if guard.permissions:
+            if user:
+                criteria_results.append(
+                    any(user.has_perm(perm) for perm in guard.permissions)
+                )
+            else:
+                criteria_results.append(False)
+
+        if guard.condition:
+            condition_callable = self._resolve_condition_callable(guard.condition)
+            if condition_callable:
+                try:
+                    allowed = condition_callable(
+                        user=user,
+                        operation=operation,
+                        info=info,
+                        instance=instance,
+                        model=self.model_class,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Error evaluating guard condition '%s' on %s: %s",
+                        guard.name,
+                        self.model_class.__name__,
+                        exc,
+                    )
+                    allowed = False
+                criteria_results.append(bool(allowed))
+
+        if not criteria_results:
+            # No specific roles/permissions/conditions configured -> auth check already performed.
+            return
+
+        if guard.match.lower() == "all":
+            allowed = all(criteria_results)
+        else:
+            allowed = any(criteria_results)
+
+        if not allowed:
+            raise GraphQLError(
+                guard.deny_message
+                or f"Operation '{operation}' is not permitted on {self.model_class.__name__}"
+            )
+
+    def should_expose_field(self, field_name: str, *, for_input: bool = False) -> bool:
+        """
+        Determine whether a field should be exposed based on field configuration.
+
+        Args:
+            field_name: Name of the field to evaluate.
+            for_input: True when evaluating mutation/input exposure.
+        """
+
+        if field_name in self._exclude_fields_set:
+            return False
+
+        if for_input and field_name in self._read_only_fields:
+            return False
+
+        if not for_input and field_name in self._write_only_fields:
+            return False
+
+        if self._include_fields_set is not None:
+            return field_name in self._include_fields_set
+
+        return True
 
     def get_custom_resolver(self, resolver_name: str) -> Optional[Callable]:
         """
@@ -184,17 +862,18 @@ class GraphQLMeta:
         Returns:
             The resolver function or None if not found
         """
+
         resolver = self.custom_resolvers.get(resolver_name)
 
         if isinstance(resolver, str):
-            # If it's a string, try to get it as a method from the model
             if hasattr(self.model_class, resolver):
                 return getattr(self.model_class, resolver)
-            else:
-                logger.warning(
-                    f"Custom resolver method '{resolver}' not found on model {self.model_class.__name__}"
-                )
-                return None
+            logger.warning(
+                "Custom resolver method '%s' not found on model %s",
+                resolver,
+                self.model_class.__name__,
+            )
+            return None
 
         return resolver
 
@@ -208,17 +887,18 @@ class GraphQLMeta:
         Returns:
             The filter function or None if not found
         """
+
         filter_func = self.custom_filters.get(filter_name)
 
         if isinstance(filter_func, str):
-            # If it's a string, try to get it as a method from the model
             if hasattr(self.model_class, filter_func):
                 return getattr(self.model_class, filter_func)
-            else:
-                logger.warning(
-                    f"Custom filter method '{filter_func}' not found on model {self.model_class.__name__}"
-                )
-                return None
+            logger.warning(
+                "Custom filter method '%s' not found on model %s",
+                filter_func,
+                self.model_class.__name__,
+            )
+            return None
 
         return filter_func
 
@@ -229,40 +909,36 @@ class GraphQLMeta:
         Returns:
             Dictionary mapping filter names to Filter instances
         """
+
         from django_filters import BooleanFilter, CharFilter, NumberFilter
 
-        filter_instances = {}
+        filter_instances: Dict[str, Any] = {}
 
         for filter_name, filter_func in self.custom_filters.items():
-            # Convert string method names to actual methods
+            callable_fn = filter_func
             if isinstance(filter_func, str):
-                if hasattr(self.model_class, filter_func):
-                    method = getattr(self.model_class, filter_func)
-                    # Create appropriate filter type based on filter name or default to CharFilter
-                    if (
-                        "bool" in filter_name.lower()
-                        or filter_name.startswith("has_")
-                        or filter_name.startswith("is_")
-                    ):
-                        filter_instances[filter_name] = BooleanFilter(method=method)
-                    elif (
-                        "count" in filter_name.lower()
-                        or "number" in filter_name.lower()
-                    ):
-                        filter_instances[filter_name] = NumberFilter(method=method)
-                    else:
-                        filter_instances[filter_name] = CharFilter(method=method)
-                else:
+                callable_fn = getattr(self.model_class, filter_func, None)
+                if callable_fn is None:
                     logger.warning(
-                        f"Custom filter method '{filter_func}' not found on model {self.model_class.__name__}"
+                        "Custom filter method '%s' not found on model %s",
+                        filter_func,
+                        self.model_class.__name__,
                     )
-            elif callable(filter_func):
-                # For callable functions, wrap them in CharFilter
-                filter_instances[filter_name] = CharFilter(method=filter_func)
-            else:
+                    continue
+
+            if not callable(callable_fn):
                 logger.warning(
-                    f"Custom filter '{filter_name}' is neither string nor callable"
+                    "Custom filter '%s' is neither string nor callable", filter_name
                 )
+                continue
+
+            lower_name = filter_name.lower()
+            if lower_name.startswith(("has_", "is_")) or "bool" in lower_name:
+                filter_instances[filter_name] = BooleanFilter(method=callable_fn)
+            elif "count" in lower_name or "number" in lower_name:
+                filter_instances[filter_name] = NumberFilter(method=callable_fn)
+            else:
+                filter_instances[filter_name] = CharFilter(method=callable_fn)
 
         return filter_instances
 
@@ -281,16 +957,18 @@ class GraphQLMeta:
         Returns:
             Modified queryset
         """
+
         resolver = self.get_custom_resolver(resolver_name)
 
         if resolver:
             try:
                 if callable(resolver):
                     return resolver(queryset, info, **kwargs)
-                else:
-                    logger.warning(f"Custom resolver '{resolver_name}' is not callable")
-            except Exception as e:
-                logger.error(f"Error applying custom resolver '{resolver_name}': {e}")
+                logger.warning("Custom resolver '%s' is not callable", resolver_name)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error(
+                    "Error applying custom resolver '%s': %s", resolver_name, exc
+                )
 
         return queryset
 
@@ -299,25 +977,17 @@ class GraphQLMeta:
     ) -> models.QuerySet:
         """
         Apply a custom filter to a queryset.
-
-        Args:
-            filter_name: Name of the filter to apply
-            queryset: The queryset to filter
-            value: The filter value
-
-        Returns:
-            Filtered queryset
         """
+
         filter_func = self.get_custom_filter(filter_name)
 
         if filter_func:
             try:
                 if callable(filter_func):
                     return filter_func(queryset, value)
-                else:
-                    logger.warning(f"Custom filter '{filter_name}' is not callable")
-            except Exception as e:
-                logger.error(f"Error applying custom filter '{filter_name}': {e}")
+                logger.warning("Custom filter '%s' is not callable", filter_name)
+            except Exception as exc:  # pragma: no cover - defensive logging
+                logger.error("Error applying custom filter '%s': %s", filter_name, exc)
 
         return queryset
 
@@ -326,33 +996,23 @@ class GraphQLMeta:
     ) -> models.QuerySet:
         """
         Apply quick filter to search across configured fields.
-
-        Args:
-            queryset: The queryset to filter
-            search_value: The search value
-
-        Returns:
-            Filtered queryset
         """
-        # Use quick_filter_fields if available, otherwise fall back to filters['quick']
-        quick_fields = getattr(self, 'quick_filter_fields', None) or self.filters.get("quick", [])
+
+        quick_fields = self.quick_filter_fields
 
         if not quick_fields or not search_value:
             return queryset
 
-        # Build Q object for OR search across all quick fields
         q_objects = Q()
+        lookup = self.filtering.quick_lookup or "icontains"
 
         for field_path in quick_fields:
             try:
-                # Determine the appropriate lookup based on field type
-                lookup = self._get_quick_filter_lookup(field_path)
                 filter_kwargs = {f"{field_path}__{lookup}": search_value}
                 q_objects |= Q(**filter_kwargs)
-
-            except Exception as e:
+            except Exception as exc:  # pragma: no cover - defensive logging
                 logger.warning(
-                    f"Error building quick filter for field '{field_path}': {e}"
+                    "Error building quick filter for field '%s': %s", field_path, exc
                 )
 
         if q_objects:
@@ -360,101 +1020,44 @@ class GraphQLMeta:
 
         return queryset
 
-    def _get_quick_filter_lookup(self, field_path: str) -> str:
-        """
-        Determine the appropriate lookup type for a field in quick filter.
-
-        Args:
-            field_path: The field path to analyze
-
-        Returns:
-            The lookup type to use (e.g., 'icontains', 'exact')
-        """
-        try:
-            # Navigate to the final field
-            current_model = self.model_class
-            field_parts = field_path.split("__")
-
-            for i, field_name in enumerate(field_parts):
-                field = current_model._meta.get_field(field_name)
-
-                if i < len(field_parts) - 1:
-                    # Navigate to related model
-                    if hasattr(field, "related_model"):
-                        current_model = field.related_model
-                    else:
-                        return "icontains"  # Default fallback
-                else:
-                    # This is the final field, determine lookup type
-                    if isinstance(
-                        field, (models.CharField, models.TextField, models.EmailField)
-                    ):
-                        return "icontains"
-                    elif isinstance(
-                        field,
-                        (models.IntegerField, models.FloatField, models.DecimalField),
-                    ):
-                        return "exact"
-                    elif isinstance(field, (models.DateField, models.DateTimeField)):
-                        return "exact"
-                    elif isinstance(field, models.BooleanField):
-                        return "exact"
-                    else:
-                        return "icontains"  # Default for unknown types
-
-        except Exception:
-            return "icontains"  # Safe default
-
     def get_filter_fields(self) -> Dict[str, List[str]]:
         """
         Get the filter fields configuration.
 
         Returns:
-            Dictionary mapping field names to allowed lookups
+            Dictionary mapping field names to allowed lookups.
         """
-        return self.filter_fields.copy()
+
+        return {
+            name: cfg.lookups[:] if cfg.lookups else []
+            for name, cfg in self.filtering.fields.items()
+        }
 
     def get_ordering_fields(self) -> List[str]:
         """
         Get the ordering fields configuration.
-
-        Returns:
-            List of allowed ordering fields
         """
-        return self.ordering.copy() if isinstance(self.ordering, list) else []
+
+        if self.ordering_config.allowed:
+            return list(self.ordering_config.allowed)
+        if self.ordering_config.default:
+            return list(self.ordering_config.default)
+        return []
 
     def has_custom_resolver(self, resolver_name: str) -> bool:
-        """
-        Check if a custom resolver exists.
+        """Check if a custom resolver exists."""
 
-        Args:
-            resolver_name: Name of the resolver to check
-
-        Returns:
-            True if resolver exists, False otherwise
-        """
         return resolver_name in self.custom_resolvers
 
     def has_custom_filter(self, filter_name: str) -> bool:
-        """
-        Check if a custom filter exists.
+        """Check if a custom filter exists."""
 
-        Args:
-            filter_name: Name of the filter to check
-
-        Returns:
-            True if filter exists, False otherwise
-        """
         return filter_name in self.custom_filters
 
     def has_quick_filter(self) -> bool:
-        """
-        Check if quick filter is configured.
+        """Check if quick filter is configured."""
 
-        Returns:
-            True if quick filter is configured, False otherwise
-        """
-        return bool(self.filters.get("quick"))
+        return bool(self.quick_filter_fields)
 
 
 def get_model_graphql_meta(model_class: Type[models.Model]) -> GraphQLMeta:
@@ -467,7 +1070,7 @@ def get_model_graphql_meta(model_class: Type[models.Model]) -> GraphQLMeta:
     Returns:
         GraphQLMeta instance for the model
     """
-    # Cache the meta instance on the model class
+
     if not hasattr(model_class, "_graphql_meta_instance"):
         model_class._graphql_meta_instance = GraphQLMeta(model_class)
 

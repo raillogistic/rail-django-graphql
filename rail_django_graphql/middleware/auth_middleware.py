@@ -8,11 +8,11 @@ including JWT token validation, user context injection, and security logging.
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, Tuple
 
 from django.conf import settings
-from django.contrib.auth.models import AnonymousUser, User
-from django.core.cache import cache
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, HttpResponse
 from django.utils.deprecation import MiddlewareMixin
 
@@ -71,13 +71,17 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             settings, "GRAPHQL_ENABLE_AUTH_RATE_LIMITING", True
         )
 
-        # Mode debug - bypass authentication when DEBUG=True
+        # Mode debug - bypass authentication only when explicitly enabled
         self.debug_mode = getattr(settings, "DEBUG", False)
+        self.debug_bypass = getattr(settings, "GRAPHQL_AUTH_DEBUG_BYPASS", False)
 
         # Cache des utilisateurs pour optimiser les performances
         self.user_cache_timeout = getattr(
             settings, "JWT_USER_CACHE_TIMEOUT", 300
         )  # 5 minutes
+
+        # In-memory per-process JWT user cache: {cache_key: (user_id, expires_ts)}
+        self._jwt_user_cache: Dict[str, Tuple[int, float]] = {}
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         """
@@ -93,8 +97,8 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         if not self._is_graphql_request(request):
             return None
 
-        # En mode debug, bypass l'authentification et créer un utilisateur de test
-        if self.debug_mode:
+        # En mode debug ET si bypass explicitement activé, bypass l'authentification et créer un utilisateur de test
+        if self.debug_mode and self.debug_bypass:
             self._setup_debug_user(request)
             # Log at INFO to ensure visibility with default settings
             logger.info("Authentication bypassed for GraphQL request (DEBUG=True)")
@@ -210,7 +214,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
 
     def _authenticate_jwt_token(
         self, token: str, request: HttpRequest
-    ) -> Optional[User]:
+    ) -> Optional[Any]:
         """
         Authentifie un token JWT et retourne l'utilisateur.
 
@@ -222,17 +226,20 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             Instance User ou None si l'authentification échoue
         """
         try:
-            # Vérifier le cache utilisateur d'abord
+            # Vérifier le cache utilisateur d'abord (in-memory)
             cache_key = f"jwt_user_{hash(token)}"
-            cached_user_id = cache.get(cache_key)
-
-            if cached_user_id:
-                try:
-                    user = User.objects.get(id=cached_user_id)
-                    if user.is_active:
-                        return user
-                except User.DoesNotExist:
-                    cache.delete(cache_key)
+            cached = self._jwt_user_cache.get(cache_key)
+            if cached:
+                cached_user_id, expires_ts = cached
+                if time.time() < expires_ts:
+                    try:
+                        UserModel = get_user_model()
+                        user = UserModel.objects.get(id=cached_user_id)
+                        if getattr(user, "is_active", True):
+                            return user
+                    except Exception:
+                        # Purge stale cache entry if lookup failed
+                        self._jwt_user_cache.pop(cache_key, None)
 
             # Valider le token JWT
             from ..extensions.auth import JWTManager
@@ -248,31 +255,37 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             if not user_id:
                 return None
 
-            user = User.objects.get(id=user_id)
+            UserModel = get_user_model()
+            user = UserModel.objects.get(id=user_id)
 
             # Vérifier que l'utilisateur est actif
-            if not user.is_active:
+            if not getattr(user, "is_active", True):
                 self._log_authentication_event(request, user, "inactive_user", "jwt")
                 return None
 
-            # Mettre en cache l'utilisateur
-            cache.set(cache_key, user.id, self.user_cache_timeout)
+            # Mettre en cache l'utilisateur (in-memory)
+            self._jwt_user_cache[cache_key] = (
+                user.id,
+                time.time() + float(self.user_cache_timeout),
+            )
 
             return user
 
-        except User.DoesNotExist:
-            logger.warning(
-                f"Utilisateur introuvable pour le token JWT: {payload.get('user_id') if 'payload' in locals() else 'unknown'}"
-            )
-            return None
         except Exception as e:
-            logger.error(f"Erreur lors de l'authentification JWT: {e}")
+            # Handle user lookup failures (including DoesNotExist) gracefully
+            if 'payload' in locals():
+                logger.warning(
+                    f"Utilisateur introuvable ou erreur lors de la récupération pour le token JWT: {payload.get('user_id') or payload.get('sub')} - {e}"
+                )
+            else:
+                logger.warning(f"Erreur JWT avant extraction du payload: {e}")
             return None
+        # Note: generic exceptions above already return None
 
     def _log_authentication_event(
         self,
         request: HttpRequest,
-        user: Optional[User],
+        user: Optional[Any],
         event_type: str,
         auth_method: str,
     ) -> None:
@@ -333,7 +346,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
     def _legacy_log_authentication_event(
         self,
         request: HttpRequest,
-        user: Optional[User],
+        user: Optional[Any],
         event_type: str,
         auth_method: str,
     ) -> None:
@@ -425,21 +438,38 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             request: Requête HTTP Django
         """
         try:
-            # Essayer de récupérer ou créer un utilisateur de debug
-            debug_user, created = User.objects.get_or_create(
-                username="debug_user",
-                defaults={
-                    "email": "debug@example.com",
-                    "first_name": "Debug",
-                    "last_name": "User",
-                    "is_active": True,
-                    "is_staff": True,
-                    "is_superuser": True,
-                },
+            # Essayer de récupérer ou créer un utilisateur de debug compatible avec le modèle custom
+            UserModel = get_user_model()
+            username_field: str = getattr(UserModel, "USERNAME_FIELD", "username")
+            identifier_value = "debug_user"
+
+            defaults = {
+                "is_active": True,
+                "is_staff": True,
+                "is_superuser": True,
+            }
+
+            # Gérer le cas où le champ d'identifiant est l'email
+            if username_field == "email":
+                defaults["email"] = "debug@example.com"
+                identifier_value = "debug@example.com"
+
+            debug_user, created = UserModel.objects.get_or_create(
+                **{username_field: identifier_value},
+                defaults=defaults,
             )
 
             if created:
                 logger.info("Debug user created for development mode")
+
+            # S'assurer que le mot de passe est inutilisable pour éviter tout risque
+            if hasattr(debug_user, "has_usable_password") and not debug_user.has_usable_password():
+                debug_user.set_unusable_password()
+                try:
+                    debug_user.save(update_fields=["password"])  # type: ignore[arg-type]
+                except Exception:
+                    # fallback simple
+                    debug_user.save()
 
             # Injecter l'utilisateur de debug dans le contexte
             request.user = debug_user
@@ -486,6 +516,10 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
 
         # Mode debug - bypass rate limiting when DEBUG=True
         self.debug_mode = getattr(settings, "DEBUG", False)
+
+        # In-memory rate limiting state per-process
+        # Structure: {key: {"window_start": int, "count": int}}
+        self._rate_state: Dict[str, Dict[str, int]] = {}
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
         """
@@ -584,24 +618,22 @@ class GraphQLRateLimitMiddleware(MiddlewareMixin):
         Returns:
             True si la limite est dépassée
         """
-        current_time = int(time.time())
-        window_start = current_time - window
+        now = int(time.time())
+        state = self._rate_state.get(cache_key)
 
-        # Récupérer les tentatives existantes
-        attempts = cache.get(cache_key, [])
+        if not state:
+            state = {"window_start": now, "count": 0}
+        else:
+            # Reset window if expired
+            if now - state.get("window_start", now) >= int(window):
+                state["window_start"] = now
+                state["count"] = 0
 
-        # Filtrer les tentatives dans la fenêtre de temps
-        recent_attempts = [attempt for attempt in attempts if attempt > window_start]
+        # Increment and check
+        state["count"] += 1
+        self._rate_state[cache_key] = state
 
-        # Vérifier la limite
-        if len(recent_attempts) >= limit:
-            return True
-
-        # Ajouter la tentative actuelle
-        recent_attempts.append(current_time)
-        cache.set(cache_key, recent_attempts, window)
-
-        return False
+        return state["count"] > int(limit)
 
     def _get_client_ip(self, request: HttpRequest) -> str:
         """

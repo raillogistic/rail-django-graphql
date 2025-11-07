@@ -59,7 +59,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "rail_django_graphql.middleware.performance.GraphQLPerformanceMiddleware",
-    "cache_middleware.GraphQLCacheInvalidationMiddleware",  # Cache invalidation middleware
 ]
 
 ROOT_URLCONF = "rail_django_graphql.urls"
@@ -229,6 +228,9 @@ RAIL_DJANGO_GRAPHQL = {
         "enable_custom_scalars": True,
         # Activer la prise en charge de l'héritage de modèles
         "enable_inheritance": True,
+        # Disable expensive schema rebuilds on every model save/delete
+        # to reduce GraphQL POST latency in production usage.
+        "auto_refresh_on_model_change": False,
     },
     # ========================================
     # CONFIGURATION DES REQUÊTES
