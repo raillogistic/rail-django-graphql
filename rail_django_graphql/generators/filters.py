@@ -1099,7 +1099,11 @@ class AdvancedFilterGenerator:
             normalized_choices = []
             for value in field_config.choices:
                 label = getattr(value, "label", None)
-                if label is None and isinstance(value, (tuple, list)) and len(value) >= 2:
+                if (
+                    label is None
+                    and isinstance(value, (tuple, list))
+                    and len(value) >= 2
+                ):
                     normalized_choices.append((value[0], value[1]))
                 else:
                     normalized_choices.append((value, label or str(value)))

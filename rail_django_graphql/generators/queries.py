@@ -142,8 +142,8 @@ class QueryGenerator:
             base = None
             alias = None
 
-            if field.endswith("__count"):
-                base = field[: -len("__count")]
+            if field.endswith("_count"):
+                base = field[: -len("_count")]
                 alias = f"{base}_count"
             elif field.endswith("_count"):
                 base = field[: -len("_count")]
@@ -157,16 +157,26 @@ class QueryGenerator:
                     for f in model._meta.get_fields():
                         if getattr(f, "name", None) == base:
                             try:
-                                from django.db.models.fields.related import ManyToManyField
-                                from django.db.models.fields.reverse_related import ManyToManyRel
-                                is_m2m = isinstance(f, ManyToManyField) or isinstance(f, ManyToManyRel)
+                                from django.db.models.fields.related import (
+                                    ManyToManyField,
+                                )
+                                from django.db.models.fields.reverse_related import (
+                                    ManyToManyRel,
+                                )
+
+                                is_m2m = isinstance(f, ManyToManyField) or isinstance(
+                                    f, ManyToManyRel
+                                )
                             except Exception:
                                 pass
                             break
                     else:
                         # Check reverse relations by accessor name
                         if hasattr(model._meta, "related_objects"):
-                            from django.db.models.fields.reverse_related import ManyToManyRel
+                            from django.db.models.fields.reverse_related import (
+                                ManyToManyRel,
+                            )
+
                             for rel in model._meta.related_objects:
                                 if rel.get_accessor_name() == base:
                                     is_m2m = isinstance(rel, ManyToManyRel)
@@ -177,7 +187,9 @@ class QueryGenerator:
 
                 if alias and alias not in annotated_aliases:
                     try:
-                        queryset = queryset.annotate(**{alias: Count(base, distinct=is_m2m)})
+                        queryset = queryset.annotate(
+                            **{alias: Count(base, distinct=is_m2m)}
+                        )
                         annotated_aliases.add(alias)
                     except Exception:
                         try:
@@ -196,7 +208,9 @@ class QueryGenerator:
 
         return queryset, new_order_by
 
-    def _normalize_ordering_specs(self, order_by: Optional[List[str]], ordering_config) -> List[str]:
+    def _normalize_ordering_specs(
+        self, order_by: Optional[List[str]], ordering_config
+    ) -> List[str]:
         """
         Apply default ordering and validate specs against GraphQLMeta configuration.
         """
@@ -215,7 +229,9 @@ class QueryGenerator:
 
         return normalized
 
-    def _split_order_specs(self, model: Type[models.Model], order_by: List[str]) -> (List[str], List[str]):
+    def _split_order_specs(
+        self, model: Type[models.Model], order_by: List[str]
+    ) -> (List[str], List[str]):
         """Split order_by specs into DB fields and property-based fields."""
         if not order_by:
             return [], []
@@ -249,7 +265,9 @@ class QueryGenerator:
         except Exception:
             return (0, str(val))
 
-    def _apply_property_ordering(self, items: List[Any], prop_specs: List[str]) -> List[Any]:
+    def _apply_property_ordering(
+        self, items: List[Any], prop_specs: List[str]
+    ) -> List[Any]:
         """Apply stable multi-key sort on a Python list based on property specs."""
         if not prop_specs:
             return items
@@ -287,7 +305,9 @@ class QueryGenerator:
             try:
                 manager = getattr(model, manager_name)
                 instance = manager.get(pk=id)
-                graphql_meta.ensure_operation_access("retrieve", info=info, instance=instance)
+                graphql_meta.ensure_operation_access(
+                    "retrieve", info=info, instance=instance
+                )
                 return instance
             except model.DoesNotExist:
                 return None
