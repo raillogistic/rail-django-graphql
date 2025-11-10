@@ -141,7 +141,12 @@ class EnhancedFilterGenerator:
         for field in model._meta.get_fields():
             if not hasattr(field, "name"):
                 continue
-
+            if (
+                field.name == "polymorphic_ctype"
+                or "_ptr" in field.name
+                or "quick" in field.name
+            ):
+                continue
             field_operations = self._generate_field_operations(field)
             if field_operations:
                 grouped_filter = GroupedFieldFilter(

@@ -1272,7 +1272,7 @@ class ModelMetadataExtractor:
             for grouped_filter in grouped_filters:
                 field_name = grouped_filter.field_name
                 # Exclude the primary key 'id' field from filter metadata
-                if field_name == "id":
+                if field_name == "id" or "quick" in field_name:
                     continue
 
                 # Get field verbose name for help text
@@ -1348,6 +1348,9 @@ class ModelMetadataExtractor:
 
                 # Process nested filters and restructure them to parent level
                 for filter_name, filter_instance in filter_class.base_filters.items():
+                    if "quick" in filter_name:
+                        continue
+
                     if "__" in filter_name and not filter_name.endswith("__count"):
                         field_parts = filter_name.split("__")
                         base_field_name = field_parts[0]
@@ -1414,12 +1417,18 @@ class ModelMetadataExtractor:
                         filter_class, "base_filters", {}
                     ).items():
                         base_name = fname.split("__")[0]
+                        if "quick" in base_name:
+                            continue
                         if base_name in property_names:
                             lookup_expr = "__".join(fname.split("__")[1:]) or "exact"
                             prop_obj = property_map.get(base_name)
                             # Prefer fget.short_description when available for properties
                             verbose = (
-                                getattr(getattr(prop_obj, "fget", None), "short_description", None)
+                                getattr(
+                                    getattr(prop_obj, "fget", None),
+                                    "short_description",
+                                    None,
+                                )
                                 or getattr(prop_obj, "verbose_name", None)
                                 or base_name
                             )
@@ -1487,29 +1496,29 @@ class ModelMetadataExtractor:
                     }
 
                     # Also add individual quick filter options for each field
-                    for quick_field in quick_fields:
-                        if "__" in quick_field:  # Handle nested quick fields
-                            # Add nested quick field as separate filter
-                            quick_filter_name = (
-                                f"quick_{quick_field.replace('__', '_')}"
-                            )
-                            grouped_filter_dict[quick_filter_name] = {
-                                "field_name": quick_filter_name,
-                                "is_nested": True,
-                                "related_model": self._get_related_model_name(
-                                    model, quick_field
-                                ),
-                                "is_custom": True,
-                                "field_label": quick_filter_name,
-                                "options": [
-                                    {
-                                        "name": quick_filter_name,
-                                        "lookup_expr": "icontains",
-                                        "help_text": f"Recherche rapide dans {quick_field}",
-                                        "filter_type": "CharFilter",
-                                    }
-                                ],
-                            }
+                    # for quick_field in quick_fields:
+                    #     if "__" in quick_field:  # Handle nested quick fields
+                    #         # Add nested quick field as separate filter
+                    #         quick_filter_name = (
+                    #             f"quick_{quick_field.replace('__', '_')}"
+                    #         )
+                    #         grouped_filter_dict[quick_filter_name] = {
+                    #             "field_name": quick_filter_name,
+                    #             "is_nested": True,
+                    #             "related_model": self._get_related_model_name(
+                    #                 model, quick_field
+                    #             ),
+                    #             "is_custom": True,
+                    #             "field_label": quick_filter_name,
+                    #             "options": [
+                    #                 {
+                    #                     "name": quick_filter_name,
+                    #                     "lookup_expr": "icontains",
+                    #                     "help_text": f"Recherche rapide dans {quick_field}",
+                    #                     "filter_type": "CharFilter",
+                    #                 }
+                    #             ],
+                    #         }
 
                 # Add custom filters
                 if (
@@ -1520,6 +1529,8 @@ class ModelMetadataExtractor:
                         custom_name,
                         custom_method,
                     ) in graphql_meta.custom_filters.items():
+                        if "quick" in custom_name:
+                            continue
                         grouped_filter_dict[custom_name] = {
                             "field_name": custom_name,
                             "is_nested": False,
@@ -1558,7 +1569,9 @@ class ModelMetadataExtractor:
                                     lookup, verbose
                                 )
                                 option_choices = None
-                                if lookup == "exact" and isinstance(f, models.CharField):
+                                if lookup == "exact" and isinstance(
+                                    f, models.CharField
+                                ):
                                     raw_choices = getattr(f, "choices", None)
                                     if raw_choices:
                                         try:
@@ -1681,10 +1694,8 @@ class ModelMetadataExtractor:
                     )
 
             result = list(grouped_filter_dict.values())
-
             # Sort filters: regular fields first, then nested, then custom
             result.sort(key=lambda x: (x["is_custom"], x["is_nested"], x["field_name"]))
-
             return result
 
         except Exception as e:
