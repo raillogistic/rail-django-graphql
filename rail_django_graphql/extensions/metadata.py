@@ -291,6 +291,12 @@ class FilterFieldType(graphene.ObjectType):
         description="List of filter options for this field",
     )
 
+    childs = graphene.List(
+        lambda: FilterFieldType,
+        required=True,
+        description="Nested child filters grouped under this parent field",
+    )
+
 
 class InputFieldMetadataType(graphene.ObjectType):
     """GraphQL type for input field metadata."""
@@ -1334,6 +1340,7 @@ class ModelMetadataExtractor:
                     "is_custom": False,
                     "field_label": verbose_name,
                     "options": options,
+                    "childs": [],
                 }
 
             # Add nested filters from traditional generator - RESTRUCTURED TO PARENT LEVEL
@@ -1346,7 +1353,7 @@ class ModelMetadataExtractor:
 
                 filter_class = filter_generator.generate_filter_set(model)
 
-                # Process nested filters and restructure them to parent level
+                # Process nested filters and restructure them under parent field 'childs'
                 for filter_name, filter_instance in filter_class.base_filters.items():
                     if "quick" in filter_name:
                         continue
@@ -1375,34 +1382,43 @@ class ModelMetadataExtractor:
                         except:
                             verbose_name = base_field_name
 
-                        # RESTRUCTURE: Move nested filters to parent level
-                        # Instead of grouping under base_field_name, create individual entries
-                        parent_filter_name = (
-                            filter_name  # Use full filter name as parent
-                        )
+                        # Ensure parent entry exists
+                        if base_field_name not in grouped_filter_dict:
+                            grouped_filter_dict[base_field_name] = {
+                                "field_name": base_field_name,
+                                "is_nested": False,
+                                "related_model": related_model,
+                                "is_custom": False,
+                                "field_label": verbose_name,
+                                "options": [],
+                                "childs": [],
+                            }
 
-                        # Create help text for restructured filter
+                        # Create help text for nested child filter
                         help_text = self._translate_help_text_to_french(
                             f"Filter by {lookup_expr} in related {base_field_name}",
                             verbose_name,
                         )
 
-                        # Create individual filter entry at parent level
-                        grouped_filter_dict[parent_filter_name] = {
-                            "field_name": parent_filter_name,  # Use full name
-                            "is_nested": True,
-                            "related_model": related_model,
-                            "is_custom": False,
-                            "field_label": verbose_name,
-                            "options": [
-                                {
-                                    "name": filter_name,
-                                    "lookup_expr": lookup_expr,
-                                    "help_text": help_text,
-                                    "filter_type": filter_instance.__class__.__name__,
-                                }
-                            ],
-                        }
+                        # Append nested child filter under parent 'childs'
+                        grouped_filter_dict[base_field_name]["childs"].append(
+                            {
+                                "field_name": filter_name,
+                                "is_nested": True,
+                                "related_model": related_model,
+                                "is_custom": False,
+                                "field_label": verbose_name,
+                                "options": [
+                                    {
+                                        "name": filter_name,
+                                        "lookup_expr": lookup_expr,
+                                        "help_text": help_text,
+                                        "filter_type": filter_instance.__class__.__name__,
+                                    }
+                                ],
+                                "childs": [],
+                            }
+                        )
 
                 # Add property filters for @property-based fields
                 try:
@@ -1449,6 +1465,7 @@ class ModelMetadataExtractor:
                                     "is_custom": False,
                                     "field_label": verbose,
                                     "options": [],
+                                    "childs": [],
                                 }
 
                             grouped_filter_dict[base_name]["options"].append(
@@ -1469,31 +1486,8 @@ class ModelMetadataExtractor:
                     f"Error processing nested filters for {model.__name__}: {e}"
                 )
 
-            # ENHANCED: Add custom filters from GraphQLMeta with better quick filter support
-            if graphql_meta:
-                # Add quick filters with comprehensive field support
-                if (
-                    hasattr(graphql_meta, "quick_filter_fields")
-                    and graphql_meta.quick_filter_fields
-                ):
-                    quick_fields = graphql_meta.quick_filter_fields
-
-                    # Create comprehensive quick filter entry
-                    grouped_filter_dict["quick"] = {
-                        "field_name": "quick",
-                        "is_nested": False,
-                        "related_model": None,
-                        "is_custom": True,
-                        "field_label": "Quick filter",
-                        "options": [
-                            {
-                                "name": "quick",
-                                "lookup_expr": "icontains",
-                                "help_text": f"Recherche rapide dans les champs: {', '.join(quick_fields)}",
-                                "filter_type": "CharFilter",
-                            }
-                        ],
-                    }
+            # Exclude quick filters from metadata output per project requirement
+            # Custom filters remain supported via graphql_meta.custom_filters above
 
                     # Also add individual quick filter options for each field
                     # for quick_field in quick_fields:
@@ -1545,6 +1539,7 @@ class ModelMetadataExtractor:
                                     "filter_type": "CustomFilter",
                                 }
                             ],
+                            "childs": [],
                         }
 
             # Convert to list format and sort for consistency
@@ -1687,6 +1682,7 @@ class ModelMetadataExtractor:
                                 "is_custom": False,
                                 "field_label": verbose,
                                 "options": options,
+                                "childs": [],
                             }
                 except Exception as e:
                     logger.warning(

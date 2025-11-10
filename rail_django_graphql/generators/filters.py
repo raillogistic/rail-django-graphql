@@ -104,10 +104,13 @@ class EnhancedFilterGenerator:
         max_nested_depth: int = DEFAULT_MAX_NESTED_DEPTH,
         enable_nested_filters: bool = True,
         schema_name: Optional[str] = None,
+        enable_quick_filter: bool = False,
     ):
         self.max_nested_depth = min(max_nested_depth, MAX_ALLOWED_NESTED_DEPTH)
         self.enable_nested_filters = enable_nested_filters
         self.schema_name = schema_name or "default"
+        # Quick filter is disabled by default per project requirements
+        self.enable_quick_filter = enable_quick_filter
         self._filter_cache: Dict[Type[models.Model], Type[FilterSet]] = {}
         self._grouped_filter_cache: Dict[
             Type[models.Model], List[GroupedFieldFilter]
@@ -630,22 +633,25 @@ class AdvancedFilterGenerator:
                 custom_filters = graphql_meta.get_custom_filters()
                 filters.update(custom_filters)
 
-            # Always add a 'quick' filter argument. When no fields are explicitly
-            # provided and auto-detection is enabled, fall back to default text fields.
-            try:
-                quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
-                if not quick_fields and getattr(
-                    graphql_meta.filtering, "auto_detect_quick", True
-                ):
-                    quick_fields = self._get_default_quick_filter_fields(model)
+            # Quick filter is intentionally disabled unless explicitly enabled
+            if getattr(self, "enable_quick_filter", False):
+                # Add a 'quick' filter argument only when enabled
+                try:
+                    quick_fields = list(
+                        getattr(graphql_meta, "quick_filter_fields", [])
+                    )
+                    if not quick_fields and getattr(
+                        graphql_meta.filtering, "auto_detect_quick", True
+                    ):
+                        quick_fields = self._get_default_quick_filter_fields(model)
 
-                quick_filter = self._generate_quick_filter(model, quick_fields)
-                if quick_filter:
-                    filters["quick"] = quick_filter
-            except Exception as e:
-                logger.warning(
-                    f"Failed to configure quick filter for {model.__name__}: {e}"
-                )
+                    quick_filter = self._generate_quick_filter(model, quick_fields)
+                    if quick_filter:
+                        filters["quick"] = quick_filter
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to configure quick filter for {model.__name__}: {e}"
+                    )
             # Development-only verbose print removed to avoid console spam and slowdown
             # Use logger.debug if trace is needed:
 
