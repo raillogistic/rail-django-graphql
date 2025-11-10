@@ -58,6 +58,7 @@ def _get_table_cache_timeout() -> int:
     """
     try:
         from django.conf import settings as django_settings
+
         config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
         metadata_cfg = config.get("METADATA", {}) or {}
         timeout_val = int(metadata_cfg.get("table_cache_timeout_seconds", 600))
@@ -73,7 +74,7 @@ def _normalize_custom_fields(custom_fields: Optional[List[str]]) -> List[str]:
     Returns: List[str] sorted and de-duplicated custom fields
     Raises: None
     Example:
-        >>> _normalize_custom_fields(["a.b", "b.a", "a.b"]) 
+        >>> _normalize_custom_fields(["a.b", "b.a", "a.b"])
         ['a.b', 'b.a']
     """
     if not custom_fields:
@@ -157,9 +158,8 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
                 cache_app = parts[3] if len(parts) > 3 else None
                 cache_model = parts[4] if len(parts) > 4 else None
                 if model_name or app_name:
-                    if (
-                        (not app_name or app_name == cache_app)
-                        and (not model_name or model_name == cache_model)
+                    if (not app_name or app_name == cache_app) and (
+                        not model_name or model_name == cache_model
                     ):
                         keys_to_delete.append(k)
                 else:
@@ -182,6 +182,7 @@ def invalidate_cache_on_startup() -> None:
     """
     try:
         from django.conf import settings as django_settings
+
         config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
         metadata_config = config.get("METADATA", {}) or {}
         clear_on_start = bool(metadata_config.get("clear_cache_on_start", False))
@@ -263,6 +264,10 @@ class FilterOptionType(graphene.ObjectType):
     filter_type = graphene.String(
         required=True, description="Filter class type (e.g., 'CharFilter')"
     )
+    choices = graphene.List(
+        ChoiceType,
+        description="Available choices for the field (if any, typically for CharField)",
+    )
 
 
 class FilterFieldType(graphene.ObjectType):
@@ -276,6 +281,10 @@ class FilterFieldType(graphene.ObjectType):
     is_custom = graphene.Boolean(
         required=True, description="Whether this includes custom filters"
     )
+    field_label = graphene.String(
+        required=True, description="Human-readable label for the field"
+    )
+
     options = graphene.List(
         FilterOptionType,
         required=True,
@@ -1262,6 +1271,9 @@ class ModelMetadataExtractor:
             # Process enhanced filters
             for grouped_filter in grouped_filters:
                 field_name = grouped_filter.field_name
+                # Exclude the primary key 'id' field from filter metadata
+                if field_name == "id":
+                    continue
 
                 # Get field verbose name for help text
                 try:
@@ -1286,12 +1298,26 @@ class ModelMetadataExtractor:
                         operation.description or operation.lookup_expr, verbose_name
                     )
 
+                    # Include choices if this is a CharField with declared choices (primarily for exact)
+                    option_choices = None
+                    if field is not None and isinstance(field, models.CharField):
+                        raw_choices = getattr(field, "choices", None)
+                        if raw_choices:
+                            try:
+                                option_choices = [
+                                    {"value": str(val), "label": str(lbl)}
+                                    for val, lbl in raw_choices
+                                ]
+                            except Exception:
+                                option_choices = None
+
                     options.append(
                         {
                             "name": filter_name,
                             "lookup_expr": operation.lookup_expr,
                             "help_text": help_text,
                             "filter_type": operation.filter_type,
+                            "choices": option_choices,
                         }
                     )
                 # Safely resolve related model name even when 'field' lookup fails
@@ -1306,6 +1332,7 @@ class ModelMetadataExtractor:
                     "is_nested": False,
                     "related_model": related_model_name,
                     "is_custom": False,
+                    "field_label": verbose_name,
                     "options": options,
                 }
 
@@ -1363,6 +1390,7 @@ class ModelMetadataExtractor:
                             "is_nested": True,
                             "related_model": related_model,
                             "is_custom": False,
+                            "field_label": verbose_name,
                             "options": [
                                 {
                                     "name": filter_name,
@@ -1388,10 +1416,11 @@ class ModelMetadataExtractor:
                         base_name = fname.split("__")[0]
                         if base_name in property_names:
                             lookup_expr = "__".join(fname.split("__")[1:]) or "exact"
+                            prop_obj = property_map.get(base_name)
+                            # Prefer fget.short_description when available for properties
                             verbose = (
-                                getattr(
-                                    property_map.get(base_name), "verbose_name", None
-                                )
+                                getattr(getattr(prop_obj, "fget", None), "short_description", None)
+                                or getattr(prop_obj, "verbose_name", None)
                                 or base_name
                             )
                             original_help = (
@@ -1409,6 +1438,7 @@ class ModelMetadataExtractor:
                                     "is_nested": False,
                                     "related_model": None,
                                     "is_custom": False,
+                                    "field_label": verbose,
                                     "options": [],
                                 }
 
@@ -1445,6 +1475,7 @@ class ModelMetadataExtractor:
                         "is_nested": False,
                         "related_model": None,
                         "is_custom": True,
+                        "field_label": "Quick filter",
                         "options": [
                             {
                                 "name": "quick",
@@ -1469,6 +1500,7 @@ class ModelMetadataExtractor:
                                     model, quick_field
                                 ),
                                 "is_custom": True,
+                                "field_label": quick_filter_name,
                                 "options": [
                                     {
                                         "name": quick_filter_name,
@@ -1493,6 +1525,7 @@ class ModelMetadataExtractor:
                             "is_nested": False,
                             "related_model": None,
                             "is_custom": True,
+                            "field_label": custom_name,
                             "options": [
                                 {
                                     "name": custom_name,
@@ -1512,6 +1545,9 @@ class ModelMetadataExtractor:
                             continue
 
                         fname = f.name
+                        if fname == "id":
+                            # Exclude id from minimal filter construction as requested
+                            continue
                         verbose = str(getattr(f, "verbose_name", fname))
                         options = []
 
@@ -1521,6 +1557,17 @@ class ModelMetadataExtractor:
                                 help_text = self._translate_help_text_to_french(
                                     lookup, verbose
                                 )
+                                option_choices = None
+                                if lookup == "exact" and isinstance(f, models.CharField):
+                                    raw_choices = getattr(f, "choices", None)
+                                    if raw_choices:
+                                        try:
+                                            option_choices = [
+                                                {"value": str(val), "label": str(lbl)}
+                                                for val, lbl in raw_choices
+                                            ]
+                                        except Exception:
+                                            option_choices = None
                                 options.append(
                                     {
                                         "name": fname
@@ -1529,6 +1576,7 @@ class ModelMetadataExtractor:
                                         "lookup_expr": lookup,
                                         "help_text": help_text,
                                         "filter_type": "CharFilter",
+                                        "choices": option_choices,
                                     }
                                 )
                         elif isinstance(
@@ -1624,6 +1672,7 @@ class ModelMetadataExtractor:
                                     getattr(f, "related_model", None), "__name__", None
                                 ),
                                 "is_custom": False,
+                                "field_label": verbose,
                                 "options": options,
                             }
                 except Exception as e:
@@ -3066,11 +3115,9 @@ class ModelTableExtractor:
                 )
         except Exception as E:
             # Properties may not be available; ignore quietly
-            logger.debug(
-                f"Properties extraction unavailable for {model.__name__}: {E}"
-            )
+            logger.debug(f"Properties extraction unavailable for {model.__name__}: {E}")
             pass
-        
+
         # Reverse relationship count field if counts is True
         if counts:
             table_fields.extend(
@@ -3097,7 +3144,6 @@ class ModelTableExtractor:
                     is_related=True,
                 )
             )
-        
 
         # Filters: reuse existing extractor and append custom ones
         filters: List[Dict[str, Any]] = []
@@ -3561,17 +3607,17 @@ def warm_metadata_cache(app_name: str = None, model_name: str = None, user=None)
 def get_cache_stats() -> Dict[str, Any]:
     """
     Purpose: Return TTL cache statistics for model table metadata.
-    
+
     Args:
         None
-    
+
     Returns:
         Dict[str, Any]: Cache statistics including hits, misses, hit rate, sets,
         deletes, invalidations, default timeout, and current cache size.
-    
+
     Raises:
         None
-    
+
     Example:
         >>> stats = get_cache_stats()
         >>> stats["hits"]
