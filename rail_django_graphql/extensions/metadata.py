@@ -1257,7 +1257,7 @@ class ModelMetadataExtractor:
             # Process enhanced filters
             for grouped_filter in grouped_filters:
                 field_name = grouped_filter.field_name
-                
+
                 # Exclude the primary key 'id' field from filter metadata
                 if field_name == "id" or "quick" in field_name:
                     continue
@@ -1338,7 +1338,7 @@ class ModelMetadataExtractor:
                     if "quick" in filter_name:
                         continue
 
-                    if "__" in filter_name and not filter_name.endswith("__count"):
+                    if "__" in filter_name and not filter_name.endswith("_count"):
                         field_parts = filter_name.split("__")
                         base_field_name = field_parts[0]
                         lookup_expr = "__".join(field_parts[1:])
@@ -3151,7 +3151,6 @@ class ModelTableExtractor:
             table_fields.extend(
                 self._build_table_field_for_reverse_count(introspector, model)
             )
-
         # Filters: exclusively use AdvancedFilterGenerator for table filter extraction
         filters: List[Dict[str, Any]] = []
         try:
@@ -3192,7 +3191,7 @@ class ModelTableExtractor:
                 # beyond the base field (e.g., famille__name__icontains). Direct
                 # lookups on the base field (famille__in, famille__isnull, famille__exact)
                 # must remain at the parent level.
-                is_nested = (len(parts) > 2) and not fname.endswith("__count")
+                is_nested = (len(parts) > 2) and not fname.endswith("_count")
 
                 # Parent group key
                 group_key = base_name
@@ -3211,6 +3210,24 @@ class ModelTableExtractor:
                 except Exception:
                     # Property-based filters
                     prop_info = properties_dict.get(base_name)
+                    if "_count" in base_name:
+                        print(model._meta, base_name, base_name.replace("_count", ""))
+                        # remove "_count"
+                        related_model = model._meta.get_field(
+                            base_name.replace("_count", "")
+                        ).related_model
+                        label = base_name.replace("_count", "").upper()
+                        if (
+                            related_model._meta.verbose_name_plural
+                            or related_model._meta.model_name
+                        ):
+                            label = (
+                                related_model._meta.verbose_name_plural
+                                or related_model._meta.model_name
+                            ).lower()
+
+                        verbose_name_val = f"Nombre total des {label} "
+
                     if prop_info is not None:
                         verbose_name_val = (
                             getattr(
@@ -3219,6 +3236,7 @@ class ModelTableExtractor:
                                 None,
                             )
                             or getattr(prop_info, "verbose_name", None)
+                            or "Nombre de "
                             or base_name
                         )
 
@@ -3251,16 +3269,12 @@ class ModelTableExtractor:
                         "choices": choices_src,
                     }
 
-                # Compute choices for exact CharField only
+                # Compute choices for CharField choices on exact and in lookups
                 option_choices = None
                 try:
-                    if (
-                        field_obj is not None
-                        and isinstance(field_obj, models.CharField)
-                        and lookup_expr == "exact"
-                    ):
+                    if field_obj is not None and isinstance(field_obj, models.CharField):
                         raw_choices = getattr(field_obj, "choices", None)
-                        if raw_choices:
+                        if raw_choices and lookup_expr in ("exact", "in"):
                             option_choices = [
                                 {"value": str(val), "label": str(lbl)}
                                 for val, lbl in raw_choices
@@ -3270,9 +3284,7 @@ class ModelTableExtractor:
 
                 if not is_nested:
                     # Determine if this is a relation (ForeignKey/ManyToMany/etc.)
-                    is_relation_field = bool(
-                        getattr(field_obj, "is_relation", False)
-                    )
+                    is_relation_field = bool(getattr(field_obj, "is_relation", False))
 
                     # For parent-level options, avoid duplicates (e.g., base and __exact)
                     seen_parent = grouped_filter_dict[group_key].setdefault(
@@ -3284,7 +3296,7 @@ class ModelTableExtractor:
                         if lookup_expr in ("exact", "in", "isnull"):
                             # Canonical name for exact is the base field without lookup
                             if lookup_expr == "exact":
-                                if ("exact" not in seen_parent):
+                                if "exact" not in seen_parent:
                                     grouped_filter_dict[group_key]["options"].append(
                                         _make_option(
                                             base_name,
@@ -3296,7 +3308,7 @@ class ModelTableExtractor:
                                     seen_parent.add("exact")
                             else:
                                 key = f"rel:{lookup_expr}"
-                                if (key not in seen_parent):
+                                if key not in seen_parent:
                                     grouped_filter_dict[group_key]["options"].append(
                                         _make_option(
                                             fname,
@@ -3311,7 +3323,7 @@ class ModelTableExtractor:
 
                     # Simple (non-relation) fields: include all available lookups
                     if lookup_expr == "exact":
-                        if ("exact" not in seen_parent):
+                        if "exact" not in seen_parent:
                             grouped_filter_dict[group_key]["options"].append(
                                 _make_option(
                                     base_name,
@@ -3323,7 +3335,7 @@ class ModelTableExtractor:
                             seen_parent.add("exact")
                     else:
                         key = f"simple:{lookup_expr}"
-                        if (key not in seen_parent):
+                        if key not in seen_parent:
                             grouped_filter_dict[group_key]["options"].append(
                                 _make_option(
                                     fname,
@@ -3340,9 +3352,11 @@ class ModelTableExtractor:
 
                 # Determine nested field label by traversing the path
                 nested_label = nested_path
+                nested_option_choices = None
                 try:
                     current_model = model
                     segments = nested_path.split("__")
+                    final_field_obj = None
                     # Walk segments to find the final field verbose name
                     for i, seg in enumerate(segments):
                         fobj = current_model._meta.get_field(seg)
@@ -3353,7 +3367,19 @@ class ModelTableExtractor:
                             else:
                                 break
                         else:
+                            final_field_obj = fobj
                             nested_label = str(getattr(fobj, "verbose_name", seg))
+                    # If nested field has choices and lookup is exact or in, expose them
+                    if (
+                        final_field_obj is not None
+                        and isinstance(final_field_obj, models.CharField)
+                    ):
+                        raw_choices = getattr(final_field_obj, "choices", None)
+                        if raw_choices and lookup_expr in ("exact", "in"):
+                            nested_option_choices = [
+                                {"value": str(val), "label": str(lbl)}
+                                for val, lbl in raw_choices
+                            ]
                 except Exception:
                     nested_label = (
                         segments[-1]
@@ -3379,15 +3405,19 @@ class ModelTableExtractor:
                 if lookup_expr == "exact":
                     nested_groups[nested_path]["options"].append(
                         _make_option(
-                            nested_path, lookup_expr, nested_label, option_choices
+                            nested_path, lookup_expr, nested_label, nested_option_choices
                         )
                     )
                     nested_groups[nested_path]["options"].append(
-                        _make_option(fname, lookup_expr, nested_label, option_choices)
+                        _make_option(
+                            fname, lookup_expr, nested_label, nested_option_choices
+                        )
                     )
                 else:
                     nested_groups[nested_path]["options"].append(
-                        _make_option(fname, lookup_expr, nested_label, option_choices)
+                        _make_option(
+                            fname, lookup_expr, nested_label, nested_option_choices
+                        )
                     )
 
             # Finalize nested lists

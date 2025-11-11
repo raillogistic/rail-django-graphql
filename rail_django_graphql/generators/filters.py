@@ -173,7 +173,10 @@ class EnhancedFilterGenerator:
         operations = []
         field_name = field.name
 
-        if isinstance(field, (models.CharField, models.TextField)):
+        # CharField with choices should only expose exact, in, isnull
+        if isinstance(field, models.CharField) and getattr(field, "choices", None):
+            operations.extend(self._get_choice_operations(field_name, field.choices))
+        elif isinstance(field, (models.CharField, models.TextField)):
             operations.extend(self._get_text_operations(field_name))
         elif isinstance(
             field, (models.IntegerField, models.FloatField, models.DecimalField)
@@ -1028,7 +1031,10 @@ class AdvancedFilterGenerator:
         filters = {}
         field_name = field.name
 
-        if isinstance(field, (models.CharField, models.TextField)):
+        # CharField with choices should expose only exact, in, isnull
+        if isinstance(field, models.CharField) and getattr(field, "choices", None):
+            filters.update(self._generate_choice_filters(field_name, field.choices))
+        elif isinstance(field, (models.CharField, models.TextField)):
             filters.update(self._generate_text_filters(field_name))
         elif isinstance(
             field, (models.IntegerField, models.FloatField, models.DecimalField)
@@ -1461,7 +1467,14 @@ class AdvancedFilterGenerator:
             nested_field_name = f"{field_name}__{related_field.name}"
 
             # Generate filters based on the related field type
-            if isinstance(related_field, (models.CharField, models.TextField)):
+            # CharField with choices should expose only exact, in, isnull
+            if isinstance(related_field, models.CharField) and getattr(related_field, "choices", None):
+                nested_filters.update(
+                    self._generate_choice_filters(
+                        nested_field_name, related_field.choices
+                    )
+                )
+            elif isinstance(related_field, (models.CharField, models.TextField)):
                 nested_filters.update(
                     self._generate_nested_text_filters(
                         nested_field_name, related_field.name
@@ -2120,7 +2133,7 @@ class AdvancedFilterGenerator:
     def _generate_choice_filters(
         self, field_name: str, choices: List
     ) -> Dict[str, ChoiceFilter]:
-        """Generate choice filters: in, exact."""
+        """Generate choice filters: exact, in, isnull."""
         choice_values = [choice[0] for choice in choices]
         return {
             f"{field_name}": ChoiceFilter(
@@ -2132,6 +2145,10 @@ class AdvancedFilterGenerator:
                 field_name=field_name,
                 choices=choices,
                 help_text=f"Filter {field_name} by multiple choices",
+            ),
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=f"{field_name}__isnull",
+                help_text=f"Check if {field_name} is null",
             ),
         }
 
@@ -2270,7 +2287,7 @@ class AdvancedFilterGenerator:
         elif isinstance(field, models.JSONField):
             return ["exact", "isnull"]
         elif hasattr(field, "choices") and field.choices:
-            return ["exact", "in"]
+            return ["exact", "in", "isnull"]
         elif isinstance(field, models.ForeignKey):
             return ["exact", "in"]
         else:
