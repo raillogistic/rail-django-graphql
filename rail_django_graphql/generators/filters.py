@@ -414,6 +414,12 @@ class EnhancedFilterGenerator:
                 is_array=True,
             ),
             FilterOperation(
+                "isnull",
+                "BooleanFilter",
+                "isnull",
+                f"Check if {field_name} has no related objects",
+            ),
+            FilterOperation(
                 "count",
                 "NumberFilter",
                 "count",
@@ -1039,13 +1045,12 @@ class AdvancedFilterGenerator:
         elif hasattr(field, "choices") and field.choices:
             filters.update(self._generate_choice_filters(field_name, field.choices))
         elif isinstance(field, models.ForeignKey):
-            # Only generate basic foreign key filters if nested filtering is enabled
-            if self.enable_nested_filters:
-                filters.update(
-                    self._generate_foreign_key_filters(field_name, field.related_model)
-                )
+            # Always generate basic foreign key filters (exact, in, isnull)
+            filters.update(
+                self._generate_foreign_key_filters(field_name, field.related_model)
+            )
 
-            # Add nested field filters if enabled and within depth limits
+            # Add nested field filters only if enabled and within depth limits
             if (
                 self.enable_nested_filters
                 and allow_nested
@@ -1056,13 +1061,12 @@ class AdvancedFilterGenerator:
                     self._generate_nested_field_filters(field, current_depth)
                 )
         elif isinstance(field, models.ManyToManyField):
-            # Generate ManyToMany filters
-            if self.enable_nested_filters:
-                filters.update(
-                    self._generate_many_to_many_filters(field_name, field.related_model)
-                )
+            # Always generate ManyToMany filters (exact, in, isnull, counts)
+            filters.update(
+                self._generate_many_to_many_filters(field_name, field.related_model)
+            )
 
-            # Add nested field filters if enabled and within depth limits
+            # Add nested field filters only if enabled and within depth limits
             if (
                 self.enable_nested_filters
                 and allow_nested
@@ -2121,8 +2125,8 @@ class AdvancedFilterGenerator:
 
     def _generate_foreign_key_filters(
         self, field_name: str, related_model: Type[models.Model] = None
-    ) -> Dict[str, NumberFilter]:
-        """Generate foreign key filters: exact, in."""
+    ) -> Dict[str, django_filters.Filter]:
+        """Generate foreign key filters: exact, in, isnull."""
         filters = {
             f"{field_name}": NumberFilter(
                 field_name=field_name, help_text=f"Filter by {field_name} ID"
@@ -2137,6 +2141,13 @@ class AdvancedFilterGenerator:
                 to_field_name="pk",
                 help_text=f"Filter by multiple {field_name} IDs",
             )
+
+        # Always support isnull for ForeignKey/OneToOne
+        filters[f"{field_name}__isnull"] = BooleanFilter(
+            field_name=field_name,
+            lookup_expr="isnull",
+            help_text=f"Check if {field_name} is null",
+        )
 
         return filters
 
@@ -2163,6 +2174,11 @@ class AdvancedFilterGenerator:
                 queryset=related_model.objects.all(),
                 to_field_name="pk",
                 help_text=f"Filter by multiple {field_name} IDs",
+            ),
+            f"{field_name}__isnull": BooleanFilter(
+                field_name=field_name,
+                lookup_expr="isnull",
+                help_text=f"Check if {field_name} has no related objects",
             ),
             # Count filters for ManyToMany relationships
             f"{field_name}_count": NumberFilter(

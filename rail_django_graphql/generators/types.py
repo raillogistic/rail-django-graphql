@@ -1037,6 +1037,26 @@ class TypeGenerator:
             if filter_type:
                 filter_fields[field_name] = filter_type
 
+        # Apply GraphQLMeta.filtering.fields overrides:
+        # - If a field is explicitly mentioned with non-empty lookups, restrict to those
+        # - If a field is not mentioned or lookups list is empty, keep all available filters
+        try:
+            graphql_meta = get_model_graphql_meta(model)
+            configured_fields = getattr(graphql_meta, "filtering").fields if graphql_meta else {}
+            if configured_fields:
+                for fname in list(filter_fields.keys()):
+                    cfg = configured_fields.get(fname)
+                    if cfg and cfg.lookups:
+                        # Only keep the explicitly allowed lookups for this field
+                        allowed = list(cfg.lookups)
+                        # Ensure we only include lookups that actually exist for the field type
+                        existing = set(filter_fields.get(fname, []))
+                        filter_fields[fname] = [lk for lk in allowed if lk in existing]
+                    # If cfg exists but lookups is empty or None, leave defaults (include all available)
+        except Exception:
+            # Be defensive: any issues retrieving meta should not break filter generation
+            pass
+
         # Create the filter set class
         class_name = f"{model.__name__}Filter"
 
