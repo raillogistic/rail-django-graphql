@@ -271,6 +271,12 @@ class FilterFieldType(graphene.ObjectType):
         description="List of filter options for this field",
     )
 
+    # Nested filter fields for related lookups (e.g., famille__code)
+    nested = graphene.List(
+        lambda: FilterFieldType,
+        description="Nested filter fields for related model attributes",
+    )
+
 
 class InputFieldMetadataType(graphene.ObjectType):
     """GraphQL type for input field metadata."""
@@ -1251,7 +1257,7 @@ class ModelMetadataExtractor:
             # Process enhanced filters
             for grouped_filter in grouped_filters:
                 field_name = grouped_filter.field_name
-
+                
                 # Exclude the primary key 'id' field from filter metadata
                 if field_name == "id" or "quick" in field_name:
                     continue
@@ -3180,11 +3186,15 @@ class ModelTableExtractor:
                 base_name = parts[0]
                 if base_name == "id" or base_name == "pk":
                     continue
+                # Determine lookup expression; if no explicit lookup, treat as exact
                 lookup_expr = "__".join(parts[1:]) or "exact"
-                is_nested = "__" in fname and not fname.endswith("__count")
+                # A filter is considered nested only when it references a deeper path
+                # beyond the base field (e.g., famille__name__icontains). Direct
+                # lookups on the base field (famille__in, famille__isnull, famille__exact)
+                # must remain at the parent level.
+                is_nested = (len(parts) > 2) and not fname.endswith("__count")
 
-                # Group ALL lookups (nested or not) under the base field name
-                # This ensures entries like id__gt, id__lt, id__in are grouped under a single 'id'
+                # Parent group key
                 group_key = base_name
 
                 # Resolve field and labels
@@ -3212,10 +3222,36 @@ class ModelTableExtractor:
                             or base_name
                         )
 
-                # Build option entry
-                help_text_val = self._translate_help_text_to_french(
-                    lookup_expr, verbose_name_val
-                )
+                # Initialize group with nested container
+                if group_key not in grouped_filter_dict:
+                    grouped_filter_dict[group_key] = {
+                        "field_name": group_key,
+                        "is_nested": False,
+                        "related_model": related_model_name,
+                        "is_custom": False,
+                        "field_label": verbose_name_val,
+                        "options": [],
+                        # Nested will be a list of FilterFieldType-like dicts
+                        "nested": [],
+                        # Internal: track seen parent lookups to avoid duplicates
+                        "_seen_parent": set(),
+                    }
+
+                # Helper to build an option dict
+                def _make_option(
+                    name: str, lookup: str, label_for_help: str, choices_src: Any
+                ) -> Dict[str, Any]:
+                    return {
+                        "name": name,
+                        "lookup_expr": lookup,
+                        "help_text": self._translate_help_text_to_french(
+                            lookup, label_for_help
+                        ),
+                        "filter_type": finstance.__class__.__name__,
+                        "choices": choices_src,
+                    }
+
+                # Compute choices for exact CharField only
                 option_choices = None
                 try:
                     if (
@@ -3232,27 +3268,136 @@ class ModelTableExtractor:
                 except Exception:
                     option_choices = None
 
-                option = {
-                    "name": fname if lookup_expr != "exact" else base_name,
-                    "lookup_expr": lookup_expr,
-                    "help_text": help_text_val,
-                    "filter_type": finstance.__class__.__name__,
-                    "choices": option_choices,
-                }
+                if not is_nested:
+                    # Determine if this is a relation (ForeignKey/ManyToMany/etc.)
+                    is_relation_field = bool(
+                        getattr(field_obj, "is_relation", False)
+                    )
 
-                if group_key not in grouped_filter_dict:
-                    grouped_filter_dict[group_key] = {
-                        "field_name": group_key,
-                        "is_nested": is_nested,
+                    # For parent-level options, avoid duplicates (e.g., base and __exact)
+                    seen_parent = grouped_filter_dict[group_key].setdefault(
+                        "_seen_parent", set()
+                    )
+
+                    # Related fields: keep only exact, in, isnull at parent level
+                    if is_relation_field:
+                        if lookup_expr in ("exact", "in", "isnull"):
+                            # Canonical name for exact is the base field without lookup
+                            if lookup_expr == "exact":
+                                if ("exact" not in seen_parent):
+                                    grouped_filter_dict[group_key]["options"].append(
+                                        _make_option(
+                                            base_name,
+                                            lookup_expr,
+                                            verbose_name_val,
+                                            option_choices,
+                                        )
+                                    )
+                                    seen_parent.add("exact")
+                            else:
+                                key = f"rel:{lookup_expr}"
+                                if (key not in seen_parent):
+                                    grouped_filter_dict[group_key]["options"].append(
+                                        _make_option(
+                                            fname,
+                                            lookup_expr,
+                                            verbose_name_val,
+                                            option_choices,
+                                        )
+                                    )
+                                    seen_parent.add(key)
+                        # Skip other lookups for relation parent field
+                        continue
+
+                    # Simple (non-relation) fields: include all available lookups
+                    if lookup_expr == "exact":
+                        if ("exact" not in seen_parent):
+                            grouped_filter_dict[group_key]["options"].append(
+                                _make_option(
+                                    base_name,
+                                    lookup_expr,
+                                    verbose_name_val,
+                                    option_choices,
+                                )
+                            )
+                            seen_parent.add("exact")
+                    else:
+                        key = f"simple:{lookup_expr}"
+                        if (key not in seen_parent):
+                            grouped_filter_dict[group_key]["options"].append(
+                                _make_option(
+                                    fname,
+                                    lookup_expr,
+                                    verbose_name_val,
+                                    option_choices,
+                                )
+                            )
+                            seen_parent.add(key)
+                    continue
+
+                # Nested: group under 'nested' for the specific nested field path
+                nested_path = fname.rsplit("__", 1)[0]
+
+                # Determine nested field label by traversing the path
+                nested_label = nested_path
+                try:
+                    current_model = model
+                    segments = nested_path.split("__")
+                    # Walk segments to find the final field verbose name
+                    for i, seg in enumerate(segments):
+                        fobj = current_model._meta.get_field(seg)
+                        if i < len(segments) - 1:
+                            # Relation hop
+                            if getattr(fobj, "related_model", None) is not None:
+                                current_model = fobj.related_model
+                            else:
+                                break
+                        else:
+                            nested_label = str(getattr(fobj, "verbose_name", seg))
+                except Exception:
+                    nested_label = (
+                        segments[-1]
+                        if "segments" in locals() and segments
+                        else nested_path
+                    )
+
+                # Find or create nested entry
+                nested_groups = grouped_filter_dict[group_key].setdefault(
+                    "_nested_groups", {}
+                )
+                if nested_path not in nested_groups:
+                    nested_groups[nested_path] = {
+                        "field_name": nested_path,
+                        "is_nested": True,
                         "related_model": related_model_name,
                         "is_custom": False,
-                        "field_label": verbose_name_val,
-                        "options": [option],
+                        "field_label": nested_label,
+                        "options": [],
                     }
-                else:
-                    grouped_filter_dict[group_key]["options"].append(option)
 
-            filters = list(grouped_filter_dict.values())
+                # For exact nested lookups, include both 'path' and full 'fname' entries
+                if lookup_expr == "exact":
+                    nested_groups[nested_path]["options"].append(
+                        _make_option(
+                            nested_path, lookup_expr, nested_label, option_choices
+                        )
+                    )
+                    nested_groups[nested_path]["options"].append(
+                        _make_option(fname, lookup_expr, nested_label, option_choices)
+                    )
+                else:
+                    nested_groups[nested_path]["options"].append(
+                        _make_option(fname, lookup_expr, nested_label, option_choices)
+                    )
+
+            # Finalize nested lists
+            filters = []
+            for gval in grouped_filter_dict.values():
+                nested_groups = gval.pop("_nested_groups", {})
+                # Remove internal tracking key if present
+                gval.pop("_seen_parent", None)
+                gval["nested"] = list(nested_groups.values()) if nested_groups else []
+                filters.append(gval)
         except Exception as e:
             logger.warning(f"Error extracting filters for {model_label}: {e}")
             filters = []
