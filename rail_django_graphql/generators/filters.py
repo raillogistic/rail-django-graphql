@@ -1494,6 +1494,17 @@ class AdvancedFilterGenerator:
                     field_name=nested_field_name,
                     help_text=f"Filter by {nested_field_name} ID",
                 )
+                # Support membership and null checks for foreign key IDs
+                nested_filters[f"{nested_field_name}__in"] = django_filters.BaseInFilter(
+                    field_name=nested_field_name,
+                    lookup_expr="in",
+                    help_text=f"Match any of the provided IDs for {nested_field_name}",
+                )
+                nested_filters[f"{nested_field_name}__isnull"] = BooleanFilter(
+                    field_name=nested_field_name,
+                    lookup_expr="isnull",
+                    help_text=f"Check if {nested_field_name} is null",
+                )
 
                 # Recursively add deeper nested filters if within depth limits
                 if current_depth + 1 < self.max_nested_depth:
@@ -1739,6 +1750,7 @@ class AdvancedFilterGenerator:
             Dictionary of nested text filter mappings
         """
         return {
+            # Exact matching aliases
             f"{field_name}__exact": CharFilter(
                 field_name=field_name,
                 lookup_expr="exact",
@@ -1748,6 +1760,12 @@ class AdvancedFilterGenerator:
                 field_name=field_name,
                 lookup_expr="exact",
                 help_text=f"Exact match for {base_field_name}",
+            ),
+            # Case-insensitive text matching
+            f"{field_name}__iexact": CharFilter(
+                field_name=field_name,
+                lookup_expr="iexact",
+                help_text=f"Case-insensitive exact match for {base_field_name}",
             ),
             f"{field_name}__icontains": CharFilter(
                 field_name=field_name,
@@ -1763,6 +1781,22 @@ class AdvancedFilterGenerator:
                 field_name=field_name,
                 lookup_expr="iendswith",
                 help_text=f"Case-insensitive ends with for {base_field_name}",
+            ),
+            # Case-sensitive text matching
+            f"{field_name}__contains": CharFilter(
+                field_name=field_name,
+                lookup_expr="contains",
+                help_text=f"Contains text in {base_field_name}",
+            ),
+            f"{field_name}__startswith": CharFilter(
+                field_name=field_name,
+                lookup_expr="startswith",
+                help_text=f"Starts with text in {base_field_name}",
+            ),
+            f"{field_name}__endswith": CharFilter(
+                field_name=field_name,
+                lookup_expr="endswith",
+                help_text=f"Ends with text in {base_field_name}",
             ),
         }
 
@@ -1795,6 +1829,12 @@ class AdvancedFilterGenerator:
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="lte",
                 help_text=f"Filter {base_field_name} less than or equal to the specified value",
+            ),
+            # Support array membership for numeric fields
+            f"{field_name}__in": django_filters.BaseInFilter(
+                field_name=field_name.replace("__", "__"),
+                lookup_expr="in",
+                help_text=f"Match any of the provided numeric values for {base_field_name}",
             ),
             f"{field_name}__range": django_filters.RangeFilter(
                 field_name=field_name.replace("__", "__"),
