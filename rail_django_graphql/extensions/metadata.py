@@ -19,6 +19,7 @@ from django.db import models
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 from graphql import GraphQLError
+from rail_django_graphql.plugins import base
 
 from ..conf import get_core_schema_settings
 from ..core.settings import SchemaSettings
@@ -3169,6 +3170,7 @@ class ModelTableExtractor:
 
             grouped_filter_dict: Dict[str, Dict[str, Any]] = {}
             base_filters = getattr(filter_class, "base_filters", {}) or {}
+            
             for fname, finstance in base_filters.items():
                 # Skip quick filter
                 if (
@@ -3183,7 +3185,13 @@ class ModelTableExtractor:
 
                 parts = fname.split("__")
                 base_name = parts[0]
-                if base_name == "id" or base_name == "pk":
+                if (
+                    base_name == "id"
+                    or base_name == "pk"
+                    or "report_rows" in base_name
+                    or "_snapshots" in base_name
+                    or "_policies" in base_name
+                ):
                     continue
                 # Determine lookup expression; if no explicit lookup, treat as exact
                 lookup_expr = "__".join(parts[1:]) or "exact"
@@ -3202,16 +3210,22 @@ class ModelTableExtractor:
                 related_model_name = None
                 try:
                     field_obj = model._meta.get_field(base_name)
-                    verbose_name_val = str(
-                        getattr(field_obj, "verbose_name", base_name)
-                    )
+                    # Prefer using the related model's verbose names for relation groups
                     if getattr(field_obj, "related_model", None):
                         related_model_name = field_obj.related_model.__name__
+                        rel_meta = field_obj.related_model._meta
+                        verbose_name_val = str(
+                            getattr(rel_meta, "verbose_name_plural", None)
+                            or getattr(rel_meta, "verbose_name", base_name)
+                        )
+                    else:
+                        verbose_name_val = str(
+                            getattr(field_obj, "verbose_name", base_name)
+                        )
                 except Exception:
                     # Property-based filters
                     prop_info = properties_dict.get(base_name)
                     if "_count" in base_name:
-                        print(model._meta, base_name, base_name.replace("_count", ""))
                         # remove "_count"
                         related_model = model._meta.get_field(
                             base_name.replace("_count", "")
@@ -3239,6 +3253,34 @@ class ModelTableExtractor:
                             or "Nombre de "
                             or base_name
                         )
+
+                    # Reverse relation filters: if base_name is an accessor/related_name,
+                    # derive label from the related model's verbose name(s)
+                    if field_obj is None and (prop_info is None):
+                        try:
+                            reverse_rel = None
+                            for f in model._meta.get_fields():
+                                # ManyToOneRel / ManyToManyRel have get_accessor_name
+                                accessor = (
+                                    getattr(f, "get_accessor_name", None)
+                                )
+                                if callable(accessor) and accessor() == base_name:
+                                    reverse_rel = f
+                                    break
+                            if reverse_rel is not None:
+                                rel_model = getattr(reverse_rel, "related_model", None)
+                                if rel_model is not None:
+                                    related_model_name = rel_model.__name__
+                                    rel_meta = rel_model._meta
+                                    # Prefer plural for reverse relations (manager-like)
+                                    verbose_name_val = str(
+                                        getattr(rel_meta, "verbose_name_plural", None)
+                                        or getattr(rel_meta, "verbose_name", base_name)
+                                    )
+                        except Exception as e:
+                            logger.debug(
+                                f"Reverse relation label resolution failed for {model.__name__}.{base_name}: {e}"
+                            )
 
                 # Initialize group with nested container
                 if group_key not in grouped_filter_dict:
@@ -3272,7 +3314,9 @@ class ModelTableExtractor:
                 # Compute choices for CharField choices on exact and in lookups
                 option_choices = None
                 try:
-                    if field_obj is not None and isinstance(field_obj, models.CharField):
+                    if field_obj is not None and isinstance(
+                        field_obj, models.CharField
+                    ):
                         raw_choices = getattr(field_obj, "choices", None)
                         if raw_choices and lookup_expr in ("exact", "in"):
                             option_choices = [
@@ -3370,9 +3414,8 @@ class ModelTableExtractor:
                             final_field_obj = fobj
                             nested_label = str(getattr(fobj, "verbose_name", seg))
                     # If nested field has choices and lookup is exact or in, expose them
-                    if (
-                        final_field_obj is not None
-                        and isinstance(final_field_obj, models.CharField)
+                    if final_field_obj is not None and isinstance(
+                        final_field_obj, models.CharField
                     ):
                         raw_choices = getattr(final_field_obj, "choices", None)
                         if raw_choices and lookup_expr in ("exact", "in"):
@@ -3405,7 +3448,10 @@ class ModelTableExtractor:
                 if lookup_expr == "exact":
                     nested_groups[nested_path]["options"].append(
                         _make_option(
-                            nested_path, lookup_expr, nested_label, nested_option_choices
+                            nested_path,
+                            lookup_expr,
+                            nested_label,
+                            nested_option_choices,
                         )
                     )
                     nested_groups[nested_path]["options"].append(
