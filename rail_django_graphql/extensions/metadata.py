@@ -2497,22 +2497,36 @@ class ModelFormMetadataExtractor:
         model_name: str,
         user,
         nested_fields: List[str] = None,
+        exclude: Optional[List[str]] = None,
+        only: Optional[List[str]] = None,
+        exclude_relationships: Optional[List[str]] = None,
+        only_relationships: Optional[List[str]] = None,
         current_depth: int = 0,
         visited_models: set = None,
     ) -> Optional[ModelFormMetadata]:
         """
-        Extract comprehensive form metadata for a Django model.
-
+        
+        Purpose: Extract comprehensive form metadata for a Django model, with optional field selection filters.
         Args:
-            app_name: Django app name
-            model_name: Model class name
-            user: User instance for permission checking
-            nested_fields: List of field names to include nested metadata for
-            current_depth: Current nesting depth
-            visited_models: Set of already visited models to prevent circular references
-
+            app_name (str): Django app name.
+            model_name (str): Model class name.
+            user: User instance for permission checking.
+            nested_fields (List[str], optional): Field names to include nested metadata for.
+            exclude (List[str], optional): Regular form field names to exclude from the result.
+            only (List[str], optional): Regular form field names to exclusively include in the result.
+            exclude_relationships (List[str], optional): Relationship field names to exclude from the result.
+            only_relationships (List[str], optional): Relationship field names to exclusively include in the result.
+            current_depth (int): Current nesting depth for recursive extraction.
+            visited_models (set): Set of already visited models to prevent circular references.
         Returns:
-            ModelFormMetadata with all form-specific information
+            Optional[ModelFormMetadata]: Metadata with form-specific information, possibly filtered by selection.
+        Raises:
+            None
+        Example:
+            >>> extractor.extract_model_form_metadata(
+            ...     app_name="auth", model_name="User", user=request.user,
+            ...     only=["username", "email"], exclude_relationships=["groups"]
+            ... )
         """
         # Initialize visited models set if not provided
         if visited_models is None:
@@ -2545,6 +2559,12 @@ class ModelFormMetadataExtractor:
         meta = model._meta
         nested_fields = nested_fields or []
 
+        # Normalize selection inputs
+        exclude = exclude or []
+        only = only or []
+        exclude_relationships = exclude_relationships or []
+        only_relationships = only_relationships or []
+
         # Extract form fields
         form_fields = []
         form_relationships = []
@@ -2564,6 +2584,17 @@ class ModelFormMetadataExtractor:
                     field_metadata = self._extract_form_field_metadata(field, user)
                     if field_metadata:
                         form_fields.append(field_metadata)
+
+        # Apply selection filters to fields and relationships
+        if only:
+            form_fields = [f for f in form_fields if f.name in set(only)]
+        if exclude:
+            form_fields = [f for f in form_fields if f.name not in set(exclude)]
+
+        if only_relationships:
+            form_relationships = [r for r in form_relationships if r.name in set(only_relationships)]
+        if exclude_relationships:
+            form_relationships = [r for r in form_relationships if r.name not in set(exclude_relationships)]
 
         # Get form configuration
         form_title = f"Form for {meta.verbose_name}"
