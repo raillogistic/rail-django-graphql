@@ -3393,6 +3393,10 @@ class ModelTableExtractor:
 
                 # Nested: group under 'nested' for the specific nested field path
                 nested_path = fname.rsplit("__", 1)[0]
+                # For nested lookups, only the final token should be the lookup (e.g., 'exact')
+                nested_lookup_expr = (
+                    fname.split("__")[-1] if "__" in fname else lookup_expr
+                )
 
                 # Determine nested field label by traversing the path
                 nested_label = nested_path
@@ -3418,7 +3422,7 @@ class ModelTableExtractor:
                         final_field_obj, models.CharField
                     ):
                         raw_choices = getattr(final_field_obj, "choices", None)
-                        if raw_choices and lookup_expr in ("exact", "in"):
+                        if raw_choices and nested_lookup_expr in ("exact", "in"):
                             nested_option_choices = [
                                 {"value": str(val), "label": str(lbl)}
                                 for val, lbl in raw_choices
@@ -3445,24 +3449,30 @@ class ModelTableExtractor:
                     }
 
                 # For exact nested lookups, include both 'path' and full 'fname' entries
-                if lookup_expr == "exact":
+                if nested_lookup_expr == "exact":
                     nested_groups[nested_path]["options"].append(
                         _make_option(
                             nested_path,
-                            lookup_expr,
+                            nested_lookup_expr,
                             nested_label,
                             nested_option_choices,
                         )
                     )
                     nested_groups[nested_path]["options"].append(
                         _make_option(
-                            fname, lookup_expr, nested_label, nested_option_choices
+                            fname,
+                            nested_lookup_expr,
+                            nested_label,
+                            nested_option_choices,
                         )
                     )
                 else:
                     nested_groups[nested_path]["options"].append(
                         _make_option(
-                            fname, lookup_expr, nested_label, nested_option_choices
+                            fname,
+                            nested_lookup_expr,
+                            nested_label,
+                            nested_option_choices,
                         )
                     )
 
