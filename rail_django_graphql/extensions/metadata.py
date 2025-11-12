@@ -2359,10 +2359,12 @@ class ModelFormMetadataExtractor:
             if callable(field.default):
                 try:
                     default_value = field.default()
-                except:
+                except Exception:
                     default_value = None
             else:
                 default_value = field.default
+        # Ensure JSONString fields receive JSON-serializable values
+        default_value = self._to_json_safe(default_value)
 
         # Check field permissions using the model from the field
         model = field.model
@@ -2396,7 +2398,7 @@ class ModelFormMetadataExtractor:
             disabled=not field.editable,
             readonly=not field.editable or getattr(field, "primary_key", None),
             css_classes=self._get_css_classes(field),
-            data_attributes=self._get_data_attributes(field),
+            data_attributes=self._to_json_safe(self._get_data_attributes(field)),
         )
 
     @cache_metadata(
@@ -2476,14 +2478,14 @@ class ModelFormMetadataExtractor:
             foreign_key=isinstance(field, models.ForeignKey),
             is_reverse=False,
             multiple=isinstance(field, models.ManyToManyField),
-            queryset_filters=self._get_queryset_filters(field),
+            queryset_filters=self._to_json_safe(self._get_queryset_filters(field)),
             empty_label=self._get_empty_label(field),
-            limit_choices_to=getattr(field, "limit_choices_to", None),
+            limit_choices_to=self._to_json_safe(getattr(field, "limit_choices_to", None)),
             has_permission=has_permission,
             disabled=not field.editable,
             readonly=not field.editable or getattr(field, "primary_key", None),
             css_classes=self._get_css_classes(field),
-            data_attributes=self._get_data_attributes(field),
+            data_attributes=self._to_json_safe(self._get_data_attributes(field)),
         )
 
     @cache_metadata(
@@ -2767,6 +2769,59 @@ class ModelFormMetadataExtractor:
             "autocomplete": "on",
             "data-model": f"{model._meta.app_label}.{model._meta.model_name}",
         }
+
+    def _to_json_safe(self, value: Any) -> Any:
+        """
+        Purpose: Convert Python/Django values into JSON-serializable primitives for Graphene JSONString.
+        Args:
+            value: Any Python value possibly containing datetime, date, time, Decimal, set/tuple, etc.
+        Returns:
+            A JSON-serializable value (str, int, float, bool, None, list, dict) with nested items converted.
+        Raises:
+            None
+        Example:
+            >>> from datetime import datetime
+            >>> v = datetime(2024, 1, 1)
+            >>> isinstance(ModelFormMetadataExtractor()._to_json_safe(v), str)
+            True
+        """
+        try:
+            from datetime import date, datetime, time
+            from decimal import Decimal
+
+            # Primitives remain unchanged
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+
+            # Datetime-like objects -> ISO 8601 strings
+            if isinstance(value, (datetime, date, time)):
+                try:
+                    # Use isoformat for a stable, interoperable string representation
+                    return value.isoformat()
+                except Exception:
+                    return str(value)
+
+            # Decimal -> string to preserve precision
+            if isinstance(value, Decimal):
+                return str(value)
+
+            # Sets/Tuples -> lists
+            if isinstance(value, (set, tuple)):
+                return [self._to_json_safe(v) for v in list(value)]
+
+            # Lists -> convert elements
+            if isinstance(value, list):
+                return [self._to_json_safe(v) for v in value]
+
+            # Dicts -> convert keys/values
+            if isinstance(value, dict):
+                return {str(k): self._to_json_safe(v) for k, v in value.items()}
+
+            # Fallback: use string representation
+            return str(value)
+        except Exception:
+            # As a last resort, stringify to avoid GraphQL serialization errors
+            return str(value)
 
     def _has_field_permission(self, user, model: type, field_name: str) -> bool:
         """
@@ -3705,6 +3760,26 @@ class ModelMetadataQuery(graphene.ObjectType):
             default_value=[],
             description="List of field names to include nested metadata for (depth 1)",
         ),
+        exclude=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="List of regular field names to exclude from form metadata",
+        ),
+        only=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="List of regular field names to exclusively include in form metadata",
+        ),
+        exclude_relationships=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="Relationship field names to exclude from form metadata",
+        ),
+        only_relationships=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="Relationship field names to exclusively include in form metadata",
+        ),
         description="Get comprehensive form metadata for a Django model",
     )
 
@@ -3821,6 +3896,10 @@ class ModelMetadataQuery(graphene.ObjectType):
         app_name: str,
         model_name: str,
         nested_fields: List[str] = None,
+        exclude: Optional[List[str]] = None,
+        only: Optional[List[str]] = None,
+        exclude_relationships: Optional[List[str]] = None,
+        only_relationships: Optional[List[str]] = None,
     ) -> Optional[ModelFormMetadataType]:
         """
         Resolve model form metadata for frontend form construction.
@@ -3846,6 +3925,10 @@ class ModelMetadataQuery(graphene.ObjectType):
             model_name=model_name,
             user=user,
             nested_fields=nested_fields or [],
+            exclude=exclude or [],
+            only=only or [],
+            exclude_relationships=exclude_relationships or [],
+            only_relationships=only_relationships or [],
         )
 
         # Handle extraction error returning None
