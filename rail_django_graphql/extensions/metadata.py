@@ -72,6 +72,11 @@ def _make_table_cache_key(
     app_name: str,
     model_name: str,
     counts: bool,
+    exclude: Optional[List[str]] = None,
+    only: Optional[List[str]] = None,
+    include_nested: bool = True,
+    only_lookup: Optional[List[str]] = None,
+    exclude_lookup: Optional[List[str]] = None,
 ) -> str:
     """
     Purpose: Build a stable cache key for model_table metadata.
@@ -80,15 +85,36 @@ def _make_table_cache_key(
         app_name: str Django app label
         model_name: str Django model name
         counts: bool include reverse relationship counts
+        exclude: Optional[List[str]] field names to exclude from filters
+        only: Optional[List[str]] field names to include in filters
+        include_nested: bool whether nested filters are included
+        only_lookup: Optional[List[str]] lookups to include (e.g., ["exact","in"]) 
+        exclude_lookup: Optional[List[str]] lookups to exclude
     Returns: str: cache key
     Raises: None
     Example:
-        >>> _make_table_cache_key('default','app','Model',False)
-        'model-table:default:app:Model:counts=0'
+        >>> _make_table_cache_key('default','app','Model',False, only=["name"], include_nested=False)
+        'model-table:default:app:Model:counts=0:cf=f9b1f2b3'
     """
-    return (
-        f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
-    )
+    try:
+        # Build a compact signature hash for filter controls to avoid overly long keys
+        parts = {
+            "exclude": ",".join(sorted(exclude or [])),
+            "only": ",".join(sorted(only or [])),
+            "include_nested": "1" if include_nested else "0",
+            "only_lookup": ",".join(sorted(only_lookup or [])),
+            "exclude_lookup": ",".join(sorted(exclude_lookup or [])),
+        }
+        signature = "|".join(f"{k}={v}" for k, v in parts.items())
+        digest = hashlib.sha1(signature.encode("utf-8")).hexdigest()[:8]
+        return (
+            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}:cf={digest}"
+        )
+    except Exception:
+        # Fallback to legacy key format if hashing fails
+        return (
+            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
+        )
 
 
 def cache_metadata(
@@ -2961,6 +2987,11 @@ class ModelTableExtractor:
         model_name: str,
         custom_fields: Optional[List[str]] = None,
         counts: bool = False,
+        exclude: Optional[List[str]] = None,
+        only: Optional[List[str]] = None,
+        include_nested: bool = True,
+        only_lookup: Optional[List[str]] = None,
+        exclude_lookup: Optional[List[str]] = None,
         user=None,
     ) -> Optional[ModelTableMetadata]:
         # TTL cache lookup for model_table metadata
@@ -2970,6 +3001,11 @@ class ModelTableExtractor:
                 app_name,
                 model_name,
                 counts,
+                exclude=exclude or [],
+                only=only or [],
+                include_nested=include_nested,
+                only_lookup=only_lookup or [],
+                exclude_lookup=exclude_lookup or [],
             )
             now = time.time()
             with _table_cache_lock:
@@ -3170,7 +3206,7 @@ class ModelTableExtractor:
 
             grouped_filter_dict: Dict[str, Dict[str, Any]] = {}
             base_filters = getattr(filter_class, "base_filters", {}) or {}
-            
+
             for fname, finstance in base_filters.items():
                 # Skip quick filter
                 if (
@@ -3261,9 +3297,7 @@ class ModelTableExtractor:
                             reverse_rel = None
                             for f in model._meta.get_fields():
                                 # ManyToOneRel / ManyToManyRel have get_accessor_name
-                                accessor = (
-                                    getattr(f, "get_accessor_name", None)
-                                )
+                                accessor = getattr(f, "get_accessor_name", None)
                                 if callable(accessor) and accessor() == base_name:
                                     reverse_rel = f
                                     break
@@ -3484,6 +3518,119 @@ class ModelTableExtractor:
                 gval.pop("_seen_parent", None)
                 gval["nested"] = list(nested_groups.values()) if nested_groups else []
                 filters.append(gval)
+
+            # Apply filter selection variables (exclude, only, include_nested, only_lookup, exclude_lookup)
+            def _apply_filter_selection(
+                filters_in: List[Dict[str, Any]],
+                only_fields: Optional[List[str]] = None,
+                exclude_fields: Optional[List[str]] = None,
+                include_nested_val: bool = True,
+                only_lk: Optional[List[str]] = None,
+                exclude_lk: Optional[List[str]] = None,
+            ) -> List[Dict[str, Any]]:
+                """
+                Purpose: Filter the computed filters according to selection variables.
+                Args:
+                    filters_in: List of grouped filter dicts
+                    only_fields: Field names to include (parent or nested paths)
+                    exclude_fields: Field names to exclude (parent or nested paths)
+                    include_nested_val: Whether to include nested groups globally
+                    only_lk: Lookup expressions to include (e.g., ['exact','in'])
+                    exclude_lk: Lookup expressions to exclude
+                Returns:
+                    Filter list after applying selection rules
+                Raises:
+                    None
+                Example:
+                    >>> _apply_filter_selection(filters, only_fields=['name'], include_nested_val=False)
+                    [{... 'field_name': 'name', 'nested': []}]
+                """
+                only_fields_set = set(only_fields or [])
+                exclude_fields_set = set(exclude_fields or [])
+                only_lk_set = set(only_lk or [])
+                exclude_lk_set = set(exclude_lk or [])
+
+                result: List[Dict[str, Any]] = []
+                for grp in filters_in:
+                    parent_name = grp.get("field_name")
+
+                    # Exclude parent group if in exclude set
+                    if parent_name in exclude_fields_set:
+                        continue
+
+                    # Determine if parent group should be included based on 'only'
+                    include_parent = True
+                    if only_fields_set:
+                        include_parent = (
+                            parent_name in only_fields_set
+                            or any(
+                                (nested.get("field_name") in only_fields_set)
+                                for nested in (grp.get("nested") or [])
+                            )
+                        )
+                    if not include_parent:
+                        continue
+
+                    # Copy group to avoid modifying original
+                    new_grp = dict(grp)
+
+                    # Options: apply lookup filters
+                    opts = list(new_grp.get("options") or [])
+                    if only_lk_set:
+                        opts = [o for o in opts if o.get("lookup_expr") in only_lk_set]
+                    if exclude_lk_set:
+                        opts = [o for o in opts if o.get("lookup_expr") not in exclude_lk_set]
+                    new_grp["options"] = opts
+
+                    # Nested handling
+                    nested_list = list(new_grp.get("nested") or [])
+                    # First, apply include_nested flag
+                    if not include_nested_val:
+                        # Allow nested entries only if explicitly requested via 'only'
+                        if only_fields_set:
+                            nested_list = [
+                                n for n in nested_list if n.get("field_name") in only_fields_set
+                            ]
+                        else:
+                            nested_list = []
+                    # Next, apply only/exclude field sets
+                    if only_fields_set:
+                        nested_list = [
+                            n for n in nested_list if n.get("field_name") in only_fields_set
+                        ]
+                    if exclude_fields_set:
+                        nested_list = [
+                            n for n in nested_list if n.get("field_name") not in exclude_fields_set
+                        ]
+
+                    # Finally, apply lookup filters to nested options
+                    for n in nested_list:
+                        n_opts = list(n.get("options") or [])
+                        if only_lk_set:
+                            n_opts = [
+                                o for o in n_opts if o.get("lookup_expr") in only_lk_set
+                            ]
+                        if exclude_lk_set:
+                            n_opts = [
+                                o
+                                for o in n_opts
+                                if o.get("lookup_expr") not in exclude_lk_set
+                            ]
+                        n["options"] = n_opts
+
+                    new_grp["nested"] = nested_list
+                    result.append(new_grp)
+
+                return result
+
+            filters = _apply_filter_selection(
+                filters,
+                only_fields=only or [],
+                exclude_fields=exclude or [],
+                include_nested_val=include_nested,
+                only_lk=only_lookup or [],
+                exclude_lk=exclude_lookup or [],
+            )
         except Exception as e:
             logger.warning(f"Error extracting filters for {model_label}: {e}")
             filters = []
@@ -3511,6 +3658,11 @@ class ModelTableExtractor:
                 app_name,
                 model_name,
                 counts,
+                exclude=exclude or [],
+                only=only or [],
+                include_nested=include_nested,
+                only_lookup=only_lookup or [],
+                exclude_lookup=exclude_lookup or [],
             )
             with _table_cache_lock:
                 _table_cache[cache_key] = {
@@ -3562,6 +3714,30 @@ class ModelMetadataQuery(graphene.ObjectType):
         model_name=graphene.String(required=True, description="Model class name"),
         counts=graphene.Boolean(
             default_value=False, description="Show reverse relationship count"
+        ),
+        exclude=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="List of field names to exclude from filters",
+        ),
+        only=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="List of field names to exclusively include in filters",
+        ),
+        include_nested=graphene.Boolean(
+            default_value=True,
+            description="Whether to include nested filter groups",
+        ),
+        only_lookup=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="Restrict filter options to these lookup expressions",
+        ),
+        exclude_lookup=graphene.List(
+            graphene.String,
+            default_value=[],
+            description="Exclude these lookup expressions from filter options",
         ),
         description="Get comprehensive table metadata for a Django model",
     )
@@ -3617,6 +3793,11 @@ class ModelMetadataQuery(graphene.ObjectType):
         app_name: str,
         model_name: str,
         counts: bool = False,
+        exclude: Optional[List[str]] = None,
+        only: Optional[List[str]] = None,
+        include_nested: bool = True,
+        only_lookup: Optional[List[str]] = None,
+        exclude_lookup: Optional[List[str]] = None,
     ) -> Optional[ModelTableType]:
         """Resolve comprehensive table metadata for a Django model."""
         user = getattr(info.context, "user", None)
@@ -3625,6 +3806,11 @@ class ModelMetadataQuery(graphene.ObjectType):
             app_name=app_name,
             model_name=model_name,
             counts=counts,
+            exclude=exclude or [],
+            only=only or [],
+            include_nested=include_nested,
+            only_lookup=only_lookup or [],
+            exclude_lookup=exclude_lookup or [],
             user=user,
         )
         return metadata
