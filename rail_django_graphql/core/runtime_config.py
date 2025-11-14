@@ -1,493 +1,570 @@
 """
-Runtime configuration management for Django GraphQL Auto-Generation.
+Debug hooks module.
 
-This module provides functionality to update configuration at runtime
-without requiring server restarts.
+This module provides comprehensive debugging hooks for GraphQL schema operations,
+including query execution, schema registration, and error handling.
 """
 
 import json
 import logging
 import threading
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
-
-from django.conf import settings
-from django.core.signals import request_started
-from django.dispatch import receiver
+import time
+import traceback
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
+class DebugLevel(Enum):
+    """Debug levels for controlling verbosity."""
+    NONE = 0
+    ERROR = 1
+    WARNING = 2
+    INFO = 3
+    DEBUG = 4
+    TRACE = 5
+
+
 @dataclass
-class ConfigurationChange:
+class DebugEvent:
+    """Represents a debug event."""
+    event_type: str
+    timestamp: datetime
+    level: DebugLevel
+    message: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: Optional[float] = None
+    error: Optional[Exception] = None
+    stack_trace: Optional[str] = None
+
+
+@dataclass
+class DebugSession:
+    """Represents a debug session."""
+    session_id: str
+    start_time: datetime
+    events: List[DebugEvent] = field(default_factory=list)
+    context: Dict[str, Any] = field(default_factory=dict)
+    is_active: bool = True
+
+
+class DebugHooks:
     """
-    Représente un changement de configuration.
+    Comprehensive debugging hooks for GraphQL schema operations.
 
-    Attributes:
-        key: Clé de configuration modifiée
-        old_value: Ancienne valeur
-        new_value: Nouvelle valeur
-        timestamp: Horodatage du changement
-        user: Utilisateur ayant effectué le changement
-        reason: Raison du changement
+    Provides hooks for schema registration, query execution, error handling,
+    and performance monitoring with configurable debug levels.
     """
 
-    key: str
-    old_value: Any
-    new_value: Any
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    user: Optional[str] = None
-    reason: Optional[str] = None
+    def __init__(self, debug_level: DebugLevel = DebugLevel.INFO,
+                 enable_performance_tracking: bool = True,
+                 enable_query_logging: bool = True,
+                 enable_error_tracking: bool = True,
+                 max_events_per_session: int = 1000):
+        self.debug_level = debug_level
+        self.enable_performance_tracking = enable_performance_tracking
+        self.enable_query_logging = enable_query_logging
+        self.enable_error_tracking = enable_error_tracking
+        self.max_events_per_session = max_events_per_session
 
-
-class RuntimeConfigManager:
-    """
-    Gestionnaire de configuration runtime avec support pour les mises à jour
-    dynamiques et les callbacks de notification.
-    """
-
-    def __init__(self):
-        self._config_cache: Dict[str, Any] = {}
-        self._change_callbacks: Dict[str, List[Callable]] = {}
-        self._change_history: List[ConfigurationChange] = []
+        # Event storage
+        self._sessions: Dict[str, DebugSession] = {}
+        self._global_events: List[DebugEvent] = []
         self._lock = threading.RLock()
-        self._max_history_size = 1000
-        self._load_initial_config()
 
-    def _load_initial_config(self) -> None:
-        """Charge la configuration initiale depuis les settings Django."""
-        try:
-            # Charger la configuration rail_django_graphql
-            graphql_config = getattr(settings, "rail_django_graphql", {})
-            self._config_cache.update(graphql_config)
+        # Hook callbacks
+        self._pre_hooks: Dict[str, List[Callable]] = {}
+        self._post_hooks: Dict[str, List[Callable]] = {}
+        self._error_hooks: Dict[str, List[Callable]] = {}
 
-            # Charger d'autres configurations pertinentes
-            runtime_config = getattr(settings, "RUNTIME_CONFIG", {})
-            self._config_cache.update(runtime_config)
+        # Performance tracking
+        self._operation_timings: Dict[str, List[float]] = {}
 
-            logger.info(
-                f"Configuration initiale chargée: {len(self._config_cache)} paramètres"
+        self.logger = logging.getLogger(__name__)
+        self._setup_logging()
+
+    def _setup_logging(self):
+        """Set up logging configuration."""
+        if self.debug_level == DebugLevel.NONE:
+            return
+
+        # Configure logger level based on debug level
+        level_mapping = {
+            DebugLevel.ERROR: logging.ERROR,
+            DebugLevel.WARNING: logging.WARNING,
+            DebugLevel.INFO: logging.INFO,
+            DebugLevel.DEBUG: logging.DEBUG,
+            DebugLevel.TRACE: logging.DEBUG
+        }
+
+        self.logger.setLevel(level_mapping.get(self.debug_level, logging.INFO))
+
+    def create_session(self, session_id: str, context: Dict[str, Any] = None) -> DebugSession:
+        """
+        Create a new debug session.
+
+        Args:
+            session_id: Unique identifier for the session
+            context: Additional context for the session
+
+        Returns:
+            Created debug session
+        """
+        with self._lock:
+            session = DebugSession(
+                session_id=session_id,
+                start_time=datetime.now(),
+                context=context or {}
+            )
+            self._sessions[session_id] = session
+
+            self._log_event(
+                event_type="session_created",
+                level=DebugLevel.INFO,
+                message=f"Debug session '{session_id}' created",
+                context={"session_id": session_id},
+                session_id=session_id
             )
 
-        except Exception as e:
-            logger.error(f"Erreur lors du chargement de la configuration initiale: {e}")
+            return session
 
-    def get_config(self, key: str, default: Any = None, use_cache: bool = True) -> Any:
-        """
-        Récupère une valeur de configuration.
-
-        Args:
-            key: Clé de configuration (support des clés imbriquées avec '.')
-            default: Valeur par défaut si la clé n'existe pas
-            use_cache: Utiliser le cache Redis si disponible
-
-        Returns:
-            Valeur de configuration ou valeur par défaut
-        """
-        # Removed external cache; always read from in-memory config
-
+    def end_session(self, session_id: str):
+        """End a debug session."""
         with self._lock:
-            # Support des clés imbriquées (ex: "mutation_settings.nested_relations")
-            keys = key.split(".")
-            value = self._config_cache
+            if session_id in self._sessions:
+                session = self._sessions[session_id]
+                session.is_active = False
 
-            try:
-                for k in keys:
-                    if isinstance(value, dict):
-                        value = value[k]
-                    else:
-                        return default
+                duration = (datetime.now() - session.start_time).total_seconds()
 
-                return value
+                self._log_event(
+                    event_type="session_ended",
+                    level=DebugLevel.INFO,
+                    message=f"Debug session '{session_id}' ended after {duration:.2f}s",
+                    context={
+                        "session_id": session_id,
+                        "duration_seconds": duration,
+                        "total_events": len(session.events)
+                    },
+                    session_id=session_id
+                )
 
-            except (KeyError, TypeError):
-                return default
+    def get_session(self, session_id: str) -> Optional[DebugSession]:
+        """Get a debug session by ID."""
+        return self._sessions.get(session_id)
 
-    def set_config(
-        self,
-        key: str,
-        value: Any,
-        user: Optional[str] = None,
-        reason: Optional[str] = None,
-        persist: bool = False,
-    ) -> bool:
+    def register_pre_hook(self, event_type: str, callback: Callable):
+        """Register a pre-execution hook."""
+        if event_type not in self._pre_hooks:
+            self._pre_hooks[event_type] = []
+        self._pre_hooks[event_type].append(callback)
+
+    def register_post_hook(self, event_type: str, callback: Callable):
+        """Register a post-execution hook."""
+        if event_type not in self._post_hooks:
+            self._post_hooks[event_type] = []
+        self._post_hooks[event_type].append(callback)
+
+    def register_error_hook(self, event_type: str, callback: Callable):
+        """Register an error hook."""
+        if event_type not in self._error_hooks:
+            self._error_hooks[event_type] = []
+        self._error_hooks[event_type].append(callback)
+
+    @contextmanager
+    def debug_operation(self, operation_name: str, context: Dict[str, Any] = None,
+                        session_id: str = None):
         """
-        Met à jour une valeur de configuration.
+        Context manager for debugging operations.
 
         Args:
-            key: Clé de configuration
-            value: Nouvelle valeur
-            user: Utilisateur effectuant le changement
-            reason: Raison du changement
-            persist: Sauvegarder dans un fichier de configuration
-
-        Returns:
-            True si la mise à jour a réussi
+            operation_name: Name of the operation being debugged
+            context: Additional context for the operation
+            session_id: Optional session ID to associate with
         """
+        start_time = time.time()
+        operation_context = context or {}
+
+        # Execute pre-hooks
+        self._execute_hooks(self._pre_hooks.get(operation_name, []),
+                            operation_name, operation_context)
+
+        self._log_event(
+            event_type="operation_started",
+            level=DebugLevel.DEBUG,
+            message=f"Operation '{operation_name}' started",
+            context={"operation": operation_name, **operation_context},
+            session_id=session_id
+        )
+
         try:
-            with self._lock:
-                old_value = self.get_config(key, use_cache=False)
+            yield operation_context
 
-                # Mettre à jour la configuration
-                keys = key.split(".")
-                config_ref = self._config_cache
+            # Success - execute post-hooks
+            duration_ms = (time.time() - start_time) * 1000
 
-                # Naviguer jusqu'au parent de la clé finale
-                for k in keys[:-1]:
-                    if k not in config_ref:
-                        config_ref[k] = {}
-                    config_ref = config_ref[k]
+            if self.enable_performance_tracking:
+                self._track_performance(operation_name, duration_ms)
 
-                # Mettre à jour la valeur finale
-                config_ref[keys[-1]] = value
-
-                # External cache removed; no cache invalidation needed
-
-                # Enregistrer le changement
-                change = ConfigurationChange(
-                    key=key,
-                    old_value=old_value,
-                    new_value=value,
-                    user=user,
-                    reason=reason,
-                )
-                self._add_change_to_history(change)
-
-                # Notifier les callbacks
-                self._notify_change_callbacks(key, old_value, value)
-
-                # Persister si demandé
-                if persist:
-                    self._persist_config_change(key, value)
-
-                logger.info(
-                    f"Configuration mise à jour: {key} = {value} (par {user or 'système'})"
-                )
-                return True
-
-        except Exception as e:
-            logger.error(
-                f"Erreur lors de la mise à jour de la configuration {key}: {e}"
+            self._log_event(
+                event_type="operation_completed",
+                level=DebugLevel.DEBUG,
+                message=f"Operation '{operation_name}' completed in {duration_ms:.2f}ms",
+                context={"operation": operation_name, **operation_context},
+                duration_ms=duration_ms,
+                session_id=session_id
             )
-            return False
 
-    def reload_config(self, config_source: Optional[str] = None) -> bool:
-        """
-        Recharge la configuration depuis la source.
-
-        Args:
-            config_source: Source spécifique à recharger (optionnel)
-
-        Returns:
-            True si le rechargement a réussi
-        """
-        try:
-            with self._lock:
-                old_config = self._config_cache.copy()
-
-                # Recharger depuis les settings Django
-                self._load_initial_config()
-
-                # Recharger depuis un fichier spécifique si spécifié
-                if config_source and Path(config_source).exists():
-                    with open(config_source, "r", encoding="utf-8") as f:
-                        file_config = json.load(f)
-                        self._config_cache.update(file_config)
-
-                # External cache removed; nothing to clear
-
-                # Notifier les changements
-                self._notify_config_reload(old_config, self._config_cache)
-
-                logger.info("Configuration rechargée avec succès")
-                return True
+            self._execute_hooks(self._post_hooks.get(operation_name, []),
+                                operation_name, operation_context, duration_ms)
 
         except Exception as e:
-            logger.error(f"Erreur lors du rechargement de la configuration: {e}")
-            return False
+            # Error - execute error hooks
+            duration_ms = (time.time() - start_time) * 1000
 
-    def register_change_callback(
-        self, key: str, callback: Callable[[str, Any, Any], None]
-    ) -> None:
-        """
-        Enregistre un callback pour les changements de configuration.
+            if self.enable_error_tracking:
+                self._log_event(
+                    event_type="operation_error",
+                    level=DebugLevel.ERROR,
+                    message=f"Operation '{operation_name}' failed: {str(e)}",
+                    context={"operation": operation_name, **operation_context},
+                    duration_ms=duration_ms,
+                    error=e,
+                    stack_trace=traceback.format_exc(),
+                    session_id=session_id
+                )
 
-        Args:
-            key: Clé de configuration à surveiller
-            callback: Fonction appelée lors des changements (key, old_value, new_value)
-        """
+            self._execute_hooks(self._error_hooks.get(operation_name, []),
+                                operation_name, operation_context, e)
+
+            raise
+
+    def log_schema_registration(self, schema_name: str, schema_config: Dict[str, Any],
+                                session_id: str = None):
+        """Log schema registration event."""
+        if self.debug_level.value < DebugLevel.INFO.value:
+            return
+
+        self._log_event(
+            event_type="schema_registered",
+            level=DebugLevel.INFO,
+            message=f"Schema '{schema_name}' registered",
+            context={
+                "schema_name": schema_name,
+                "config": schema_config
+            },
+            session_id=session_id
+        )
+
+    def log_query_execution(self, query: str, variables: Dict[str, Any] = None,
+                            operation_name: str = None, session_id: str = None):
+        """Log GraphQL query execution."""
+        if not self.enable_query_logging or self.debug_level.value < DebugLevel.DEBUG.value:
+            return
+
+        # Sanitize query for logging (remove sensitive data)
+        sanitized_query = self._sanitize_query(query)
+        sanitized_variables = self._sanitize_variables(variables or {})
+
+        self._log_event(
+            event_type="query_executed",
+            level=DebugLevel.DEBUG,
+            message=f"GraphQL query executed: {operation_name or 'unnamed'}",
+            context={
+                "query": sanitized_query,
+                "variables": sanitized_variables,
+                "operation_name": operation_name
+            },
+            session_id=session_id
+        )
+
+    def log_mutation_execution(self, mutation: str, variables: Dict[str, Any] = None,
+                               operation_name: str = None, session_id: str = None):
+        """Log GraphQL mutation execution."""
+        if not self.enable_query_logging or self.debug_level.value < DebugLevel.DEBUG.value:
+            return
+
+        sanitized_mutation = self._sanitize_query(mutation)
+        sanitized_variables = self._sanitize_variables(variables or {})
+
+        self._log_event(
+            event_type="mutation_executed",
+            level=DebugLevel.DEBUG,
+            message=f"GraphQL mutation executed: {operation_name or 'unnamed'}",
+            context={
+                "mutation": sanitized_mutation,
+                "variables": sanitized_variables,
+                "operation_name": operation_name
+            },
+            session_id=session_id
+        )
+
+    def log_validation_error(self, error: Exception, context: Dict[str, Any] = None,
+                             session_id: str = None):
+        """Log validation error."""
+        if not self.enable_error_tracking:
+            return
+
+        self._log_event(
+            event_type="validation_error",
+            level=DebugLevel.ERROR,
+            message=f"Validation error: {str(error)}",
+            context=context or {},
+            error=error,
+            stack_trace=traceback.format_exc(),
+            session_id=session_id
+        )
+
+    def log_performance_warning(self, operation: str, duration_ms: float,
+                                threshold_ms: float = 1000, session_id: str = None):
+        """Log performance warning for slow operations."""
+        if duration_ms < threshold_ms:
+            return
+
+        self._log_event(
+            event_type="performance_warning",
+            level=DebugLevel.WARNING,
+            message=f"Slow operation detected: '{operation}' took {duration_ms:.2f}ms (threshold: {threshold_ms}ms)",
+            context={
+                "operation": operation,
+                "duration_ms": duration_ms,
+                "threshold_ms": threshold_ms
+            },
+            duration_ms=duration_ms,
+            session_id=session_id
+        )
+
+    def get_performance_stats(self, operation: str = None) -> Dict[str, Any]:
+        """Get performance statistics."""
         with self._lock:
-            if key not in self._change_callbacks:
-                self._change_callbacks[key] = []
-            self._change_callbacks[key].append(callback)
+            if operation:
+                timings = self._operation_timings.get(operation, [])
+                if not timings:
+                    return {"operation": operation, "stats": None}
 
-        logger.debug(f"Callback enregistré pour la clé: {key}")
-
-    def unregister_change_callback(self, key: str, callback: Callable) -> None:
-        """
-        Désenregistre un callback de changement.
-
-        Args:
-            key: Clé de configuration
-            callback: Fonction callback à supprimer
-        """
-        with self._lock:
-            if key in self._change_callbacks:
-                try:
-                    self._change_callbacks[key].remove(callback)
-                    if not self._change_callbacks[key]:
-                        del self._change_callbacks[key]
-                except ValueError:
-                    pass
-
-    def get_change_history(
-        self, key: Optional[str] = None, limit: int = 100
-    ) -> List[ConfigurationChange]:
-        """
-        Récupère l'historique des changements de configuration.
-
-        Args:
-            key: Clé spécifique (optionnel)
-            limit: Nombre maximum d'entrées à retourner
-
-        Returns:
-            Liste des changements de configuration
-        """
-        with self._lock:
-            history = self._change_history
-
-            if key:
-                history = [change for change in history if change.key == key]
-
-            return history[-limit:] if limit else history
-
-    def export_config(self, keys: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Exporte la configuration actuelle.
-
-        Args:
-            keys: Clés spécifiques à exporter (optionnel)
-
-        Returns:
-            Dictionnaire de configuration
-        """
-        with self._lock:
-            if keys:
-                exported = {}
-                for key in keys:
-                    value = self.get_config(key, use_cache=False)
-                    if value is not None:
-                        exported[key] = value
-                return exported
+                return {
+                    "operation": operation,
+                    "stats": {
+                        "count": len(timings),
+                        "avg_ms": sum(timings) / len(timings),
+                        "min_ms": min(timings),
+                        "max_ms": max(timings),
+                        "total_ms": sum(timings)
+                    }
+                }
             else:
-                return self._config_cache.copy()
+                # Return stats for all operations
+                all_stats = {}
+                for op_name, timings in self._operation_timings.items():
+                    if timings:
+                        all_stats[op_name] = {
+                            "count": len(timings),
+                            "avg_ms": sum(timings) / len(timings),
+                            "min_ms": min(timings),
+                            "max_ms": max(timings),
+                            "total_ms": sum(timings)
+                        }
 
-    def import_config(
-        self,
-        config: Dict[str, Any],
-        user: Optional[str] = None,
-        reason: str = "Configuration import",
-    ) -> bool:
-        """
-        Importe une configuration.
+                return {"all_operations": all_stats}
 
-        Args:
-            config: Dictionnaire de configuration à importer
-            user: Utilisateur effectuant l'import
-            reason: Raison de l'import
+    def get_events(self, session_id: str = None, event_type: str = None,
+                   level: DebugLevel = None, limit: int = None) -> List[DebugEvent]:
+        """Get debug events with optional filtering."""
+        with self._lock:
+            if session_id:
+                session = self._sessions.get(session_id)
+                events = session.events if session else []
+            else:
+                events = self._global_events
 
-        Returns:
-            True si l'import a réussi
-        """
-        try:
-            success_count = 0
-            for key, value in config.items():
-                if self.set_config(key, value, user, reason):
-                    success_count += 1
+            # Apply filters
+            filtered_events = events
 
-            logger.info(
-                f"Configuration importée: {success_count}/{len(config)} paramètres"
-            )
-            return success_count == len(config)
+            if event_type:
+                filtered_events = [e for e in filtered_events if e.event_type == event_type]
 
-        except Exception as e:
-            logger.error(f"Erreur lors de l'import de configuration: {e}")
-            return False
+            if level:
+                filtered_events = [e for e in filtered_events if e.level == level]
 
-    def validate_config(
-        self, config: Optional[Dict[str, Any]] = None
-    ) -> Dict[str, List[str]]:
-        """
-        Valide la configuration actuelle ou fournie.
+            # Apply limit
+            if limit:
+                filtered_events = filtered_events[-limit:]
 
-        Args:
-            config: Configuration à valider (optionnel, utilise la config actuelle sinon)
+            return filtered_events
 
-        Returns:
-            Dictionnaire des erreurs de validation par clé
-        """
-        validation_errors = {}
-        config_to_validate = config or self._config_cache
+    def export_debug_data(self, session_id: str = None, format: str = 'json') -> str:
+        """Export debug data in specified format."""
+        events = self.get_events(session_id=session_id)
 
-        try:
-            # Validation des types de base
-            for key, value in config_to_validate.items():
-                errors = []
+        if format == 'json':
+            return self._export_json(events, session_id)
+        elif format == 'csv':
+            return self._export_csv(events)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
 
-                # Validation spécifique pour rail_django_graphql
-                if key == "mutation_settings" and isinstance(value, dict):
-                    if "nested_relations_config" in value:
-                        nested_config = value["nested_relations_config"]
-                        if not isinstance(nested_config, dict):
-                            errors.append(
-                                "nested_relations_config doit être un dictionnaire"
-                            )
-                        else:
-                            for model, enabled in nested_config.items():
-                                if not isinstance(enabled, bool):
-                                    errors.append(
-                                        f"nested_relations_config.{model} doit être un booléen"
-                                    )
+    def clear_events(self, session_id: str = None):
+        """Clear debug events."""
+        with self._lock:
+            if session_id:
+                session = self._sessions.get(session_id)
+                if session:
+                    session.events.clear()
+            else:
+                self._global_events.clear()
+                self._operation_timings.clear()
 
-                if errors:
-                    validation_errors[key] = errors
+    def _log_event(self, event_type: str, level: DebugLevel, message: str,
+                   context: Dict[str, Any] = None, duration_ms: float = None,
+                   error: Exception = None, stack_trace: str = None,
+                   session_id: str = None):
+        """Log a debug event."""
+        if level.value > self.debug_level.value:
+            return
 
-            return validation_errors
+        event = DebugEvent(
+            event_type=event_type,
+            timestamp=datetime.now(),
+            level=level,
+            message=message,
+            context=context or {},
+            duration_ms=duration_ms,
+            error=error,
+            stack_trace=stack_trace
+        )
 
-        except Exception as e:
-            logger.error(f"Erreur lors de la validation de configuration: {e}")
-            return {"validation_error": [str(e)]}
+        with self._lock:
+            # Add to session if specified
+            if session_id and session_id in self._sessions:
+                session = self._sessions[session_id]
+                session.events.append(event)
 
-    def _add_change_to_history(self, change: ConfigurationChange) -> None:
-        """Ajoute un changement à l'historique."""
-        self._change_history.append(change)
+                # Limit events per session
+                if len(session.events) > self.max_events_per_session:
+                    session.events = session.events[-self.max_events_per_session:]
 
-        # Limiter la taille de l'historique
-        if len(self._change_history) > self._max_history_size:
-            self._change_history = self._change_history[-self._max_history_size :]
+            # Add to global events
+            self._global_events.append(event)
 
-    def _notify_change_callbacks(
-        self, key: str, old_value: Any, new_value: Any
-    ) -> None:
-        """Notifie les callbacks de changement."""
-        callbacks = self._change_callbacks.get(key, [])
-        for callback in callbacks:
+            # Limit global events
+            if len(self._global_events) > self.max_events_per_session * 10:
+                self._global_events = self._global_events[-self.max_events_per_session * 10:]
+
+        # Log to Python logger
+        log_level_mapping = {
+            DebugLevel.ERROR: logging.ERROR,
+            DebugLevel.WARNING: logging.WARNING,
+            DebugLevel.INFO: logging.INFO,
+            DebugLevel.DEBUG: logging.DEBUG,
+            DebugLevel.TRACE: logging.DEBUG
+        }
+
+        python_level = log_level_mapping.get(level, logging.INFO)
+
+        if error:
+            self.logger.log(python_level, f"{message} - Error: {str(error)}")
+        else:
+            self.logger.log(python_level, message)
+
+    def _execute_hooks(self, hooks: List[Callable], *args, **kwargs):
+        """Execute a list of hooks safely."""
+        for hook in hooks:
             try:
-                callback(key, old_value, new_value)
+                hook(*args, **kwargs)
             except Exception as e:
-                logger.error(f"Erreur dans le callback pour {key}: {e}")
+                self.logger.error(f"Error executing hook: {e}")
 
-    def _notify_config_reload(
-        self, old_config: Dict[str, Any], new_config: Dict[str, Any]
-    ) -> None:
-        """Notifie les callbacks lors d'un rechargement complet."""
-        all_keys = set(old_config.keys()) | set(new_config.keys())
+    def _track_performance(self, operation: str, duration_ms: float):
+        """Track performance metrics for an operation."""
+        with self._lock:
+            if operation not in self._operation_timings:
+                self._operation_timings[operation] = []
 
-        for key in all_keys:
-            old_value = old_config.get(key)
-            new_value = new_config.get(key)
+            self._operation_timings[operation].append(duration_ms)
 
-            if old_value != new_value:
-                self._notify_change_callbacks(key, old_value, new_value)
+            # Keep only recent timings (last 1000)
+            if len(self._operation_timings[operation]) > 1000:
+                self._operation_timings[operation] = self._operation_timings[operation][-1000:]
 
-    def _clear_config_cache(self) -> None:
-        """No-op: external cache removed."""
-        return
+    def _sanitize_query(self, query: str) -> str:
+        """Sanitize GraphQL query for logging (remove sensitive data)."""
+        # This is a basic implementation - in production, you'd want more sophisticated sanitization
+        if len(query) > 1000:
+            return query[:1000] + "... (truncated)"
+        return query
 
-    def _persist_config_change(self, key: str, value: Any) -> None:
-        """Persiste un changement de configuration dans un fichier."""
-        try:
-            config_file = getattr(
-                settings, "RUNTIME_CONFIG_FILE", "runtime_config.json"
-            )
-            config_path = Path(config_file)
+    def _sanitize_variables(self, variables: Dict[str, Any]) -> Dict[str, Any]:
+        """Sanitize variables for logging (remove sensitive data)."""
+        sensitive_keys = {'password', 'token', 'secret', 'key', 'auth', 'credential'}
 
-            # Charger la configuration existante
-            existing_config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    existing_config = json.load(f)
+        sanitized = {}
+        for key, value in variables.items():
+            if any(sensitive in key.lower() for sensitive in sensitive_keys):
+                sanitized[key] = "[REDACTED]"
+            elif isinstance(value, str) and len(value) > 100:
+                sanitized[key] = value[:100] + "... (truncated)"
+            else:
+                sanitized[key] = value
 
-            # Mettre à jour avec la nouvelle valeur
-            keys = key.split(".")
-            config_ref = existing_config
-            for k in keys[:-1]:
-                if k not in config_ref:
-                    config_ref[k] = {}
-                config_ref = config_ref[k]
-            config_ref[keys[-1]] = value
+        return sanitized
 
-            # Sauvegarder
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(existing_config, f, indent=2, ensure_ascii=False)
+    def _export_json(self, events: List[DebugEvent], session_id: str = None) -> str:
+        """Export events as JSON."""
+        export_data = {
+            "session_id": session_id,
+            "export_timestamp": datetime.now().isoformat(),
+            "total_events": len(events),
+            "events": []
+        }
 
-            logger.debug(f"Configuration persistée: {key}")
+        for event in events:
+            event_data = {
+                "event_type": event.event_type,
+                "timestamp": event.timestamp.isoformat(),
+                "level": event.level.name,
+                "message": event.message,
+                "context": event.context,
+                "duration_ms": event.duration_ms
+            }
 
-        except Exception as e:
-            logger.error(f"Erreur lors de la persistance de {key}: {e}")
+            if event.error:
+                event_data["error"] = str(event.error)
 
+            if event.stack_trace:
+                event_data["stack_trace"] = event.stack_trace
 
-# Instance globale du gestionnaire de configuration runtime
-runtime_config = RuntimeConfigManager()
+            export_data["events"].append(event_data)
 
+        return json.dumps(export_data, indent=2, ensure_ascii=False)
 
-# Fonctions utilitaires
-def get_runtime_config(key: str, default: Any = None) -> Any:
-    """
-    Fonction utilitaire pour récupérer une configuration runtime.
+    def _export_csv(self, events: List[DebugEvent]) -> str:
+        """Export events as CSV."""
+        import csv
+        import io
 
-    Args:
-        key: Clé de configuration
-        default: Valeur par défaut
+        output = io.StringIO()
+        writer = csv.writer(output)
 
-    Returns:
-        Valeur de configuration
-    """
-    return runtime_config.get_config(key, default)
+        # Header
+        writer.writerow([
+            'timestamp', 'event_type', 'level', 'message',
+            'duration_ms', 'error', 'context'
+        ])
 
+        # Data
+        for event in events:
+            writer.writerow([
+                event.timestamp.isoformat(),
+                event.event_type,
+                event.level.name,
+                event.message,
+                event.duration_ms or '',
+                str(event.error) if event.error else '',
+                json.dumps(event.context) if event.context else ''
+            ])
 
-def set_runtime_config(
-    key: str,
-    value: Any,
-    user: Optional[str] = None,
-    reason: Optional[str] = None,
-    persist: bool = False,
-) -> bool:
-    """
-    Fonction utilitaire pour mettre à jour une configuration runtime.
-
-    Args:
-        key: Clé de configuration
-        value: Nouvelle valeur
-        user: Utilisateur
-        reason: Raison du changement
-        persist: Persister le changement
-
-    Returns:
-        True si la mise à jour a réussi
-    """
-    return runtime_config.set_config(key, value, user, reason, persist)
-
-
-def reload_runtime_config(config_source: Optional[str] = None) -> bool:
-    """
-    Fonction utilitaire pour recharger la configuration runtime.
-
-    Args:
-        config_source: Source de configuration
-
-    Returns:
-        True si le rechargement a réussi
-    """
-    return runtime_config.reload_config(config_source)
-
-
-# Signal handler pour recharger la configuration au démarrage des requêtes
-@receiver(request_started)
-def check_config_updates(sender, **kwargs):
-    """Vérifie les mises à jour de configuration au début de chaque requête."""
-    # Cette fonction peut être utilisée pour vérifier périodiquement
-    # les mises à jour de configuration depuis une source externe
-    pass
+        return output.getvalue()

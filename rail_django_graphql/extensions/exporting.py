@@ -728,9 +728,10 @@ class ExportView(View):
             HttpResponse with file download or JsonResponse with error
         """
         # Log authenticated user for audit purposes
-        if hasattr(request, 'user') and request.user.is_authenticated:
+        if hasattr(request, "user") and request.user.is_authenticated:
             logger.info(
-                f"Export request from user: {request.user.username} (ID: {request.user.id})")
+                f"Export request from user: {request.user.username} (ID: {request.user.id})"
+            )
 
         try:
             # Parse JSON payload
@@ -753,9 +754,9 @@ class ExportView(View):
             fields = data["fields"]
 
             # Validate file extension
-            if file_extension not in ["excel", "csv"]:
+            if file_extension not in ["xlsx", "csv"]:
                 return JsonResponse(
-                    {"error": 'file_extension must be "excel" or "csv"'}, status=400
+                    {"error": 'file_extension must be "xlsx" or "csv"'}, status=400
                 )
 
             # Validate fields format
@@ -797,7 +798,7 @@ class ExportView(View):
             # Create exporter and generate file
             exporter = ModelExporter(app_name, model_name)
 
-            if file_extension == "excel":
+            if file_extension == "xlsx":
                 content = exporter.export_to_excel(fields, variables, ordering)
                 content_type = (
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -833,8 +834,10 @@ class ExportView(View):
         Handle GET request - return API documentation (JWT protected).
         """
         # Log authenticated user for audit purposes
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            logger.info(f"Export API documentation request from user: {request.user.username}")
+        if hasattr(request, "user") and request.user.is_authenticated:
+            logger.info(
+                f"Export API documentation request from user: {request.user.username}"
+            )
 
         documentation = {
             "endpoint": "/export",
@@ -843,7 +846,7 @@ class ExportView(View):
             "description": "Export Django model data to Excel or CSV format with GraphQL filter integration",
             "required_headers": {
                 "Authorization": "Bearer <jwt_token>",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
             },
             "required_parameters": {
                 "app_name": "string - Name of the Django app containing the model",
@@ -874,7 +877,7 @@ class ExportView(View):
                 "method": "POST",
                 "headers": {
                     "Authorization": "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 "payload": {
                     "app_name": "blog",
@@ -892,12 +895,12 @@ class ExportView(View):
                         "quick": "search term",
                         "published_date_today": True,
                     },
-                }
+                },
             },
             "authentication_errors": {
                 "401": "Missing or invalid JWT token",
-                "403": "Token valid but insufficient permissions"
-            }
+                "403": "Token valid but insufficient permissions",
+            },
         }
 
         return JsonResponse(documentation, json_dumps_params={"indent": 2})
