@@ -3684,6 +3684,17 @@ class ModelTableExtractor:
                 nested_groups = gval.pop("_nested_groups", {})
                 # Remove internal tracking key if present
                 gval.pop("_seen_parent", None)
+                # Ensure 'exact' appears first in options if present
+                try:
+                    opts = list(gval.get("options") or [])
+                    if opts:
+                        opts.sort(
+                            key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                        )
+                        gval["options"] = opts
+                except Exception:
+                    # Non-critical ordering step; ignore on failure
+                    pass
                 gval["nested"] = list(nested_groups.values()) if nested_groups else []
                 filters.append(gval)
 
@@ -3749,6 +3760,14 @@ class ModelTableExtractor:
                             for o in opts
                             if o.get("lookup_expr") not in exclude_lk_set
                         ]
+                    # Reorder to place 'exact' first, preserving relative order otherwise
+                    try:
+                        if opts:
+                            opts.sort(
+                                key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                            )
+                    except Exception:
+                        pass
                     new_grp["options"] = opts
 
                     # Nested handling
@@ -3791,6 +3810,14 @@ class ModelTableExtractor:
                                 for o in n_opts
                                 if o.get("lookup_expr") not in exclude_lk_set
                             ]
+                        # Reorder nested options to place 'exact' first
+                        try:
+                            if n_opts:
+                                n_opts.sort(
+                                    key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                                )
+                        except Exception:
+                            pass
                         n["options"] = n_opts
 
                     new_grp["nested"] = nested_list

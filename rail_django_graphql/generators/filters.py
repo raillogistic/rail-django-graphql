@@ -2027,6 +2027,12 @@ class AdvancedFilterGenerator:
                 lookup_expr="day",
                 help_text=f"Filtrer {field_name} par jour",
             ),
+            # Add exact date matching for non-nested date fields
+            f"{field_name}__exact": DateFilter(
+                field_name=field_name,
+                lookup_expr="exact",
+                help_text=f"Filtrer {field_name} avec une correspondance de date exacte",
+            ),
             f"{field_name}__gt": DateFilter(
                 field_name=field_name,
                 lookup_expr="gt",
