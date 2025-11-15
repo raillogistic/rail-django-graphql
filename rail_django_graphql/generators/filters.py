@@ -764,7 +764,7 @@ class AdvancedFilterGenerator:
 
         return django_filters.CharFilter(
             method=quick_filter_method,
-            help_text=f'Quick search across fields: {", ".join(quick_filter_fields)}',
+            help_text=f'Recherche rapide sur les champs : {", ".join(quick_filter_fields)}',
         )
 
     def _get_default_quick_filter_fields(self, model: Type[models.Model]) -> List[str]:
@@ -1296,23 +1296,23 @@ class AdvancedFilterGenerator:
                     # Add count filters for reverse ManyToOne relationships
                     filters[f"{accessor_name}_count"] = NumberFilter(
                         method=f"filter_{accessor_name}_count",
-                        help_text=f"Filter by count of {accessor_name} relationships",
+                        help_text=f"Filtrer par le nombre de relations {accessor_name}",
                     )
                     filters[f"{accessor_name}_count__gt"] = NumberFilter(
                         method=f"filter_{accessor_name}_count_gt",
-                        help_text=f"Filter by count of {accessor_name} relationships greater than",
+                        help_text=f"Filtrer par le nombre de relations {accessor_name} supérieur à",
                     )
                     filters[f"{accessor_name}_count__gte"] = NumberFilter(
                         method=f"filter_{accessor_name}_count_gte",
-                        help_text=f"Filter by count of {accessor_name} relationships greater than or equal",
+                        help_text=f"Filtrer par le nombre de relations {accessor_name} supérieur ou égal à",
                     )
                     filters[f"{accessor_name}_count__lt"] = NumberFilter(
                         method=f"filter_{accessor_name}_count_lt",
-                        help_text=f"Filter by count of {accessor_name} relationships less than",
+                        help_text=f"Filtrer par le nombre de relations {accessor_name} inférieur à",
                     )
                     filters[f"{accessor_name}_count__lte"] = NumberFilter(
                         method=f"filter_{accessor_name}_count_lte",
-                        help_text=f"Filter by count of {accessor_name} relationships less than or equal",
+                        help_text=f"Filtrer par le nombre de relations {accessor_name} inférieur ou égal à",
                     )
 
         return filters
@@ -1505,18 +1505,18 @@ class AdvancedFilterGenerator:
                 # Add basic foreign key filter
                 nested_filters[nested_field_name] = NumberFilter(
                     field_name=nested_field_name,
-                    help_text=f"Filter by {nested_field_name} ID",
+                    help_text=f"Filtrer par ID de {nested_field_name}",
                 )
                 # Support membership and null checks for foreign key IDs
                 nested_filters[f"{nested_field_name}__in"] = django_filters.BaseInFilter(
                     field_name=nested_field_name,
                     lookup_expr="in",
-                    help_text=f"Match any of the provided IDs for {nested_field_name}",
+                    help_text=f"Correspondre à l'un des identifiants fournis pour {nested_field_name}",
                 )
                 nested_filters[f"{nested_field_name}__isnull"] = BooleanFilter(
                     field_name=nested_field_name,
                     lookup_expr="isnull",
-                    help_text=f"Check if {nested_field_name} is null",
+                    help_text=f"Vérifier si {nested_field_name} est nul",
                 )
 
                 # Recursively add deeper nested filters if within depth limits
@@ -1767,49 +1767,49 @@ class AdvancedFilterGenerator:
             f"{field_name}__exact": CharFilter(
                 field_name=field_name,
                 lookup_expr="exact",
-                help_text=f"Exact match for {base_field_name}",
+                help_text=f"Correspondance exacte pour {base_field_name}",
             ),
             field_name: CharFilter(
                 field_name=field_name,
                 lookup_expr="exact",
-                help_text=f"Exact match for {base_field_name}",
+                help_text=f"Correspondance exacte pour {base_field_name}",
             ),
             # Case-insensitive text matching
             f"{field_name}__iexact": CharFilter(
                 field_name=field_name,
                 lookup_expr="iexact",
-                help_text=f"Case-insensitive exact match for {base_field_name}",
+                help_text=f"Correspondance exacte insensible à la casse pour {base_field_name}",
             ),
             f"{field_name}__icontains": CharFilter(
                 field_name=field_name,
                 lookup_expr="icontains",
-                help_text=f"Case-insensitive partial match for {base_field_name}",
+                help_text=f"Correspondance partielle insensible à la casse pour {base_field_name}",
             ),
             f"{field_name}__istartswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="istartswith",
-                help_text=f"Case-insensitive starts with for {base_field_name}",
+                help_text=f"Commence par (insensible à la casse) pour {base_field_name}",
             ),
             f"{field_name}__iendswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="iendswith",
-                help_text=f"Case-insensitive ends with for {base_field_name}",
+                help_text=f"Se termine par (insensible à la casse) pour {base_field_name}",
             ),
             # Case-sensitive text matching
             f"{field_name}__contains": CharFilter(
                 field_name=field_name,
                 lookup_expr="contains",
-                help_text=f"Contains text in {base_field_name}",
+                help_text=f"Contient le texte dans {base_field_name}",
             ),
             f"{field_name}__startswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="startswith",
-                help_text=f"Starts with text in {base_field_name}",
+                help_text=f"Commence par le texte dans {base_field_name}",
             ),
             f"{field_name}__endswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="endswith",
-                help_text=f"Ends with text in {base_field_name}",
+                help_text=f"Se termine par le texte dans {base_field_name}",
             ),
         }
 
@@ -1821,37 +1821,37 @@ class AdvancedFilterGenerator:
             f"{field_name}__exact": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="exact",
-                help_text=f"Filter {base_field_name} with exact value",
+                help_text=f"Filtrer {base_field_name} avec une valeur exacte",
             ),
             f"{field_name}__gt": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="gt",
-                help_text=f"Filter {base_field_name} greater than the specified value",
+                help_text=f"Filtrer {base_field_name} supérieur à la valeur spécifiée",
             ),
             f"{field_name}__gte": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="gte",
-                help_text=f"Filter {base_field_name} greater than or equal to the specified value",
+                help_text=f"Filtrer {base_field_name} supérieur ou égal à la valeur spécifiée",
             ),
             f"{field_name}__lt": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="lt",
-                help_text=f"Filter {base_field_name} less than the specified value",
+                help_text=f"Filtrer {base_field_name} inférieur à la valeur spécifiée",
             ),
             f"{field_name}__lte": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="lte",
-                help_text=f"Filter {base_field_name} less than or equal to the specified value",
+                help_text=f"Filtrer {base_field_name} inférieur ou égal à la valeur spécifiée",
             ),
             # Support array membership for numeric fields
             f"{field_name}__in": django_filters.BaseInFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="in",
-                help_text=f"Match any of the provided numeric values for {base_field_name}",
+                help_text=f"Correspondre à l'une des valeurs numériques fournies pour {base_field_name}",
             ),
             f"{field_name}__range": django_filters.RangeFilter(
                 field_name=field_name.replace("__", "__"),
-                help_text=f"Filter {base_field_name} within the specified range",
+                help_text=f"Filtrer {base_field_name} dans l'intervalle spécifié",
             ),
         }
 
@@ -1863,47 +1863,47 @@ class AdvancedFilterGenerator:
             f"{field_name}__exact": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="exact",
-                help_text=f"Filter {base_field_name} with exact date match",
+                help_text=f"Filtrer {base_field_name} avec une correspondance de date exacte",
             ),
             f"{field_name}__gt": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="gt",
-                help_text=f"Filter {base_field_name} after the specified date",
+                help_text=f"Filtrer {base_field_name} après la date spécifiée",
             ),
             f"{field_name}__gte": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="gte",
-                help_text=f"Filter {base_field_name} on or after the specified date",
+                help_text=f"Filtrer {base_field_name} à la date spécifiée ou après",
             ),
             f"{field_name}__lt": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="lt",
-                help_text=f"Filter {base_field_name} before the specified date",
+                help_text=f"Filtrer {base_field_name} avant la date spécifiée",
             ),
             f"{field_name}__lte": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="lte",
-                help_text=f"Filter {base_field_name} on or before the specified date",
+                help_text=f"Filtrer {base_field_name} à la date spécifiée ou avant",
             ),
             f"{field_name}__date": DateFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="date",
-                help_text=f"Filter {base_field_name} by date (ignoring time)",
+                help_text=f"Filtrer {base_field_name} par date (en ignorant l'heure)",
             ),
             f"{field_name}__year": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="year",
-                help_text=f"Filter {base_field_name} by year",
+                help_text=f"Filtrer {base_field_name} par année",
             ),
             f"{field_name}__month": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="month",
-                help_text=f"Filter {base_field_name} by month",
+                help_text=f"Filtrer {base_field_name} par mois",
             ),
             f"{field_name}__day": NumberFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="day",
-                help_text=f"Filter {base_field_name} by day",
+                help_text=f"Filtrer {base_field_name} par jour",
             ),
         }
 
@@ -1915,16 +1915,16 @@ class AdvancedFilterGenerator:
             f"{field_name}__exact": BooleanFilter(
                 field_name=field_name,
                 lookup_expr="exact",
-                help_text=f"Exact match for {base_field_name}",
+                help_text=f"Correspondance exacte pour {base_field_name}",
             ),
             f"{field_name}": BooleanFilter(
                 field_name=field_name.replace("__", "__"),
-                help_text=f"Filter {base_field_name} by boolean value",
+                help_text=f"Filtrer {base_field_name} par valeur booléenne",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=field_name.replace("__", "__"),
                 lookup_expr="isnull",
-                help_text=f"Filter {base_field_name} for null/empty values",
+                help_text=f"Filtrer {base_field_name} pour les valeurs nulles/vides",
             ),
         }
 
@@ -1933,32 +1933,32 @@ class AdvancedFilterGenerator:
         return {
             f"{field_name}": CharFilter(
                 field_name=field_name,
-                help_text=f"Filter {field_name} with basic text matching",
+                help_text=f"Filtrer {field_name} avec correspondance de texte basique",
             ),
             f"{field_name}__contains": CharFilter(
                 field_name=field_name,
                 lookup_expr="contains",
-                help_text=f"Filter {field_name} containing the specified text (case-sensitive)",
+                help_text=f"Filtrer {field_name} contenant le texte spécifié (sensible à la casse)",
             ),
             f"{field_name}__icontains": CharFilter(
                 field_name=field_name,
                 lookup_expr="icontains",
-                help_text=f"Filter {field_name} containing the specified text (case-insensitive)",
+                help_text=f"Filtrer {field_name} contenant le texte spécifié (insensible à la casse)",
             ),
             f"{field_name}__startswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="startswith",
-                help_text=f"Filter {field_name} starting with the specified text",
+                help_text=f"Filtrer {field_name} commençant par le texte spécifié",
             ),
             f"{field_name}__endswith": CharFilter(
                 field_name=field_name,
                 lookup_expr="endswith",
-                help_text=f"Filter {field_name} ending with the specified text",
+                help_text=f"Filtrer {field_name} se terminant par le texte spécifié",
             ),
             f"{field_name}__exact": CharFilter(
                 field_name=field_name,
                 lookup_expr="exact",
-                help_text=f"Filter {field_name} with exact match",
+                help_text=f"Filtrer {field_name} avec correspondance exacte",
             ),
         }
 
@@ -1971,36 +1971,36 @@ class AdvancedFilterGenerator:
         return {
             f"{field_name}": NumberFilter(
                 field_name=field_name,
-                help_text=f"Filter {field_name} with basic numeric matching",
+                help_text=f"Filtrer {field_name} avec correspondance numérique basique",
             ),
             f"{field_name}__gt": NumberFilter(
                 field_name=field_name,
                 lookup_expr="gt",
-                help_text=f"Filter {field_name} greater than the specified value",
+                help_text=f"Filtrer {field_name} supérieur à la valeur spécifiée",
             ),
             f"{field_name}__gte": NumberFilter(
                 field_name=field_name,
                 lookup_expr="gte",
-                help_text=f"Filter {field_name} greater than or equal to the specified value",
+                help_text=f"Filtrer {field_name} supérieur ou égal à la valeur spécifiée",
             ),
             f"{field_name}__lt": NumberFilter(
                 field_name=field_name,
                 lookup_expr="lt",
-                help_text=f"Filter {field_name} less than the specified value",
+                help_text=f"Filtrer {field_name} inférieur à la valeur spécifiée",
             ),
             f"{field_name}__lte": NumberFilter(
                 field_name=field_name,
                 lookup_expr="lte",
-                help_text=f"Filter {field_name} less than or equal to the specified value",
+                help_text=f"Filtrer {field_name} inférieur ou égal à la valeur spécifiée",
             ),
             f"{field_name}__in": django_filters.BaseInFilter(
                 field_name=field_name,
                 lookup_expr="in",
-                help_text=f"Filter {field_name} matching any of the provided values (Int[] array)",
+                help_text=f"Filtrer {field_name} correspondant à l'une des valeurs fournies (tableau Int[])",
             ),
             f"{field_name}__range": django_filters.RangeFilter(
                 field_name=field_name,
-                help_text=f"Filter {field_name} within the specified inclusive range",
+                help_text=f"Filtrer {field_name} dans l'intervalle inclus spécifié",
             ),
         }
 
@@ -2010,31 +2010,31 @@ class AdvancedFilterGenerator:
             f"{field_name}__year": NumberFilter(
                 field_name=field_name,
                 lookup_expr="year",
-                help_text=f"Filter {field_name} by year",
+                help_text=f"Filtrer {field_name} par année",
             ),
             f"{field_name}__month": NumberFilter(
                 field_name=field_name,
                 lookup_expr="month",
-                help_text=f"Filter {field_name} by month",
+                help_text=f"Filtrer {field_name} par mois",
             ),
             f"{field_name}__day": NumberFilter(
                 field_name=field_name,
                 lookup_expr="day",
-                help_text=f"Filter {field_name} by day",
+                help_text=f"Filtrer {field_name} par jour",
             ),
             f"{field_name}__gt": DateFilter(
                 field_name=field_name,
                 lookup_expr="gt",
-                help_text=f"Filter {field_name} after the specified date",
+                help_text=f"Filtrer {field_name} après la date spécifiée",
             ),
             f"{field_name}__lt": DateFilter(
                 field_name=field_name,
                 lookup_expr="lt",
-                help_text=f"Filter {field_name} before the specified date",
+                help_text=f"Filtrer {field_name} avant la date spécifiée",
             ),
             f"{field_name}__range": django_filters.DateRangeFilter(
                 field_name=field_name,
-                help_text=f"Filter {field_name} within the specified date range",
+                help_text=f"Filtrer {field_name} dans l'intervalle de dates spécifié",
             ),
         }
 
@@ -2081,49 +2081,49 @@ class AdvancedFilterGenerator:
                 method=lambda queryset, name, value: self._filter_date_today(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for today",
+                help_text=f"Filtrer {field_name} pour aujourd'hui",
             ),
             f"{field_name}_yesterday": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_yesterday(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for yesterday",
+                help_text=f"Filtrer {field_name} pour hier",
             ),
             f"{field_name}_this_week": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_week(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for this week",
+                help_text=f"Filtrer {field_name} pour cette semaine",
             ),
             f"{field_name}_past_week": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_week(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for past week",
+                help_text=f"Filtrer {field_name} pour la semaine passée",
             ),
             f"{field_name}_this_month": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_month(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for this month",
+                help_text=f"Filtrer {field_name} pour ce mois-ci",
             ),
             f"{field_name}_past_month": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_month(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for past month",
+                help_text=f"Filtrer {field_name} pour le mois passé",
             ),
             f"{field_name}_this_year": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_this_year(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for this year",
+                help_text=f"Filtrer {field_name} pour cette année",
             ),
             f"{field_name}_past_year": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_past_year(
                     queryset, field_name, value
                 ),
-                help_text=f"Filter {field_name} for past year",
+                help_text=f"Filtrer {field_name} pour l'année passée",
             ),
         }
 
@@ -2134,7 +2134,7 @@ class AdvancedFilterGenerator:
         """Generate boolean filters: exact matching."""
         return {
             f"{field_name}": BooleanFilter(
-                field_name=field_name, help_text=f"Filter {field_name} by boolean value"
+                field_name=field_name, help_text=f"Filtrer {field_name} par valeur booléenne"
             ),
         }
 
@@ -2147,16 +2147,16 @@ class AdvancedFilterGenerator:
             f"{field_name}": ChoiceFilter(
                 field_name=field_name,
                 choices=choices,
-                help_text=f"Filter {field_name} by specific choice",
+                help_text=f"Filtrer {field_name} par choix spécifique",
             ),
             f"{field_name}__in": django_filters.MultipleChoiceFilter(
                 field_name=field_name,
                 choices=choices,
-                help_text=f"Filter {field_name} by multiple choices",
+                help_text=f"Filtrer {field_name} par plusieurs choix",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
-                help_text=f"Check if {field_name} is null",
+                help_text=f"Vérifier si {field_name} est nul",
             ),
         }
 
@@ -2179,12 +2179,12 @@ class AdvancedFilterGenerator:
             f"{field_name}": CharFilter(
                 field_name=field_name,
                 lookup_expr="exact",
-                help_text=f"Filter {field_name} with exact JSON match",
+                help_text=f"Filtrer {field_name} avec correspondance JSON exacte",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=field_name,
                 lookup_expr="isnull",
-                help_text=f"Filter {field_name} for null/empty values",
+                help_text=f"Filtrer {field_name} pour les valeurs nulles/vides",
             ),
         }
 
@@ -2194,7 +2194,7 @@ class AdvancedFilterGenerator:
         """Generate foreign key filters: exact, in, isnull."""
         filters = {
             f"{field_name}": NumberFilter(
-                field_name=field_name, help_text=f"Filter by {field_name} ID"
+                field_name=field_name, help_text=f"Filtrer par ID de {field_name}"
             ),
         }
 
@@ -2204,14 +2204,14 @@ class AdvancedFilterGenerator:
                 field_name=field_name,
                 queryset=related_model.objects.all(),
                 to_field_name="pk",
-                help_text=f"Filter by multiple {field_name} IDs",
+                help_text=f"Filtrer par plusieurs ID de {field_name}",
             )
 
         # Always support isnull for ForeignKey/OneToOne
         filters[f"{field_name}__isnull"] = BooleanFilter(
             field_name=field_name,
             lookup_expr="isnull",
-            help_text=f"Check if {field_name} is null",
+            help_text=f"Vérifier si {field_name} est nul",
         )
 
         return filters
@@ -2232,39 +2232,39 @@ class AdvancedFilterGenerator:
         filters = {
             # Basic ManyToMany filters
             f"{field_name}": NumberFilter(
-                field_name=field_name, help_text=f"Filter by {field_name} ID"
+                field_name=field_name, help_text=f"Filtrer par ID de {field_name}"
             ),
             f"{field_name}__in": django_filters.ModelMultipleChoiceFilter(
                 field_name=field_name,
                 queryset=related_model.objects.all(),
                 to_field_name="pk",
-                help_text=f"Filter by multiple {field_name} IDs",
+                help_text=f"Filtrer par plusieurs ID de {field_name}",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=field_name,
                 lookup_expr="isnull",
-                help_text=f"Check if {field_name} has no related objects",
+                help_text=f"Vérifier si {field_name} n'a pas d'objets liés",
             ),
             # Count filters for ManyToMany relationships
             f"{field_name}_count": NumberFilter(
                 method=f"filter_{field_name}_count",
-                help_text=f"Filter by count of {field_name} relationships",
+                help_text=f"Filtrer par le nombre de relations {field_name}",
             ),
             f"{field_name}_count__gt": NumberFilter(
                 method=f"filter_{field_name}_count_gt",
-                help_text=f"Filter by count of {field_name} relationships greater than",
+                help_text=f"Filtrer par le nombre de relations {field_name} supérieur à",
             ),
             f"{field_name}_count__gte": NumberFilter(
                 method=f"filter_{field_name}_count_gte",
-                help_text=f"Filter by count of {field_name} relationships greater than or equal",
+                help_text=f"Filtrer par le nombre de relations {field_name} supérieur ou égal à",
             ),
             f"{field_name}_count__lt": NumberFilter(
                 method=f"filter_{field_name}_count_lt",
-                help_text=f"Filter by count of {field_name} relationships less than",
+                help_text=f"Filtrer par le nombre de relations {field_name} inférieur à",
             ),
             f"{field_name}_count__lte": NumberFilter(
                 method=f"filter_{field_name}_count_lte",
-                help_text=f"Filter by count of {field_name} relationships less than or equal",
+                help_text=f"Filtrer par le nombre de relations {field_name} inférieur ou égal à",
             ),
         }
 
@@ -2523,27 +2523,27 @@ class AdvancedFilterGenerator:
         return {
             f"{property_name}": CharFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property with exact text matching",
+                help_text=f"Filtrer par la propriété {property_name} avec une correspondance de texte exacte",
             ),
             f"{property_name}__contains": CharFilter(
                 method=self._create_property_filter_method(property_name, "contains"),
-                help_text=f"Filter by {property_name} property containing the specified text (case-sensitive)",
+                help_text=f"Filtrer par la propriété {property_name} contenant le texte spécifié (sensible à la casse)",
             ),
             f"{property_name}__icontains": CharFilter(
                 method=self._create_property_filter_method(property_name, "icontains"),
-                help_text=f"Filter by {property_name} property containing the specified text (case-insensitive)",
+                help_text=f"Filtrer par la propriété {property_name} contenant le texte spécifié (insensible à la casse)",
             ),
             f"{property_name}__startswith": CharFilter(
                 method=self._create_property_filter_method(property_name, "startswith"),
-                help_text=f"Filter by {property_name} property starting with the specified text",
+                help_text=f"Filtrer par la propriété {property_name} commençant par le texte spécifié",
             ),
             f"{property_name}__endswith": CharFilter(
                 method=self._create_property_filter_method(property_name, "endswith"),
-                help_text=f"Filter by {property_name} property ending with the specified text",
+                help_text=f"Filtrer par la propriété {property_name} se terminant par le texte spécifié",
             ),
             f"{property_name}__exact": CharFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property with exact match",
+                help_text=f"Filtrer par la propriété {property_name} avec correspondance exacte",
             ),
         }
 
@@ -2554,23 +2554,23 @@ class AdvancedFilterGenerator:
         return {
             f"{property_name}": NumberFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property with exact numeric matching",
+                help_text=f"Filtrer par la propriété {property_name} avec correspondance numérique exacte",
             ),
             f"{property_name}__gt": NumberFilter(
                 method=self._create_property_filter_method(property_name, "gt"),
-                help_text=f"Filter by {property_name} property greater than the specified value",
+                help_text=f"Filtrer par la propriété {property_name} supérieure à la valeur spécifiée",
             ),
             f"{property_name}__gte": NumberFilter(
                 method=self._create_property_filter_method(property_name, "gte"),
-                help_text=f"Filter by {property_name} property greater than or equal to the specified value",
+                help_text=f"Filtrer par la propriété {property_name} supérieure ou égale à la valeur spécifiée",
             ),
             f"{property_name}__lt": NumberFilter(
                 method=self._create_property_filter_method(property_name, "lt"),
-                help_text=f"Filter by {property_name} property less than the specified value",
+                help_text=f"Filtrer par la propriété {property_name} inférieure à la valeur spécifiée",
             ),
             f"{property_name}__lte": NumberFilter(
                 method=self._create_property_filter_method(property_name, "lte"),
-                help_text=f"Filter by {property_name} property less than or equal to the specified value",
+                help_text=f"Filtrer par la propriété {property_name} inférieure ou égale à la valeur spécifiée",
             ),
         }
 
@@ -2581,7 +2581,7 @@ class AdvancedFilterGenerator:
         return {
             f"{property_name}": BooleanFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property boolean value",
+                help_text=f"Filtrer par la valeur booléenne de la propriété {property_name}",
             ),
         }
 
@@ -2592,39 +2592,39 @@ class AdvancedFilterGenerator:
         return {
             f"{property_name}": DateFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property with exact date matching",
+                help_text=f"Filtrer par la propriété {property_name} avec une correspondance de date exacte",
             ),
             f"{property_name}__exact": DateFilter(
                 method=self._create_property_filter_method(property_name, "exact"),
-                help_text=f"Filter by {property_name} property with exact date match",
+                help_text=f"Filtrer par la propriété {property_name} avec correspondance de date exacte",
             ),
             f"{property_name}__gt": DateFilter(
                 method=self._create_property_filter_method(property_name, "gt"),
-                help_text=f"Filter by {property_name} property after the specified date",
+                help_text=f"Filtrer par la propriété {property_name} après la date spécifiée",
             ),
             f"{property_name}__gte": DateFilter(
                 method=self._create_property_filter_method(property_name, "gte"),
-                help_text=f"Filter by {property_name} property on or after the specified date",
+                help_text=f"Filtrer par la propriété {property_name} à la date spécifiée ou après",
             ),
             f"{property_name}__lt": DateFilter(
                 method=self._create_property_filter_method(property_name, "lt"),
-                help_text=f"Filter by {property_name} property before the specified date",
+                help_text=f"Filtrer par la propriété {property_name} avant la date spécifiée",
             ),
             f"{property_name}__lte": DateFilter(
                 method=self._create_property_filter_method(property_name, "lte"),
-                help_text=f"Filter by {property_name} property on or before the specified date",
+                help_text=f"Filtrer par la propriété {property_name} à la date spécifiée ou avant",
             ),
             f"{property_name}__year": NumberFilter(
                 method=self._create_property_filter_method(property_name, "year"),
-                help_text=f"Filter by {property_name} property year",
+                help_text=f"Filtrer par année de la propriété {property_name}",
             ),
             f"{property_name}__month": NumberFilter(
                 method=self._create_property_filter_method(property_name, "month"),
-                help_text=f"Filter by {property_name} property month",
+                help_text=f"Filtrer par mois de la propriété {property_name}",
             ),
             f"{property_name}__day": NumberFilter(
                 method=self._create_property_filter_method(property_name, "day"),
-                help_text=f"Filter by {property_name} property day",
+                help_text=f"Filtrer par jour de la propriété {property_name}",
             ),
         }
 
@@ -2777,31 +2777,31 @@ class AdvancedFilterGenerator:
         return {
             f"{field_name}": CharFilter(
                 field_name=field_name,
-                help_text=f"Filter by {field_name} with exact text matching",
+                help_text=f"Filtrer par {field_name} avec une correspondance de texte exacte",
             ),
             f"{field_name}__contains": CharFilter(
                 field_name=f"{field_name}__contains",
-                help_text=f"Filter by {field_name} containing the specified text (case-sensitive)",
+                help_text=f"Filtrer par {field_name} contenant le texte spécifié (sensible à la casse)",
             ),
             f"{field_name}__icontains": CharFilter(
                 field_name=f"{field_name}__icontains",
-                help_text=f"Filter by {field_name} containing the specified text (case-insensitive)",
+                help_text=f"Filtrer par {field_name} contenant le texte spécifié (insensible à la casse)",
             ),
             f"{field_name}__startswith": CharFilter(
                 field_name=f"{field_name}__startswith",
-                help_text=f"Filter by {field_name} starting with the specified text",
+                help_text=f"Filtrer par {field_name} commençant par le texte spécifié",
             ),
             f"{field_name}__endswith": CharFilter(
                 field_name=f"{field_name}__endswith",
-                help_text=f"Filter by {field_name} ending with the specified text",
+                help_text=f"Filtrer par {field_name} se terminant par le texte spécifié",
             ),
             f"{field_name}__exact": CharFilter(
                 field_name=f"{field_name}__exact",
-                help_text=f"Filter by {field_name} with exact match",
+                help_text=f"Filtrer par {field_name} avec correspondance exacte",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
-                help_text=f"Filter by whether {field_name} is null",
+                help_text=f"Filtrer selon que {field_name} est nul",
             ),
         }
 
@@ -2812,7 +2812,7 @@ class AdvancedFilterGenerator:
         return {
             f"{field_name}": NumberFilter(
                 field_name=field_name,
-                help_text=f"Filter by {field_name} with exact numeric matching",
+                help_text=f"Filtrer par {field_name} avec une correspondance numérique exacte",
             ),
             f"{field_name}__in": type(
                 f"{field_name.title()}InFilter",
@@ -2820,27 +2820,27 @@ class AdvancedFilterGenerator:
                 {},
             )(
                 field_name=field_name,
-                help_text=f"Filter by multiple {field_name} values",
+                help_text=f"Filtrer par plusieurs valeurs de {field_name}",
             ),
             f"{field_name}__gt": NumberFilter(
                 field_name=f"{field_name}__gt",
-                help_text=f"Filter by {field_name} greater than the specified value",
+                help_text=f"Filtrer par {field_name} supérieur à la valeur spécifiée",
             ),
             f"{field_name}__gte": NumberFilter(
                 field_name=f"{field_name}__gte",
-                help_text=f"Filter by {field_name} greater than or equal to the specified value",
+                help_text=f"Filtrer par {field_name} supérieur ou égal à la valeur spécifiée",
             ),
             f"{field_name}__lt": NumberFilter(
                 field_name=f"{field_name}__lt",
-                help_text=f"Filter by {field_name} less than the specified value",
+                help_text=f"Filtrer par {field_name} inférieur à la valeur spécifiée",
             ),
             f"{field_name}__lte": NumberFilter(
                 field_name=f"{field_name}__lte",
-                help_text=f"Filter by {field_name} less than or equal to the specified value",
+                help_text=f"Filtrer par {field_name} inférieur ou égal à la valeur spécifiée",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
-                help_text=f"Filter by whether {field_name} is null",
+                help_text=f"Filtrer selon que {field_name} est nul",
             ),
         }
 
@@ -2851,27 +2851,27 @@ class AdvancedFilterGenerator:
         filters = {
             f"{field_name}": DateFilter(
                 field_name=field_name,
-                help_text=f"Filter by {field_name} with exact date matching",
+                help_text=f"Filtrer par {field_name} avec une correspondance de date exacte",
             ),
             f"{field_name}__gt": DateFilter(
                 field_name=f"{field_name}__gt",
-                help_text=f"Filter by {field_name} after the specified date",
+                help_text=f"Filtrer par {field_name} après la date spécifiée",
             ),
             f"{field_name}__gte": DateFilter(
                 field_name=f"{field_name}__gte",
-                help_text=f"Filter by {field_name} on or after the specified date",
+                help_text=f"Filtrer par {field_name} à la date spécifiée ou après",
             ),
             f"{field_name}__lt": DateFilter(
                 field_name=f"{field_name}__lt",
-                help_text=f"Filter by {field_name} before the specified date",
+                help_text=f"Filtrer par {field_name} avant la date spécifiée",
             ),
             f"{field_name}__lte": DateFilter(
                 field_name=f"{field_name}__lte",
-                help_text=f"Filter by {field_name} on or before the specified date",
+                help_text=f"Filtrer par {field_name} à la date spécifiée ou avant",
             ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
-                help_text=f"Filter by whether {field_name} is null",
+                help_text=f"Filtrer selon que {field_name} est nul",
             ),
         }
 
@@ -2881,15 +2881,15 @@ class AdvancedFilterGenerator:
                 {
                     f"{field_name}__year": NumberFilter(
                         field_name=f"{field_name}__year",
-                        help_text=f"Filter by {field_name} year",
+                        help_text=f"Filtrer par année de {field_name}",
                     ),
                     f"{field_name}__month": NumberFilter(
                         field_name=f"{field_name}__month",
-                        help_text=f"Filter by {field_name} month",
+                        help_text=f"Filtrer par mois de {field_name}",
                     ),
                     f"{field_name}__day": NumberFilter(
                         field_name=f"{field_name}__day",
-                        help_text=f"Filter by {field_name} day",
+                        help_text=f"Filtrer par jour de {field_name}",
                     ),
                 }
             )
