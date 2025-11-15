@@ -1963,7 +1963,11 @@ class AdvancedFilterGenerator:
         }
 
     def _generate_numeric_filters(self, field_name: str) -> Dict[str, NumberFilter]:
-        """Generate numeric filters: gt, gte, lt, lte, in (replacing range)."""
+        """Generate numeric filters: exact, gt, gte, lt, lte, in, range.
+
+        Adds __range support for digit fields (integer, float, decimal) to allow
+        filtering values within a minimum and maximum inclusive range.
+        """
         return {
             f"{field_name}": NumberFilter(
                 field_name=field_name,
@@ -1993,6 +1997,10 @@ class AdvancedFilterGenerator:
                 field_name=field_name,
                 lookup_expr="in",
                 help_text=f"Filter {field_name} matching any of the provided values (Int[] array)",
+            ),
+            f"{field_name}__range": django_filters.RangeFilter(
+                field_name=field_name,
+                help_text=f"Filter {field_name} within the specified inclusive range",
             ),
         }
 
