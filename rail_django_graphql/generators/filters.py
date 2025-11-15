@@ -6,6 +6,7 @@ GraphQL filters based on Django model field types, supporting complex
 filter combinations and field-specific operations.
 """
 
+from cProfile import label
 from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
 
 import graphene
@@ -346,31 +347,31 @@ class EnhancedFilterGenerator:
                 "today",
                 "BooleanFilter",
                 "today",
-                f"Filter for today's date in {field_name}",
+                f"Filtrer {field_name} pour aujourd'hui",
             ),
             FilterOperation(
                 "yesterday",
                 "BooleanFilter",
                 "yesterday",
-                f"Filter for yesterday's date in {field_name}",
+                f"Filtrer {field_name} pour hier",
             ),
             FilterOperation(
                 "this_week",
                 "BooleanFilter",
                 "this_week",
-                f"Filter for this week's dates in {field_name}",
+                f"Filtrer {field_name} pour cette semaine",
             ),
             FilterOperation(
                 "this_month",
                 "BooleanFilter",
                 "this_month",
-                f"Filter for this month's dates in {field_name}",
+                f"Filtrer {field_name} pour ce mois-ci",
             ),
             FilterOperation(
                 "this_year",
                 "BooleanFilter",
                 "this_year",
-                f"Filter for this year's dates in {field_name}",
+                f"Filtrer {field_name} pour cette année",
             ),
         ]
 
@@ -1468,7 +1469,9 @@ class AdvancedFilterGenerator:
 
             # Generate filters based on the related field type
             # CharField with choices should expose only exact, in, isnull
-            if isinstance(related_field, models.CharField) and getattr(related_field, "choices", None):
+            if isinstance(related_field, models.CharField) and getattr(
+                related_field, "choices", None
+            ):
                 nested_filters.update(
                     self._generate_choice_filters(
                         nested_field_name, related_field.choices
@@ -1508,10 +1511,12 @@ class AdvancedFilterGenerator:
                     help_text=f"Filtrer par ID de {nested_field_name}",
                 )
                 # Support membership and null checks for foreign key IDs
-                nested_filters[f"{nested_field_name}__in"] = django_filters.BaseInFilter(
-                    field_name=nested_field_name,
-                    lookup_expr="in",
-                    help_text=f"Correspondre à l'un des identifiants fournis pour {nested_field_name}",
+                nested_filters[f"{nested_field_name}__in"] = (
+                    django_filters.BaseInFilter(
+                        field_name=nested_field_name,
+                        lookup_expr="in",
+                        help_text=f"Correspondre à l'un des identifiants fournis pour {nested_field_name}",
+                    )
                 )
                 nested_filters[f"{nested_field_name}__isnull"] = BooleanFilter(
                     field_name=nested_field_name,
@@ -2082,6 +2087,7 @@ class AdvancedFilterGenerator:
                     queryset, field_name, value
                 ),
                 help_text=f"Filtrer {field_name} pour aujourd'hui",
+                
             ),
             f"{field_name}_yesterday": django_filters.BooleanFilter(
                 method=lambda queryset, name, value: self._filter_date_yesterday(
@@ -2134,7 +2140,8 @@ class AdvancedFilterGenerator:
         """Generate boolean filters: exact matching."""
         return {
             f"{field_name}": BooleanFilter(
-                field_name=field_name, help_text=f"Filtrer {field_name} par valeur booléenne"
+                field_name=field_name,
+                help_text=f"Filtrer {field_name} par valeur booléenne",
             ),
         }
 

@@ -88,7 +88,7 @@ def _make_table_cache_key(
         exclude: Optional[List[str]] field names to exclude from filters
         only: Optional[List[str]] field names to include in filters
         include_nested: bool whether nested filters are included
-        only_lookup: Optional[List[str]] lookups to include (e.g., ["exact","in"]) 
+        only_lookup: Optional[List[str]] lookups to include (e.g., ["exact","in"])
         exclude_lookup: Optional[List[str]] lookups to exclude
     Returns: str: cache key
     Raises: None
@@ -107,14 +107,10 @@ def _make_table_cache_key(
         }
         signature = "|".join(f"{k}={v}" for k, v in parts.items())
         digest = hashlib.sha1(signature.encode("utf-8")).hexdigest()[:8]
-        return (
-            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}:cf={digest}"
-        )
+        return f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}:cf={digest}"
     except Exception:
         # Fallback to legacy key format if hashing fails
-        return (
-            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
-        )
+        return f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
 
 
 def cache_metadata(
@@ -1776,24 +1772,69 @@ class ModelMetadataExtractor:
             "this_week": f"Filtrer pour les dates de cette semaine dans {verbose_name}",
             "this_month": f"Filtrer pour les dates de ce mois dans {verbose_name}",
             "this_year": f"Filtrer pour les dates de cette année dans {verbose_name}",
+            "past_week": f"Filtrer pour les dates de la semaine dernière dans {verbose_name}",
+            "past_month": f"Filtrer pour les dates du mois dernier dans {verbose_name}",
+            "past_year": f"Filtrer pour les dates de l'année dernière dans {verbose_name}",
+            "last_week": f"Filtrer pour les dates de la semaine dernière dans {verbose_name}",
+            "last_month": f"Filtrer pour les dates du mois dernier dans {verbose_name}",
+            "last_year": f"Filtrer pour les dates de l'année dernière dans {verbose_name}",
             "year": f"Filtrer par année pour {verbose_name}",
             "month": f"Filtrer par mois pour {verbose_name}",
             "day": f"Filtrer par jour pour {verbose_name}",
         }
 
-        # Extract lookup expression from original text
-        for lookup, french_text in translations.items():
-            if lookup in original_text.lower():
-                return french_text
+        # Normalize for matching
+        original_lc = original_text.lower()
+
+        # Prioritize relative date/time lookups so they aren't overshadowed by generic matches
+        for rel_lookup in (
+            "today",
+            "yesterday",
+            "this_week",
+            "this_month",
+            "this_year",
+            "past_week",
+            "past_month",
+            "past_year",
+            "last_week",
+            "last_month",
+            "last_year",
+            "year",
+            "month",
+            "day",
+        ):
+            if rel_lookup in original_lc:
+                return translations[rel_lookup]
+
+        # Then match common generic lookups
+        for gen_lookup in (
+            "exact",
+            "iexact",
+            "contains",
+            "icontains",
+            "startswith",
+            "istartswith",
+            "endswith",
+            "iendswith",
+            "in",
+            "gt",
+            "gte",
+            "lt",
+            "lte",
+            "range",
+            "isnull",
+        ):
+            if gen_lookup in original_lc:
+                return translations[gen_lookup]
 
         # Fallback: basic translation
-        if "exact match" in original_text.lower():
+        if "exact match" in original_lc:
             return f"Correspondance exacte pour {verbose_name}"
-        elif "contains" in original_text.lower():
+        elif "contains" in original_lc:
             return f"Contient le texte dans {verbose_name}"
-        elif "greater than" in original_text.lower():
+        elif "greater than" in original_lc:
             return f"Supérieur à la valeur pour {verbose_name}"
-        elif "less than" in original_text.lower():
+        elif "less than" in original_lc:
             return f"Inférieur à la valeur pour {verbose_name}"
         else:
             return f"Filtre pour {verbose_name}"
@@ -2480,7 +2521,9 @@ class ModelFormMetadataExtractor:
             multiple=isinstance(field, models.ManyToManyField),
             queryset_filters=self._to_json_safe(self._get_queryset_filters(field)),
             empty_label=self._get_empty_label(field),
-            limit_choices_to=self._to_json_safe(getattr(field, "limit_choices_to", None)),
+            limit_choices_to=self._to_json_safe(
+                getattr(field, "limit_choices_to", None)
+            ),
             has_permission=has_permission,
             disabled=not field.editable,
             readonly=not field.editable or getattr(field, "primary_key", None),
@@ -2505,7 +2548,7 @@ class ModelFormMetadataExtractor:
         visited_models: set = None,
     ) -> Optional[ModelFormMetadata]:
         """
-        
+
         Purpose: Extract comprehensive form metadata for a Django model, with optional field selection filters.
         Args:
             app_name (str): Django app name.
@@ -2592,9 +2635,15 @@ class ModelFormMetadataExtractor:
             form_fields = [f for f in form_fields if f.name not in set(exclude)]
 
         if only_relationships:
-            form_relationships = [r for r in form_relationships if r.name in set(only_relationships)]
+            form_relationships = [
+                r for r in form_relationships if r.name in set(only_relationships)
+            ]
         if exclude_relationships:
-            form_relationships = [r for r in form_relationships if r.name not in set(exclude_relationships)]
+            form_relationships = [
+                r
+                for r in form_relationships
+                if r.name not in set(exclude_relationships)
+            ]
 
         # Get form configuration
         form_title = f"Form for {meta.verbose_name}"
@@ -3056,6 +3105,13 @@ class ModelTableExtractor:
             "this_week": f"Filtrer pour les dates de cette semaine dans {verbose_name}",
             "this_month": f"Filtrer pour les dates de ce mois dans {verbose_name}",
             "this_year": f"Filtrer pour les dates de cette année dans {verbose_name}",
+            "last_year": f"Filtrer pour les dates de l'année dernière dans {verbose_name}",
+            "past_week": f"Filtrer pour les dates de la semaine dernière dans {verbose_name}",
+            "past_month": f"Filtrer pour les dates du mois dernier dans {verbose_name}",
+            "past_year": f"Filtrer pour les dates de l'année dernière dans {verbose_name}",
+            # Synonyms support
+            "last_week": f"Filtrer pour les dates de la semaine dernière dans {verbose_name}",
+            "last_month": f"Filtrer pour les dates du mois dernier dans {verbose_name}",
             "year": f"Filtrer par année pour {verbose_name}",
             "month": f"Filtrer par mois pour {verbose_name}",
             "day": f"Filtrer par jour pour {verbose_name}",
@@ -3317,6 +3373,32 @@ class ModelTableExtractor:
                     continue
                 # Determine lookup expression; if no explicit lookup, treat as exact
                 lookup_expr = "__".join(parts[1:]) or "exact"
+
+                # Special handling for time-based Boolean filters named with single underscores
+                # e.g., created_date_today, created_date_yesterday, etc.
+                # These should be grouped under the base field (created_date) with proper lookup.
+                rel_suffix_map = {
+                    "_today": "today",
+                    "_yesterday": "yesterday",
+                    "_this_week": "this_week",
+                    "_this_month": "this_month",
+                    "_this_year": "this_year",
+                    "_past_week": "past_week",
+                    "_past_month": "past_month",
+                    "_past_year": "past_year",
+                    # Support 'last_*' synonyms used in some docs/exports
+                    "_last_week": "past_week",
+                    "_last_month": "past_month",
+                    "_last_year": "past_year",
+                }
+                matched_suffix = None
+                for suf, lookup_val in rel_suffix_map.items():
+                    if fname.endswith(suf):
+                        matched_suffix = suf
+                        lookup_expr = lookup_val
+                        # Reset base_name to the field name without the suffix
+                        base_name = fname[: -len(suf)]
+                        break
                 # A filter is considered nested only when it references a deeper path
                 # beyond the base field (e.g., famille__name__icontains). Direct
                 # lookups on the base field (famille__in, famille__isnull, famille__exact)
@@ -3647,12 +3729,9 @@ class ModelTableExtractor:
                     # Determine if parent group should be included based on 'only'
                     include_parent = True
                     if only_fields_set:
-                        include_parent = (
-                            parent_name in only_fields_set
-                            or any(
-                                (nested.get("field_name") in only_fields_set)
-                                for nested in (grp.get("nested") or [])
-                            )
+                        include_parent = parent_name in only_fields_set or any(
+                            (nested.get("field_name") in only_fields_set)
+                            for nested in (grp.get("nested") or [])
                         )
                     if not include_parent:
                         continue
@@ -3665,7 +3744,11 @@ class ModelTableExtractor:
                     if only_lk_set:
                         opts = [o for o in opts if o.get("lookup_expr") in only_lk_set]
                     if exclude_lk_set:
-                        opts = [o for o in opts if o.get("lookup_expr") not in exclude_lk_set]
+                        opts = [
+                            o
+                            for o in opts
+                            if o.get("lookup_expr") not in exclude_lk_set
+                        ]
                     new_grp["options"] = opts
 
                     # Nested handling
@@ -3675,18 +3758,24 @@ class ModelTableExtractor:
                         # Allow nested entries only if explicitly requested via 'only'
                         if only_fields_set:
                             nested_list = [
-                                n for n in nested_list if n.get("field_name") in only_fields_set
+                                n
+                                for n in nested_list
+                                if n.get("field_name") in only_fields_set
                             ]
                         else:
                             nested_list = []
                     # Next, apply only/exclude field sets
                     if only_fields_set:
                         nested_list = [
-                            n for n in nested_list if n.get("field_name") in only_fields_set
+                            n
+                            for n in nested_list
+                            if n.get("field_name") in only_fields_set
                         ]
                     if exclude_fields_set:
                         nested_list = [
-                            n for n in nested_list if n.get("field_name") not in exclude_fields_set
+                            n
+                            for n in nested_list
+                            if n.get("field_name") not in exclude_fields_set
                         ]
 
                     # Finally, apply lookup filters to nested options
