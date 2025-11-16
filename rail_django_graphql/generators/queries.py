@@ -441,6 +441,15 @@ class QueryGenerator:
                         elif "Date" in field.__class__.__name__:
                             field_type = graphene.Date
 
+                    # Special-case the global 'include' filter to use [ID!] as requested
+                    if name == "include":
+                        # GraphQL list of non-null ID elements
+                        try:
+                            field_type = graphene.List(graphene.NonNull(graphene.ID))
+                        except Exception:
+                            # Fallback if NonNull is unavailable in environment
+                            field_type = graphene.List(graphene.ID)
+
                     # Handle ModelMultipleChoiceFilter for __in filters
                     if (
                         "ModelMultipleChoiceFilter" in field.__class__.__name__

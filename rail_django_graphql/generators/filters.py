@@ -678,6 +678,80 @@ class AdvancedFilterGenerator:
             # Generate dynamic filter methods for count filters
             filter_methods = self._generate_count_filter_methods(model, filters)
 
+            # Add a global 'include' filter to union specified IDs into results
+            def filter_include(self, queryset, name, value):
+                """
+                Purpose: Union the provided primary key IDs with the current filtered queryset.
+                Args:
+                    self: The FilterSet instance (required by django-filters method hooks)
+                    queryset: The current QuerySet after other filters are applied
+                    name: The filter name ('include')
+                    value: List of IDs to include (GraphQL ID values)
+                Returns:
+                    QuerySet: A combined queryset that includes records matching existing filters
+                    plus records with pk in 'value'. Ensures deterministic ordering by placing
+                    included IDs at the top, followed by the usual results, using a stable
+                    secondary ordering.
+                Raises:
+                    None: Errors are logged and the original queryset is returned as fallback
+                Example:
+                    >>> filter_include(qs, 'include', ['1','2'])
+                    <QuerySet ...>
+                """
+                try:
+                    if not value:
+                        return queryset
+                    # Sanitize IDs: keep original types; cast numeric strings to int
+                    sanitized_ids = []
+                    for v in value:
+                        try:
+                            if isinstance(v, str) and v.isdigit():
+                                sanitized_ids.append(int(v))
+                            else:
+                                sanitized_ids.append(v)
+                        except Exception:
+                            sanitized_ids.append(v)
+                    # Build a combined queryset that includes:
+                    # - All records from the current filtered queryset
+                    # - All records with pk in sanitized_ids (even if excluded by other filters)
+                    # Use OR across PK IN subquery to avoid unstable UNION ordering.
+                    model_cls = queryset.model
+                    from django.db.models import Case, When, Value, IntegerField
+
+                    combined_qs = model_cls.objects.filter(
+                        Q(pk__in=sanitized_ids) | Q(pk__in=queryset.values("pk"))
+                    ).distinct()
+
+                    # Deterministic ordering:
+                    # 1) Included IDs first (priority = 0)
+                    # 2) Others next (priority = 1)
+                    # 3) Stable secondary order by PK to avoid flicker across executions
+                    combined_qs = combined_qs.annotate(
+                        _include_priority=Case(
+                            When(pk__in=sanitized_ids, then=Value(0)),
+                            default=Value(1),
+                            output_field=IntegerField(),
+                        )
+                    ).order_by("_include_priority", "pk")
+
+                    return combined_qs
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to apply 'include' union on {queryset.model.__name__}: {e}"
+                    )
+                    # Fallback: return original queryset
+                    return queryset
+
+            filters["include"] = django_filters.BaseInFilter(
+                field_name="pk",
+                method="filter_include",
+                label="Include records by ID",
+                help_text=(
+                    "Include specific IDs in the results regardless of other filters"
+                ),
+            )
+            filter_methods["filter_include"] = filter_include
+
             # Create FilterSet class
             filter_set_class = type(
                 f"{model.__name__}FilterSet",
