@@ -387,31 +387,82 @@ class GraphQLMeta:
         )
 
     def _build_ordering_config(self) -> OrderingConfig:
-        """Construct ordering configuration."""
+        """Construct ordering configuration.
 
-        if not self._meta_config:
-            return OrderingConfig()
+        This method builds the ordering configuration from the model's GraphQLMeta
+        if present. When no explicit GraphQL ordering is provided, it falls back
+        to a safe default derived from the Django model's Meta:
+        - Use Meta.ordering when defined
+        - Else use descending latest_by if configured ("-<latest_by>")
+        - Else default to descending primary key ("-id" or "-<pk field name>")
 
-        raw = getattr(self._meta_config, "ordering", None)
-        if isinstance(raw, OrderingConfig):
-            return OrderingConfig(
-                allowed=list(raw.allowed),
-                default=list(raw.default),
-                allow_related=raw.allow_related,
-            )
+        The goal is to ensure deterministic results and align with the common
+        expectation that newest records appear first by default.
+        """
 
-        if isinstance(raw, dict):
-            return OrderingConfig(
-                allowed=list(raw.get("allowed", [])),
-                default=list(raw.get("default", [])),
-                allow_related=raw.get("allow_related", True),
-            )
+        # Build from GraphQLMeta if present
+        config: OrderingConfig
+        if self._meta_config:
+            raw = getattr(self._meta_config, "ordering", None)
+            if isinstance(raw, OrderingConfig):
+                config = OrderingConfig(
+                    allowed=list(raw.allowed),
+                    default=list(raw.default),
+                    allow_related=raw.allow_related,
+                )
+            elif isinstance(raw, dict):
+                config = OrderingConfig(
+                    allowed=list(raw.get("allowed", [])),
+                    default=list(raw.get("default", [])),
+                    allow_related=raw.get("allow_related", True),
+                )
+            elif isinstance(raw, (list, tuple)):
+                values = list(raw)
+                config = OrderingConfig(allowed=values, default=values)
+            else:
+                config = OrderingConfig()
+        else:
+            config = OrderingConfig()
 
-        if isinstance(raw, (list, tuple)):
-            values = list(raw)
-            return OrderingConfig(allowed=values, default=values)
+        # Fallbacks when no explicit default ordering is provided
+        if not config.default:
+            model_meta = getattr(self.model_class, "_meta", None)
+            fallback_default: List[str] = []
 
-        return OrderingConfig()
+            try:
+                # 1) Use Django Meta.ordering if available
+                if model_meta and getattr(model_meta, "ordering", None):
+                    fallback_default = list(model_meta.ordering)
+                # 2) Else use latest_by (descending)
+                elif model_meta and getattr(model_meta, "get_latest_by", None):
+                    fallback_default = [f"-{model_meta.get_latest_by}"]
+                else:
+                    # 3) Else use descending primary key
+                    pk_name = (
+                        model_meta.pk.name
+                        if model_meta and getattr(model_meta, "pk", None)
+                        else "id"
+                    )
+                    fallback_default = [f"-{pk_name}"]
+            except Exception:
+                # Fail-safe fallback if model meta inspection fails
+                fallback_default = ["-id"]
+
+            # If an allow-list is defined and does not include the fallback fields,
+            # choose the first allowed field to avoid invalid default configuration.
+            if config.allowed:
+                fallback_names = [f.lstrip("-") for f in fallback_default]
+                allowed_set = set(config.allowed)
+                if not all(name in allowed_set for name in fallback_names):
+                    # Prefer descending for deterministic "latest first" semantics
+                    safe_default = [f"-{config.allowed[0]}"]
+                    config.default = safe_default
+                else:
+                    config.default = fallback_default
+            else:
+                config.default = fallback_default
+
+        return config
 
     def _build_resolver_config(self) -> ResolverConfig:
         """Construct resolver configuration."""
