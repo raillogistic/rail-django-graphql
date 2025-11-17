@@ -643,25 +643,21 @@ class AdvancedFilterGenerator:
                 custom_filters = graphql_meta.get_custom_filters()
                 filters.update(custom_filters)
 
-            # Quick filter is intentionally disabled unless explicitly enabled
-            if getattr(self, "enable_quick_filter", False):
-                # Add a 'quick' filter argument only when enabled
-                try:
-                    quick_fields = list(
-                        getattr(graphql_meta, "quick_filter_fields", [])
-                    )
-                    if not quick_fields and getattr(
-                        graphql_meta.filtering, "auto_detect_quick", True
-                    ):
-                        quick_fields = self._get_default_quick_filter_fields(model)
+            # Always include the 'quick' filter argument
+            try:
+                quick_fields = list(getattr(graphql_meta, "quick_filter_fields", []))
+                if not quick_fields and getattr(
+                    graphql_meta.filtering, "auto_detect_quick", True
+                ):
+                    quick_fields = self._get_default_quick_filter_fields(model)
 
-                    quick_filter = self._generate_quick_filter(model, quick_fields)
-                    if quick_filter:
-                        filters["quick"] = quick_filter
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to configure quick filter for {model.__name__}: {e}"
-                    )
+                quick_filter = self._generate_quick_filter(model, quick_fields)
+                if quick_filter:
+                    filters["quick"] = quick_filter
+            except Exception as e:
+                logger.warning(
+                    f"Failed to configure quick filter for {model.__name__}: {e}"
+                )
             # Development-only verbose print removed to avoid console spam and slowdown
             # Use logger.debug if trace is needed:
 
