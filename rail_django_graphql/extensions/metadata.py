@@ -511,12 +511,22 @@ class ModelFormMetadata:
     verbose_name: str
     verbose_name_plural: str
     form_title: str
+
     form_description: Optional[str]
     fields: List[FormFieldMetadata]
     relationships: List[FormRelationshipMetadata]
     nested: List["ModelFormMetadata"] = field(default_factory=list)
     # Form configuration
     field_order: Optional[List[str]] = None
+    # When this instance is produced as a nested metadata entry for a relationship,
+    # these attributes describe the parent relationship that led to this nesting.
+    # They remain None for top-level metadata.
+    name: Optional[str] = None
+    field_name: Optional[str] = None
+    relationship_type: Optional[str] = None
+    to_field: Optional[str] = None
+    from_field: Optional[str] = None
+    is_required: Optional[bool] = None
     exclude_fields: List[str] = field(default_factory=list)
     readonly_fields: List[str] = field(default_factory=list)
     # Validation and permissions
@@ -810,6 +820,14 @@ class ModelFormMetadataType(graphene.ObjectType):
     verbose_name_plural = graphene.String(
         required=True, description="Model verbose name plural"
     )
+    # Relationship linkage information for nested metadata entries
+    # These are typically only populated for nested entries
+    name = graphene.String(description="Deprecated: use field_name; retained for compatibility")
+    field_name = graphene.String(description="Parent relationship field name that produced this nested metadata")
+    relationship_type = graphene.String(description="Relationship type for the parent field (ForeignKey, ManyToManyField, OneToOneField)")
+    to_field = graphene.String(description="Target field name on the related model (if specified)")
+    from_field = graphene.String(description="Source field name on the parent model")
+    is_required = graphene.Boolean(description="Whether the parent relationship field is required")
     form_title = graphene.String(required=True, description="Form title")
     form_description = graphene.String(description="Form description")
     fields = graphene.List(
@@ -2501,6 +2519,36 @@ class ModelFormMetadataExtractor:
             # For reverse relationships like ManyToOneRel, generate a readable name
             verbose_name = field.name.replace("_", " ").title()
 
+        # Detect reverse relationships using Django's reverse_related classes
+        try:
+            from django.db.models.fields.reverse_related import (
+                ManyToOneRel,
+                ManyToManyRel,
+                OneToOneRel,
+            )
+            is_reverse = isinstance(field, (ManyToOneRel, ManyToManyRel, OneToOneRel))
+        except Exception:
+            # Fallback: use multiple signals to detect reverse relations conservatively
+            is_reverse = False
+            # Heuristic 1: auto_created and not a standard forward field class
+            try:
+                from django.db import models as dj_models
+                if bool(getattr(field, "auto_created", False)) and not isinstance(
+                    field, (dj_models.ForeignKey, dj_models.OneToOneField, dj_models.ManyToManyField)
+                ):
+                    is_reverse = True
+            except Exception:
+                # If models import fails for any reason, keep current is_reverse value
+                pass
+            # Heuristic 2: GenericRelation should be treated as reverse-facing relation in forms
+            try:
+                from django.contrib.contenttypes.fields import GenericRelation
+                if isinstance(field, GenericRelation):
+                    is_reverse = True
+            except Exception:
+                # GenericRelation may not be installed; ignore
+                pass
+
         return FormRelationshipMetadata(
             name=field.name,
             relationship_type=field.__class__.__name__,
@@ -2517,7 +2565,7 @@ class ModelFormMetadataExtractor:
             many_to_many=isinstance(field, models.ManyToManyField),
             one_to_one=isinstance(field, models.OneToOneField),
             foreign_key=isinstance(field, models.ForeignKey),
-            is_reverse=False,
+            is_reverse=is_reverse,
             multiple=isinstance(field, models.ManyToManyField),
             queryset_filters=self._to_json_safe(self._get_queryset_filters(field)),
             empty_label=self._get_empty_label(field),
@@ -2608,25 +2656,99 @@ class ModelFormMetadataExtractor:
         exclude_relationships = exclude_relationships or []
         only_relationships = only_relationships or []
 
+        # Detect polymorphic/multi-table inheritance to hide parent/child pointers
+        # and reverse OneToOne relations from form metadata.
+        try:
+            from ..generators.inheritance import inheritance_handler
+
+            inheritance_info = inheritance_handler.analyze_model_inheritance(model)
+        except Exception:
+            inheritance_info = {}
+
+        is_polymorphic_model = False
+        try:
+            for _f in meta.get_fields():
+                if getattr(_f, "name", None) == "polymorphic_ctype":
+                    is_polymorphic_model = True
+                    break
+        except Exception:
+            pass
+
+        if getattr(meta, "parents", None):
+            try:
+                if len(meta.parents) > 0:
+                    is_polymorphic_model = True
+            except Exception:
+                # Some Django versions expose parents as a dict-like
+                is_polymorphic_model = True
+
+        if inheritance_info and (
+            inheritance_info.get("child_models")
+            or inheritance_info.get("concrete_parents")
+        ):
+            is_polymorphic_model = True
+
+        # Always exclude these known fields from form metadata
+        excluded_names = {
+            "report_rows",
+            "stock_policies",
+            "stock_snapshots",
+        }
+
         # Extract form fields
         form_fields = []
         form_relationships = []
+        # Track declared order across fields and relationships
+        # Keep forward relationships in the main order and push reverse relationships to the end
+        declared_forward_order: List[str] = []
+        declared_reverse_order: List[str] = []
 
         for field in meta.get_fields():
+            # Global name-based exclusions
+            if field.name in excluded_names:
+                continue
+
+            # Hide internal polymorphic marker
+            if field.name == "polymorphic_ctype":
+                continue
+
+            # Hide parent-link pointer fields (multi-table inheritance)
+            if field.name.endswith("_ptr"):
+                continue
+
             # Check if this is a relationship field
             if hasattr(field, "related_model") and field.related_model:
+                # Skip polymorphic OneToOne reverse accessors (auto-created)
+                if is_polymorphic_model and getattr(field, "one_to_one", False):
+                    # Avoid exposing child/parent relations in forms
+                    if getattr(field, "auto_created", False):
+                        continue
+
                 # Always include relationship fields regardless of nested_fields
                 relationship_metadata = self._extract_form_relationship_metadata(
                     field, user, current_depth, visited_models
                 )
                 if relationship_metadata:
                     form_relationships.append(relationship_metadata)
+                    if getattr(relationship_metadata, "is_reverse", False):
+                        declared_reverse_order.append(field.name)
+                    else:
+                        declared_forward_order.append(field.name)
             else:
                 # This is a regular field
                 if not field.name.startswith("_") and field.concrete:
+                    # Skip OneToOne parent-link fields for polymorphic models
+                    if is_polymorphic_model and isinstance(field, models.OneToOneField):
+                        # parent_link is True for the implicit pointer from child to parent
+                        if getattr(field, "parent_link", False):
+                            continue
+                    # Also skip if it looks like an inheritance pointer by naming
+                    if field.name.endswith("_ptr"):
+                        continue
                     field_metadata = self._extract_form_field_metadata(field, user)
                     if field_metadata:
                         form_fields.append(field_metadata)
+                        declared_forward_order.append(field.name)
 
         # Apply selection filters to fields and relationships
         if only:
@@ -2645,14 +2767,39 @@ class ModelFormMetadataExtractor:
                 if r.name not in set(exclude_relationships)
             ]
 
+        # Final safeguard: remove any excluded_names that slipped through
+        if excluded_names:
+            form_fields = [f for f in form_fields if f.name not in excluded_names]
+            form_relationships = [
+                r for r in form_relationships if r.name not in excluded_names
+            ]
+
         # Get form configuration
         form_title = f"Form for {meta.verbose_name}"
         form_description = f"Create or edit {meta.verbose_name.lower()}"
 
-        # Get field ordering
-        field_order = list(getattr(meta, "field_order", []))
-        if not field_order:
-            field_order = [f.name for f in form_fields]
+        # Build field_order using declaration order: forward first, then reverse relationships at the end
+        final_field_names = {f.name for f in form_fields}
+        final_relationship_names = {r.name for r in form_relationships}
+        field_order_forward = [
+            name
+            for name in declared_forward_order
+            if (name in final_field_names or name in final_relationship_names)
+        ]
+        field_order_reverse = [
+            name
+            for name in declared_reverse_order
+            if (name in final_field_names or name in final_relationship_names)
+        ]
+        field_order = field_order_forward + field_order_reverse
+
+        # Final stable partition: ensure reverse relationship names appear at the end
+        # even if any slipped into the forward list due to detection issues elsewhere.
+        reverse_names = {r.name for r in form_relationships if getattr(r, "is_reverse", False)}
+        if reverse_names:
+            non_reverse_order = [name for name in field_order if name not in reverse_names]
+            reverse_order = [name for name in field_order if name in reverse_names]
+            field_order = non_reverse_order + reverse_order
 
         # Get excluded fields (typically auto fields, computed fields)
         exclude_fields = []
@@ -2677,7 +2824,7 @@ class ModelFormMetadataExtractor:
 
         # Extract nested metadata for specified fields
         nested_metadata = []
-        if nested_fields and current_depth < self.max_depth:
+        if nested_fields:
             for field_name in nested_fields:
                 try:
                     field = meta.get_field(field_name)
@@ -2696,11 +2843,32 @@ class ModelFormMetadataExtractor:
                         )
 
                         if nested_form_metadata:
+                            # Attach linkage information from the parent relationship field
+                            nested_form_metadata.name = field.name
+                            nested_form_metadata.field_name = field.name
+                            nested_form_metadata.relationship_type = field.__class__.__name__
+                            nested_form_metadata.to_field = (
+                                field.remote_field.name
+                                if hasattr(field, "remote_field") and field.remote_field
+                                else None
+                            )
+                            nested_form_metadata.from_field = field.name
+                            nested_form_metadata.is_required = not getattr(field, "blank", True)
                             nested_metadata.append(nested_form_metadata)
                 except Exception as e:
                     logger.warning(
                         f"Could not extract nested metadata for field {field_name}: {e}"
                     )
+
+        # If a relationship is represented in nested, exclude it from top-level relationships
+        if nested_metadata:
+            nested_names = {
+                n.name for n in nested_metadata if getattr(n, "name", None)
+            }
+            if nested_names:
+                form_relationships = [
+                    r for r in form_relationships if r.name not in nested_names
+                ]
 
         # Remove current model from visited set before returning (cleanup)
         visited_models.discard(model_key)
@@ -3764,7 +3932,9 @@ class ModelTableExtractor:
                     try:
                         if opts:
                             opts.sort(
-                                key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                                key=lambda o: 0
+                                if o.get("lookup_expr") == "exact"
+                                else 1
                             )
                     except Exception:
                         pass
@@ -3814,7 +3984,9 @@ class ModelTableExtractor:
                         try:
                             if n_opts:
                                 n_opts.sort(
-                                    key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                                    key=lambda o: 0
+                                    if o.get("lookup_expr") == "exact"
+                                    else 1
                                 )
                         except Exception:
                             pass
