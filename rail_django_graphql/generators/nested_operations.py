@@ -362,22 +362,32 @@ class NestedOperationHandler:
         except IntegrityError as e:
             # Attempt to parse constraint violations and map to fields
             error_msg = str(e)
-            
-            # Handle not-null constraint violations
+
+            # Handle not-null constraint violations (French message)
             match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
             if match:
                 column_name = match.group(1)
                 field_name = self._map_column_to_field(model, column_name) or column_name
-                raise ValidationError({field_name: f"{field_name} cannot be null."})
-            
-            # Handle unique constraint violations
+                # Prefer verbose_name when available
+                label = self._get_field_verbose_name(model, field_name) or field_name
+                # French: "ne peut pas être nul"
+                raise ValidationError({field_name: f"Le champ '{label}' ne peut pas être nul."})
+
+            # Handle unique constraint violations (French message)
             fields = self._extract_unique_constraint_fields(model, e)
             if fields:
-                message = f"Failed to create {model.__name__}: {str(e)}"
-                raise ValidationError({field: message for field in fields})
-            
-            # Fallback to generic message if fields cannot be determined
-            raise ValidationError(f"Failed to create {model.__name__}: {str(e)}")
+                # Provide a clear French message without leaking raw DB error details
+                # Use verbose_name if available for user-facing clarity
+                return_errors = {}
+                for field in fields:
+                    label = self._get_field_verbose_name(model, field) or field
+                    return_errors[field] = (
+                        f"Doublon détecté: la valeur du champ '{label}' existe déjà. Veuillez fournir une valeur unique."
+                    )
+                raise ValidationError(return_errors)
+
+            # Fallback to generic message in French if fields cannot be determined
+            raise ValidationError(f"Échec de la création de {model.__name__} : {str(e)}")
 
         except Exception as e:
             # Wrap non-validation exceptions with context
@@ -835,22 +845,28 @@ class NestedOperationHandler:
         except IntegrityError as e:
             # Attempt to parse constraint violations and map to fields
             error_msg = str(e)
-            
-            # Handle not-null constraint violations
+
+            # Handle not-null constraint violations (French message)
             match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
             if match:
                 column_name = match.group(1)
                 field_name = self._map_column_to_field(model, column_name) or column_name
-                raise ValidationError({field_name: f"{field_name} cannot be null."})
-            
-            # Handle unique constraint violations
+                label = self._get_field_verbose_name(model, field_name) or field_name
+                raise ValidationError({field_name: f"Le champ '{label}' ne peut pas être nul."})
+
+            # Handle unique constraint violations (French message)
             fields = self._extract_unique_constraint_fields(model, e)
             if fields:
-                message = f"Failed to update {model.__name__}: {str(e)}"
-                raise ValidationError({field: message for field in fields})
-            
-            # Fallback to generic message if fields cannot be determined
-            raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
+                return_errors = {}
+                for field in fields:
+                    label = self._get_field_verbose_name(model, field) or field
+                    return_errors[field] = (
+                        f"Doublon détecté: la valeur du champ '{label}' existe déjà. Veuillez fournir une valeur unique."
+                    )
+                raise ValidationError(return_errors)
+
+            # Fallback to generic message in French if fields cannot be determined
+            raise ValidationError(f"Échec de la mise à jour de {model.__name__} : {str(e)}")
         except Exception as e:
             # Wrap non-validation exceptions with context
             raise ValidationError(f"Failed to update {model.__name__}: {str(e)}")
@@ -899,6 +915,28 @@ class NestedOperationHandler:
                     return f.name
         except Exception:
             pass
+        return None
+
+    def _get_field_verbose_name(self, model: Type[models.Model], field_name: str) -> Optional[str]:
+        """
+        Retrieve the user-facing verbose_name for a Django field when available.
+
+        Args:
+            model: Django model class
+            field_name: Name of the field in the Django model
+
+        Returns:
+            Optional[str]: The verbose_name string if available, otherwise None.
+        """
+        try:
+            field = model._meta.get_field(field_name)
+            # verbose_name can be lazy, cast to str for safety
+            label = getattr(field, "verbose_name", None)
+            if label:
+                return str(label)
+        except Exception:
+            # If field lookup fails, return None to allow graceful fallback
+            return None
         return None
 
     def handle_cascade_delete(

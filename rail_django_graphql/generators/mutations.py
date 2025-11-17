@@ -104,7 +104,9 @@ class MutationGenerator:
         graphql_meta = get_model_graphql_meta(model)
         graphql_meta = get_model_graphql_meta(model)
         graphql_meta = get_model_graphql_meta(model)
-        read_only_fields = set(getattr(graphql_meta.field_config, "read_only", []) or [])
+        read_only_fields = set(
+            getattr(graphql_meta.field_config, "read_only", []) or []
+        )
 
         class CreateMutation(graphene.Mutation):
             class Arguments:
@@ -191,12 +193,25 @@ class MutationGenerator:
                     transaction.set_rollback(True)
                     error_msg = str(e)
                     # Parse not-null constraint violation
-                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    match = re.search(
+                        r'null value in column "(\w+)".*violates not-null constraint',
+                        error_msg,
+                    )
                     if match:
                         field_name = match.group(1)
-                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                        error_objects = [
+                            MutationError(
+                                field=field_name,
+                                message=f"{field_name} cannot be null.",
+                            )
+                        ]
                     else:
-                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                        error_objects = [
+                            MutationError(
+                                field=None,
+                                message=f"Database integrity error: {error_msg}",
+                            )
+                        ]
                     return cls(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
@@ -421,7 +436,9 @@ class MutationGenerator:
         )
         model_name = model.__name__
         graphql_meta = get_model_graphql_meta(model)
-        read_only_fields = set(getattr(graphql_meta.field_config, "read_only", []) or [])
+        read_only_fields = set(
+            getattr(graphql_meta.field_config, "read_only", []) or []
+        )
 
         class UpdateMutation(graphene.Mutation):
             class Arguments:
@@ -473,7 +490,9 @@ class MutationGenerator:
                             # If all else fails, raise the original error
                             instance = model.objects.get(pk=id)
 
-                    graphql_meta.ensure_operation_access("update", info=info, instance=instance)
+                    graphql_meta.ensure_operation_access(
+                        "update", info=info, instance=instance
+                    )
 
                     # Use the nested operation handler for advanced nested operations
                     nested_handler = cls._get_nested_handler(info)
@@ -539,12 +558,25 @@ class MutationGenerator:
                     transaction.set_rollback(True)
                     error_msg = str(e)
                     # Parse not-null constraint violation
-                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    match = re.search(
+                        r'null value in column "(\w+)".*violates not-null constraint',
+                        error_msg,
+                    )
                     if match:
                         field_name = match.group(1)
-                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                        error_objects = [
+                            MutationError(
+                                field=field_name,
+                                message=f"{field_name} cannot be null.",
+                            )
+                        ]
                     else:
-                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                        error_objects = [
+                            MutationError(
+                                field=None,
+                                message=f"Database integrity error: {error_msg}",
+                            )
+                        ]
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
@@ -785,7 +817,9 @@ class MutationGenerator:
             ) -> "DeleteMutation":
                 try:
                     instance = model.objects.get(pk=id)
-                    graphql_meta.ensure_operation_access("delete", info=info, instance=instance)
+                    graphql_meta.ensure_operation_access(
+                        "delete", info=info, instance=instance
+                    )
                     deleted_instance = instance  # Store reference before deletion
                     instance.delete()
                     return cls(ok=True, object=deleted_instance, errors=[])
@@ -869,12 +903,25 @@ class MutationGenerator:
                     transaction.set_rollback(True)
                     error_msg = str(e)
                     # Parse not-null constraint violation
-                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    match = re.search(
+                        r'null value in column "(\w+)".*violates not-null constraint',
+                        error_msg,
+                    )
                     if match:
                         field_name = match.group(1)
-                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                        error_objects = [
+                            MutationError(
+                                field=field_name,
+                                message=f"{field_name} cannot be null.",
+                            )
+                        ]
                     else:
-                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                        error_objects = [
+                            MutationError(
+                                field=None,
+                                message=f"Database integrity error: {error_msg}",
+                            )
+                        ]
                     return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
@@ -971,7 +1018,9 @@ class MutationGenerator:
                     instances = []
                     for input_data in inputs:
                         instance = model.objects.get(pk=input_data["id"])
-                        graphql_meta.ensure_operation_access("bulk_update", info=info, instance=instance)
+                        graphql_meta.ensure_operation_access(
+                            "bulk_update", info=info, instance=instance
+                        )
                         # Normalize enum inputs for update payload
                         update_data = cls._normalize_enum_inputs(
                             input_data["data"], model
@@ -996,12 +1045,25 @@ class MutationGenerator:
                     transaction.set_rollback(True)
                     error_msg = str(e)
                     # Parse not-null constraint violation
-                    match = re.search(r'null value in column "(\w+)".*violates not-null constraint', error_msg)
+                    match = re.search(
+                        r'null value in column "(\w+)".*violates not-null constraint',
+                        error_msg,
+                    )
                     if match:
                         field_name = match.group(1)
-                        error_objects = [MutationError(field=field_name, message=f"{field_name} cannot be null.")]
+                        error_objects = [
+                            MutationError(
+                                field=field_name,
+                                message=f"{field_name} cannot be null.",
+                            )
+                        ]
                     else:
-                        error_objects = [MutationError(field=None, message=f"Database integrity error: {error_msg}")]
+                        error_objects = [
+                            MutationError(
+                                field=None,
+                                message=f"Database integrity error: {error_msg}",
+                            )
+                        ]
                     return cls(ok=False, objects=[], errors=error_objects)
                 except Exception as e:
                     transaction.set_rollback(True)
@@ -1056,7 +1118,9 @@ class MutationGenerator:
 
                     deleted_instances = list(instances)  # Store before deletion
                     for inst in deleted_instances:
-                        graphql_meta.ensure_operation_access("bulk_delete", info=info, instance=inst)
+                        graphql_meta.ensure_operation_access(
+                            "bulk_delete", info=info, instance=inst
+                        )
                     instances.delete()
                     return cls(ok=True, objects=deleted_instances, errors=[])
 
