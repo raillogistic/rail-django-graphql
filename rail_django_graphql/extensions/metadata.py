@@ -822,12 +822,22 @@ class ModelFormMetadataType(graphene.ObjectType):
     )
     # Relationship linkage information for nested metadata entries
     # These are typically only populated for nested entries
-    name = graphene.String(description="Deprecated: use field_name; retained for compatibility")
-    field_name = graphene.String(description="Parent relationship field name that produced this nested metadata")
-    relationship_type = graphene.String(description="Relationship type for the parent field (ForeignKey, ManyToManyField, OneToOneField)")
-    to_field = graphene.String(description="Target field name on the related model (if specified)")
+    name = graphene.String(
+        description="Deprecated: use field_name; retained for compatibility"
+    )
+    field_name = graphene.String(
+        description="Parent relationship field name that produced this nested metadata"
+    )
+    relationship_type = graphene.String(
+        description="Relationship type for the parent field (ForeignKey, ManyToManyField, OneToOneField)"
+    )
+    to_field = graphene.String(
+        description="Target field name on the related model (if specified)"
+    )
     from_field = graphene.String(description="Source field name on the parent model")
-    is_required = graphene.Boolean(description="Whether the parent relationship field is required")
+    is_required = graphene.Boolean(
+        description="Whether the parent relationship field is required"
+    )
     form_title = graphene.String(required=True, description="Form title")
     form_description = graphene.String(description="Form description")
     fields = graphene.List(
@@ -2526,6 +2536,7 @@ class ModelFormMetadataExtractor:
                 ManyToManyRel,
                 OneToOneRel,
             )
+
             is_reverse = isinstance(field, (ManyToOneRel, ManyToManyRel, OneToOneRel))
         except Exception:
             # Fallback: use multiple signals to detect reverse relations conservatively
@@ -2533,8 +2544,14 @@ class ModelFormMetadataExtractor:
             # Heuristic 1: auto_created and not a standard forward field class
             try:
                 from django.db import models as dj_models
+
                 if bool(getattr(field, "auto_created", False)) and not isinstance(
-                    field, (dj_models.ForeignKey, dj_models.OneToOneField, dj_models.ManyToManyField)
+                    field,
+                    (
+                        dj_models.ForeignKey,
+                        dj_models.OneToOneField,
+                        dj_models.ManyToManyField,
+                    ),
                 ):
                     is_reverse = True
             except Exception:
@@ -2543,6 +2560,7 @@ class ModelFormMetadataExtractor:
             # Heuristic 2: GenericRelation should be treated as reverse-facing relation in forms
             try:
                 from django.contrib.contenttypes.fields import GenericRelation
+
                 if isinstance(field, GenericRelation):
                     is_reverse = True
             except Exception:
@@ -2795,9 +2813,13 @@ class ModelFormMetadataExtractor:
 
         # Final stable partition: ensure reverse relationship names appear at the end
         # even if any slipped into the forward list due to detection issues elsewhere.
-        reverse_names = {r.name for r in form_relationships if getattr(r, "is_reverse", False)}
+        reverse_names = {
+            r.name for r in form_relationships if getattr(r, "is_reverse", False)
+        }
         if reverse_names:
-            non_reverse_order = [name for name in field_order if name not in reverse_names]
+            non_reverse_order = [
+                name for name in field_order if name not in reverse_names
+            ]
             reverse_order = [name for name in field_order if name in reverse_names]
             field_order = non_reverse_order + reverse_order
 
@@ -2846,14 +2868,18 @@ class ModelFormMetadataExtractor:
                             # Attach linkage information from the parent relationship field
                             nested_form_metadata.name = field.name
                             nested_form_metadata.field_name = field.name
-                            nested_form_metadata.relationship_type = field.__class__.__name__
+                            nested_form_metadata.relationship_type = (
+                                field.__class__.__name__
+                            )
                             nested_form_metadata.to_field = (
                                 field.remote_field.name
                                 if hasattr(field, "remote_field") and field.remote_field
                                 else None
                             )
                             nested_form_metadata.from_field = field.name
-                            nested_form_metadata.is_required = not getattr(field, "blank", True)
+                            nested_form_metadata.is_required = not getattr(
+                                field, "blank", True
+                            )
                             nested_metadata.append(nested_form_metadata)
                 except Exception as e:
                     logger.warning(
@@ -2862,9 +2888,7 @@ class ModelFormMetadataExtractor:
 
         # If a relationship is represented in nested, exclude it from top-level relationships
         if nested_metadata:
-            nested_names = {
-                n.name for n in nested_metadata if getattr(n, "name", None)
-            }
+            nested_names = {n.name for n in nested_metadata if getattr(n, "name", None)}
             if nested_names:
                 form_relationships = [
                     r for r in form_relationships if r.name not in nested_names
