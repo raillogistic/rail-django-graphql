@@ -12,7 +12,18 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from django.contrib.auth import get_user_model
 from django.db import models
@@ -21,12 +32,12 @@ from graphql import GraphQLError
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
-
 logger = logging.getLogger(__name__)
 
 
 class FieldAccessLevel(Enum):
     """Niveaux d'accès aux champs."""
+
     NONE = "none"  # Aucun accès
     READ = "read"  # Lecture seule
     WRITE = "write"  # Lecture et écriture
@@ -35,6 +46,7 @@ class FieldAccessLevel(Enum):
 
 class FieldVisibility(Enum):
     """Visibilité des champs."""
+
     VISIBLE = "visible"  # Champ visible
     HIDDEN = "hidden"  # Champ masqué
     MASKED = "masked"  # Champ masqué avec valeur par défaut
@@ -44,6 +56,7 @@ class FieldVisibility(Enum):
 @dataclass
 class FieldPermissionRule:
     """Règle de permission pour un champ."""
+
     field_name: str
     model_name: str
     access_level: FieldAccessLevel
@@ -58,12 +71,14 @@ class FieldPermissionRule:
 @dataclass
 class FieldContext:
     """Contexte d'accès à un champ."""
+
     user: "AbstractUser"
     instance: Optional[models.Model] = None
     parent_instance: Optional[models.Model] = None
     field_name: str = None
     operation_type: str = "read"  # read, write, create, update, delete
     request_context: Dict[str, Any] = None
+    model_class: Optional[Type[models.Model]] = None
 
 
 class FieldPermissionManager:
@@ -75,9 +90,17 @@ class FieldPermissionManager:
         """Initialise le gestionnaire de permissions de champs."""
         self._field_rules: Dict[str, List[FieldPermissionRule]] = {}
         self._global_rules: List[FieldPermissionRule] = []
+        self._graphql_configs: Set[str] = set()
         self._sensitive_fields = {
-            'password', 'token', 'secret', 'key', 'hash',
-            'ssn', 'social_security', 'credit_card', 'bank_account'
+            "password",
+            "token",
+            "secret",
+            "key",
+            "hash",
+            "ssn",
+            "social_security",
+            "credit_card",
+            "bank_account",
         }
 
         # Règles par défaut pour les champs sensibles
@@ -86,43 +109,51 @@ class FieldPermissionManager:
     def _setup_default_rules(self):
         """Configure les règles par défaut pour les champs sensibles."""
         # Champs de mot de passe - toujours masqués
-        self.register_field_rule(FieldPermissionRule(
-            field_name="password",
-            model_name="*",
-            access_level=FieldAccessLevel.NONE,
-            visibility=FieldVisibility.HIDDEN,
-            roles=["admin", "superadmin"]
-        ))
+        self.register_field_rule(
+            FieldPermissionRule(
+                field_name="password",
+                model_name="*",
+                access_level=FieldAccessLevel.NONE,
+                visibility=FieldVisibility.HIDDEN,
+                roles=["admin", "superadmin"],
+            )
+        )
 
         # Champs de token - visibles seulement pour l'admin
-        self.register_field_rule(FieldPermissionRule(
-            field_name="*token*",
-            model_name="*",
-            access_level=FieldAccessLevel.READ,
-            visibility=FieldVisibility.MASKED,
-            mask_value="***HIDDEN***",
-            roles=["admin", "superadmin"]
-        ))
-
-        # Email - visible pour le propriétaire et admin
-        self.register_field_rule(FieldPermissionRule(
-            field_name="email",
-            model_name="User",
-            access_level=FieldAccessLevel.READ,
-            visibility=FieldVisibility.VISIBLE,
-            condition=self._is_owner_or_admin
-        ))
-
-        # Champs financiers - accès restreint
-        for field in ['salary', 'wage', 'income', 'revenue', 'cost', 'price']:
-            self.register_field_rule(FieldPermissionRule(
-                field_name=field,
+        self.register_field_rule(
+            FieldPermissionRule(
+                field_name="*token*",
                 model_name="*",
                 access_level=FieldAccessLevel.READ,
                 visibility=FieldVisibility.MASKED,
-                mask_value="***CONFIDENTIAL***",
-                roles=["manager", "admin", "superadmin"]
-            ))
+                mask_value="***HIDDEN***",
+                roles=["admin", "superadmin"],
+            )
+        )
+
+        # Email - visible pour le propriétaire et admin
+        self.register_field_rule(
+            FieldPermissionRule(
+                field_name="email",
+                model_name="User",
+                access_level=FieldAccessLevel.READ,
+                visibility=FieldVisibility.VISIBLE,
+                condition=self._is_owner_or_admin,
+            )
+        )
+
+        # Champs financiers - accès restreint
+        for field in ["salary", "wage", "income", "revenue", "cost", "price"]:
+            self.register_field_rule(
+                FieldPermissionRule(
+                    field_name=field,
+                    model_name="*",
+                    access_level=FieldAccessLevel.READ,
+                    visibility=FieldVisibility.MASKED,
+                    mask_value="***CONFIDENTIAL***",
+                    roles=["manager", "admin", "superadmin"],
+                )
+            )
 
     def register_field_rule(self, rule: FieldPermissionRule):
         """
@@ -149,6 +180,83 @@ class FieldPermissionManager:
         self._global_rules.append(rule)
         logger.info(f"Règle globale enregistrée pour {rule.field_name}")
 
+    def register_graphql_field_config(
+        self, model_class: Type[models.Model], graphql_meta: Any
+    ) -> None:
+        """Crée des règles basées sur la configuration GraphQL d'un modèle."""
+
+        if not model_class or not graphql_meta:
+            return
+
+        model_label = model_class._meta.label_lower
+        if model_label in self._graphql_configs:
+            return
+
+        field_config = getattr(graphql_meta, "field_config", None)
+        if not field_config:
+            return
+
+        def _rules_from_fields(field_names, access, visibility, mask_value=None):
+            for field_name in field_names:
+                rule = FieldPermissionRule(
+                    field_name=field_name,
+                    model_name=model_label,
+                    access_level=access,
+                    visibility=visibility,
+                    mask_value=mask_value,
+                )
+                self.register_field_rule(rule)
+
+        if field_config.exclude:
+            _rules_from_fields(
+                field_config.exclude,
+                FieldAccessLevel.NONE,
+                FieldVisibility.HIDDEN,
+            )
+
+        if field_config.read_only:
+            _rules_from_fields(
+                field_config.read_only,
+                FieldAccessLevel.READ,
+                FieldVisibility.VISIBLE,
+            )
+
+        if field_config.write_only:
+            _rules_from_fields(
+                field_config.write_only,
+                FieldAccessLevel.WRITE,
+                FieldVisibility.HIDDEN,
+            )
+
+        self._graphql_configs.add(model_label)
+
+    def _get_model_lookup_tokens(
+        self, instance: Optional[models.Model], model_class: Optional[Type[models.Model]]
+    ) -> List[str]:
+        """Retourne les identifiants possibles (label + nom) pour un modèle."""
+
+        tokens: List[str] = []
+        target_class = None
+        if instance is not None:
+            target_class = instance.__class__
+        elif model_class is not None:
+            target_class = model_class
+
+        if target_class is not None:
+            tokens.extend([
+                target_class._meta.label_lower,
+                target_class.__name__,
+            ])
+
+        tokens.append("*")
+
+        seen_tokens: List[str] = []
+        for token in tokens:
+            if token and token not in seen_tokens:
+                seen_tokens.append(token)
+
+        return seen_tokens
+
     def get_field_access_level(self, context: FieldContext) -> FieldAccessLevel:
         """
         Détermine le niveau d'accès pour un champ.
@@ -167,15 +275,19 @@ class FieldPermissionManager:
             return FieldAccessLevel.ADMIN
 
         # Vérifier les règles spécifiques au champ
-        model_name = context.instance.__class__.__name__ if context.instance else "*"
         field_name = context.field_name
+        lookup_tokens = self._get_model_lookup_tokens(
+            context.instance, context.model_class
+        )
 
-        # Clés de recherche par ordre de priorité
-        search_keys = [
-            f"{model_name}.{field_name}",
-            f"*.{field_name}",
-            f"{model_name}.*"
-        ]
+        search_keys: List[str] = []
+        seen: Set[str] = set()
+        for token in lookup_tokens:
+            for suffix in (field_name, "*"):
+                key = f"{token}.{suffix}"
+                if key not in seen:
+                    search_keys.append(key)
+                    seen.add(key)
 
         for key in search_keys:
             if key in self._field_rules:
@@ -194,7 +306,7 @@ class FieldPermissionManager:
             app_label = model_class._meta.app_label
             model_name_lower = model_class._meta.model_name
 
-            if context.operation_type in ['create', 'update', 'delete']:
+            if context.operation_type in ["create", "update", "delete"]:
                 perm_name = f"{app_label}.change_{model_name_lower}"
                 if context.user.has_perm(perm_name):
                     return FieldAccessLevel.WRITE
@@ -205,7 +317,9 @@ class FieldPermissionManager:
 
         return FieldAccessLevel.NONE
 
-    def get_field_visibility(self, context: FieldContext) -> Tuple[FieldVisibility, Any]:
+    def get_field_visibility(
+        self, context: FieldContext
+    ) -> Tuple[FieldVisibility, Any]:
         """
         Détermine la visibilité d'un champ et sa valeur masquée si applicable.
 
@@ -221,14 +335,19 @@ class FieldPermissionManager:
             return FieldVisibility.HIDDEN, None
 
         # Vérifier les règles spécifiques de visibilité
-        model_name = context.instance.__class__.__name__ if context.instance else "*"
         field_name = context.field_name
+        lookup_tokens = self._get_model_lookup_tokens(
+            context.instance, context.model_class
+        )
 
-        search_keys = [
-            f"{model_name}.{field_name}",
-            f"*.{field_name}",
-            f"{model_name}.*"
-        ]
+        search_keys: List[str] = []
+        seen: Set[str] = set()
+        for token in lookup_tokens:
+            for suffix in (field_name, "*"):
+                key = f"{token}.{suffix}"
+                if key not in seen:
+                    search_keys.append(key)
+                    seen.add(key)
 
         for key in search_keys:
             if key in self._field_rules:
@@ -254,9 +373,11 @@ class FieldPermissionManager:
             True si la règle s'applique
         """
         # Vérifier le nom du modèle
-        if rule.model_name != "*":
-            model_name = context.instance.__class__.__name__ if context.instance else ""
-            if rule.model_name != model_name:
+        if rule.model_name not in ("*", None):
+            identifiers = self._get_model_lookup_tokens(
+                context.instance, context.model_class
+            )
+            if rule.model_name not in identifiers:
                 return False
 
         # Vérifier le nom du champ (support des wildcards)
@@ -272,6 +393,7 @@ class FieldPermissionManager:
         # Vérifier les rôles
         if rule.roles:
             from .rbac import role_manager
+
             user_roles = role_manager.get_user_roles(context.user)
             if not any(role in user_roles for role in rule.roles):
                 return False
@@ -320,19 +442,20 @@ class FieldPermissionManager:
 
         if context.instance:
             # Vérifier si l'utilisateur est le propriétaire
-            if hasattr(context.instance, 'owner'):
+            if hasattr(context.instance, "owner"):
                 return context.instance.owner == context.user
-            elif hasattr(context.instance, 'created_by'):
+            elif hasattr(context.instance, "created_by"):
                 return context.instance.created_by == context.user
-            elif hasattr(context.instance, 'user'):
+            elif hasattr(context.instance, "user"):
                 return context.instance.user == context.user
             elif isinstance(context.instance, get_user_model()):
                 return context.instance == context.user
 
         return False
 
-    def filter_fields_for_user(self, user: "AbstractUser", model_class: type,
-                               instance: models.Model = None) -> Dict[str, Any]:
+    def filter_fields_for_user(
+        self, user: "AbstractUser", model_class: type, instance: models.Model = None
+    ) -> Dict[str, Any]:
         """
         Filtre les champs visibles pour un utilisateur.
 
@@ -348,14 +471,15 @@ class FieldPermissionManager:
 
         # Obtenir tous les champs du modèle
         for field in model_class._meta.get_fields():
-            if field.name.startswith('_'):
+            if field.name.startswith("_"):
                 continue  # Ignorer les champs privés
 
             context = FieldContext(
                 user=user,
                 instance=instance,
                 field_name=field.name,
-                operation_type="read"
+                operation_type="read",
+                model_class=model_class,
             )
 
             access_level = self.get_field_access_level(context)
@@ -363,17 +487,24 @@ class FieldPermissionManager:
 
             if visibility != FieldVisibility.HIDDEN:
                 result[field.name] = {
-                    'access_level': access_level.value,
-                    'visibility': visibility.value,
-                    'mask_value': mask_value,
-                    'readable': access_level in [FieldAccessLevel.READ, FieldAccessLevel.WRITE, FieldAccessLevel.ADMIN],
-                    'writable': access_level in [FieldAccessLevel.WRITE, FieldAccessLevel.ADMIN]
+                    "access_level": access_level.value,
+                    "visibility": visibility.value,
+                    "mask_value": mask_value,
+                    "readable": access_level
+                    in [
+                        FieldAccessLevel.READ,
+                        FieldAccessLevel.WRITE,
+                        FieldAccessLevel.ADMIN,
+                    ],
+                    "writable": access_level
+                    in [FieldAccessLevel.WRITE, FieldAccessLevel.ADMIN],
                 }
 
         return result
 
-    def apply_field_filtering(self, queryset: models.QuerySet,
-                              user: "AbstractUser") -> models.QuerySet:
+    def apply_field_filtering(
+        self, queryset: models.QuerySet, user: "AbstractUser"
+    ) -> models.QuerySet:
         """
         Applique le filtrage des champs à un QuerySet.
 
@@ -407,7 +538,9 @@ class FieldPermissionManager:
         return queryset
 
 
-def field_permission_required(field_name: str, access_level: FieldAccessLevel = FieldAccessLevel.READ):
+def field_permission_required(
+    field_name: str, access_level: FieldAccessLevel = FieldAccessLevel.READ
+):
     """
     Décorateur pour vérifier les permissions d'accès à un champ.
 
@@ -418,6 +551,7 @@ def field_permission_required(field_name: str, access_level: FieldAccessLevel = 
     Returns:
         Décorateur de vérification de permission
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -426,12 +560,12 @@ def field_permission_required(field_name: str, access_level: FieldAccessLevel = 
             instance = None
 
             for arg in args:
-                if hasattr(arg, 'context'):
+                if hasattr(arg, "context"):
                     info = arg
                 elif isinstance(arg, models.Model):
                     instance = arg
 
-            if not info or not hasattr(info.context, 'user'):
+            if not info or not hasattr(info.context, "user"):
                 raise GraphQLError("Contexte utilisateur non disponible")
 
             user = info.context.user
@@ -442,7 +576,8 @@ def field_permission_required(field_name: str, access_level: FieldAccessLevel = 
                 user=user,
                 instance=instance,
                 field_name=field_name,
-                operation_type="read"
+                operation_type="read",
+                model_class=model_class,
             )
 
             user_access_level = field_permission_manager.get_field_access_level(context)
@@ -452,19 +587,28 @@ def field_permission_required(field_name: str, access_level: FieldAccessLevel = 
                 FieldAccessLevel.NONE: 0,
                 FieldAccessLevel.READ: 1,
                 FieldAccessLevel.WRITE: 2,
-                FieldAccessLevel.ADMIN: 3
+                FieldAccessLevel.ADMIN: 3,
             }
 
-            if access_levels_hierarchy[user_access_level] < access_levels_hierarchy[access_level]:
+            if (
+                access_levels_hierarchy[user_access_level]
+                < access_levels_hierarchy[access_level]
+            ):
                 raise GraphQLError(f"Accès insuffisant au champ '{field_name}'")
 
             return func(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
 
-def mask_sensitive_fields(data: Dict[str, Any], user: "AbstractUser",
-                          model_class: type, instance: models.Model = None) -> Dict[str, Any]:
+def mask_sensitive_fields(
+    data: Dict[str, Any],
+    user: "AbstractUser",
+    model_class: type,
+    instance: models.Model = None,
+) -> Dict[str, Any]:
     """
     Masque les champs sensibles dans un dictionnaire de données.
 
@@ -487,7 +631,8 @@ def mask_sensitive_fields(data: Dict[str, Any], user: "AbstractUser",
             user=user,
             instance=instance,
             field_name=field_name,
-            operation_type="read"
+            operation_type="read",
+            model_class=model_class,
         )
 
         visibility, mask_value = field_permission_manager.get_field_visibility(context)

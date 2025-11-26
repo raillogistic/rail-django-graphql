@@ -442,7 +442,6 @@ class MutationGenerator:
 
         class UpdateMutation(graphene.Mutation):
             class Arguments:
-                id = graphene.ID(required=True)
                 input = input_type(required=True)
 
             # Standardized return type
@@ -456,39 +455,54 @@ class MutationGenerator:
                 cls,
                 root: Any,
                 info: graphene.ResolveInfo,
-                id: str,
                 input: Dict[str, Any],
             ) -> "UpdateMutation":
                 try:
-                    # Handle double quotes in string fields
                     input = cls._sanitize_input_data(input)
+                    record_id = input.get("id")
+                    if not record_id:
+                        return cls(
+                            ok=False,
+                            object=None,
+                            errors=[
+                                MutationError(
+                                    field="id",
+                                    message="L'identifiant est requis pour la mise à jour.",
+                                )
+                            ],
+                        )
+
+                    # Remove id from the update payload to avoid attempting to overwrite PK
+                    update_data = {
+                        key: value for key, value in input.items() if key != "id"
+                    }
 
                     # Normalize enum inputs (GraphQL Enum -> underlying Django values)
-                    input = cls._normalize_enum_inputs(input, model)
+                    update_data = cls._normalize_enum_inputs(update_data, model)
 
                     # Process dual fields with automatic priority handling
-                    input = cls._process_dual_fields(input, model)
+                    update_data = cls._process_dual_fields(update_data, model)
                     if read_only_fields:
-                        input = {
+                        update_data = {
                             key: value
-                            for key, value in input.items()
+                            for key, value in update_data.items()
                             if key not in read_only_fields
                         }
 
                     # Decode GraphQL ID to database ID if needed
                     try:
                         # Try to use the ID as-is first (for integer IDs)
-                        instance = model.objects.get(pk=id)
+                        instance = model.objects.get(pk=record_id)
                     except (ValueError, model.DoesNotExist):
                         # If that fails, try to decode as GraphQL global ID
                         from graphql_relay import from_global_id
 
                         try:
-                            decoded_type, decoded_id = from_global_id(id)
+                            decoded_type, decoded_id = from_global_id(record_id)
                             instance = model.objects.get(pk=decoded_id)
                         except Exception:
                             # If all else fails, raise the original error
-                            instance = model.objects.get(pk=id)
+                            instance = model.objects.get(pk=record_id)
 
                     graphql_meta.ensure_operation_access(
                         "update", info=info, instance=instance
@@ -499,14 +513,14 @@ class MutationGenerator:
 
                     # Validate nested data before processing
                     validation_errors = nested_handler.validate_nested_data(
-                        model, input, "update"
+                        model, update_data, "update"
                     )
                     if validation_errors:
                         return cls(ok=False, object=None, errors=validation_errors)
 
                     # Handle nested update with comprehensive validation and transaction management
                     instance = nested_handler.handle_nested_update(
-                        model, input, instance
+                        model, update_data, instance
                     )
 
                     return UpdateMutation(ok=True, object=instance, errors=[])
@@ -515,7 +529,7 @@ class MutationGenerator:
                     error_objects = [
                         MutationError(
                             field=None,
-                            message=f"{model_name} with id {id} does not exist",
+                            message=f"{model_name} with id {record_id} does not exist",
                         )
                     ]
                     return UpdateMutation(ok=False, object=None, errors=error_objects)

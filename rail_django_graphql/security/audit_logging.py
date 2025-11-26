@@ -19,7 +19,8 @@ from functools import wraps
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 from django.contrib.auth import get_user_model
-from django.contrib.contenttypes.models import ContentType
+
+# from django.contrib.contenttypes.models import ContentType
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
 from django.utils import timezone as django_timezone
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 class AuditEventType(Enum):
     """Types d'événements d'audit."""
+
     # Authentification
     LOGIN_SUCCESS = "login_success"
     LOGIN_FAILURE = "login_failure"
@@ -73,6 +75,7 @@ class AuditEventType(Enum):
 
 class AuditSeverity(Enum):
     """Niveaux de gravité des événements d'audit."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -82,6 +85,7 @@ class AuditSeverity(Enum):
 @dataclass
 class AuditEvent:
     """Événement d'audit."""
+
     event_type: AuditEventType
     severity: AuditSeverity
     timestamp: datetime
@@ -135,21 +139,34 @@ class AuditLogger:
 
     def __init__(self):
         """Initialise le gestionnaire d'audit."""
-        self.logger = logging.getLogger('audit')
+        self.logger = logging.getLogger("audit")
         self._event_handlers = {}
         self._risk_calculators = {}
 
         # Configuration par défaut
         self.sensitive_fields = {
-            'password', 'token', 'secret', 'key', 'hash',
-            'ssn', 'social_security', 'credit_card', 'bank_account',
-            'email', 'phone', 'address'
+            "password",
+            "token",
+            "secret",
+            "key",
+            "hash",
+            "ssn",
+            "social_security",
+            "credit_card",
+            "bank_account",
+            "email",
+            "phone",
+            "address",
         }
 
         self.high_risk_operations = {
-            'delete', 'bulk_delete', 'user_delete',
-            'permission_change', 'role_change',
-            'password_reset', 'mfa_disable'
+            "delete",
+            "bulk_delete",
+            "user_delete",
+            "permission_change",
+            "role_change",
+            "password_reset",
+            "mfa_disable",
         }
 
         # Enregistrer les calculateurs de risque par défaut
@@ -158,18 +175,15 @@ class AuditLogger:
     def _setup_default_risk_calculators(self):
         """Configure les calculateurs de risque par défaut."""
         self.register_risk_calculator(
-            AuditEventType.LOGIN_FAILURE,
-            self._calculate_login_failure_risk
+            AuditEventType.LOGIN_FAILURE, self._calculate_login_failure_risk
         )
 
         self.register_risk_calculator(
-            AuditEventType.PERMISSION_DENIED,
-            self._calculate_permission_denied_risk
+            AuditEventType.PERMISSION_DENIED, self._calculate_permission_denied_risk
         )
 
         self.register_risk_calculator(
-            AuditEventType.SENSITIVE_DATA_ACCESS,
-            self._calculate_sensitive_data_risk
+            AuditEventType.SENSITIVE_DATA_ACCESS, self._calculate_sensitive_data_risk
         )
 
     def log_event(self, event: AuditEvent):
@@ -188,7 +202,7 @@ class AuditLogger:
 
         # Enregistrer dans les logs
         log_data = asdict(sanitized_event)
-        log_data['timestamp'] = sanitized_event.timestamp.isoformat()
+        log_data["timestamp"] = sanitized_event.timestamp.isoformat()
 
         # Choisir le niveau de log approprié
         if event.severity == AuditSeverity.CRITICAL:
@@ -219,7 +233,10 @@ class AuditLogger:
         sanitized = AuditEvent(**asdict(event))
 
         # Masquer les valeurs sensibles
-        if sanitized.field_name and sanitized.field_name.lower() in self.sensitive_fields:
+        if (
+            sanitized.field_name
+            and sanitized.field_name.lower() in self.sensitive_fields
+        ):
             if sanitized.old_value:
                 sanitized.old_value = "***MASKED***"
             if sanitized.new_value:
@@ -253,7 +270,9 @@ class AuditLogger:
                 masked[key] = self._mask_sensitive_variables(value)
             elif isinstance(value, list):
                 masked[key] = [
-                    self._mask_sensitive_variables(item) if isinstance(item, dict) else item
+                    self._mask_sensitive_variables(item)
+                    if isinstance(item, dict)
+                    else item
                     for item in value
                 ]
             else:
@@ -294,7 +313,7 @@ class AuditLogger:
             AuditSeverity.INFO: 10,
             AuditSeverity.WARNING: 30,
             AuditSeverity.ERROR: 60,
-            AuditSeverity.CRITICAL: 90
+            AuditSeverity.CRITICAL: 90,
         }
         base_score += severity_scores.get(event.severity, 10)
 
@@ -302,7 +321,7 @@ class AuditLogger:
         if event.event_type in [
             AuditEventType.LOGIN_FAILURE,
             AuditEventType.PERMISSION_DENIED,
-            AuditEventType.SECURITY_VIOLATION
+            AuditEventType.SECURITY_VIOLATION,
         ]:
             base_score += 20
 
@@ -311,7 +330,10 @@ class AuditLogger:
             base_score += 15
 
         # Score basé sur les opérations à haut risque
-        if event.operation_name and event.operation_name.lower() in self.high_risk_operations:
+        if (
+            event.operation_name
+            and event.operation_name.lower() in self.high_risk_operations
+        ):
             base_score += 25
 
         return min(base_score, 100)
@@ -369,14 +391,21 @@ class AuditLogger:
         # Augmenter le score pour certains types de données
         if event.field_name:
             field_lower = event.field_name.lower()
-            if any(sensitive in field_lower for sensitive in ['password', 'token', 'secret']):
+            if any(
+                sensitive in field_lower
+                for sensitive in ["password", "token", "secret"]
+            ):
                 base_score += 30
-            elif any(sensitive in field_lower for sensitive in ['ssn', 'credit_card', 'bank']):
+            elif any(
+                sensitive in field_lower for sensitive in ["ssn", "credit_card", "bank"]
+            ):
                 base_score += 25
 
         return base_score
 
-    def register_risk_calculator(self, event_type: AuditEventType, calculator: callable):
+    def register_risk_calculator(
+        self, event_type: AuditEventType, calculator: callable
+    ):
         """
         Enregistre un calculateur de risque personnalisé.
 
@@ -473,21 +502,22 @@ def audit_graphql_operation(operation_type: str = None):
     Returns:
         Décorateur d'audit
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
             # Extraire le contexte GraphQL
             info = None
             for arg in args:
-                if hasattr(arg, 'context'):
+                if hasattr(arg, "context"):
                     info = arg
                     break
 
             if not info:
                 return func(*args, **kwargs)
 
-            user = getattr(info.context, 'user', None)
-            request = getattr(info.context, 'request', None)
+            user = getattr(info.context, "user", None)
+            request = getattr(info.context, "request", None)
 
             # Créer l'événement d'audit
             event = AuditEvent(
@@ -497,11 +527,11 @@ def audit_graphql_operation(operation_type: str = None):
                 user_id=user.id if user and user.is_authenticated else None,
                 username=user.username if user and user.is_authenticated else None,
                 ip_address=get_client_ip(request) if request else None,
-                user_agent=request.META.get('HTTP_USER_AGENT') if request else None,
+                user_agent=request.META.get("HTTP_USER_AGENT") if request else None,
                 operation_name=info.field_name,
                 operation_type=operation_type or info.operation.operation.value,
                 query_hash=hash_query(info.operation) if info.operation else None,
-                variables=info.variable_values
+                variables=info.variable_values,
             )
 
             try:
@@ -522,6 +552,7 @@ def audit_graphql_operation(operation_type: str = None):
                 raise
 
         return wrapper
+
     return decorator
 
 
@@ -536,6 +567,7 @@ def audit_data_modification(model_class: type, operation: str):
     Returns:
         Décorateur d'audit
     """
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -544,17 +576,17 @@ def audit_data_modification(model_class: type, operation: str):
             instance = None
 
             for arg in args:
-                if hasattr(arg, 'context'):
+                if hasattr(arg, "context"):
                     info = arg
                 elif isinstance(arg, model_class):
                     instance = arg
 
-            user = getattr(info.context, 'user', None) if info else None
-            request = getattr(info.context, 'request', None) if info else None
+            user = getattr(info.context, "user", None) if info else None
+            request = getattr(info.context, "request", None) if info else None
 
             # Capturer l'état avant modification
             old_values = {}
-            if instance and operation in ['update', 'delete']:
+            if instance and operation in ["update", "delete"]:
                 for field in model_class._meta.get_fields():
                     if hasattr(instance, field.name):
                         old_values[field.name] = getattr(instance, field.name)
@@ -564,33 +596,34 @@ def audit_data_modification(model_class: type, operation: str):
 
                 # Capturer l'état après modification
                 new_values = {}
-                if instance and operation in ['create', 'update']:
+                if instance and operation in ["create", "update"]:
                     for field in model_class._meta.get_fields():
                         if hasattr(instance, field.name):
                             new_values[field.name] = getattr(instance, field.name)
 
                 # Créer l'événement d'audit
                 event_type_map = {
-                    'create': AuditEventType.CREATE,
-                    'update': AuditEventType.UPDATE,
-                    'delete': AuditEventType.DELETE
+                    "create": AuditEventType.CREATE,
+                    "update": AuditEventType.UPDATE,
+                    "delete": AuditEventType.DELETE,
                 }
 
                 event = AuditEvent(
-                    event_type=event_type_map.get(operation, AuditEventType.DATA_ACCESS),
+                    event_type=event_type_map.get(
+                        operation, AuditEventType.DATA_ACCESS
+                    ),
                     severity=AuditSeverity.INFO,
                     timestamp=django_timezone.now(),
                     user_id=user.id if user and user.is_authenticated else None,
                     username=user.username if user and user.is_authenticated else None,
                     ip_address=get_client_ip(request) if request else None,
                     model_name=model_class.__name__,
-                    object_id=str(instance.pk) if instance and hasattr(instance, 'pk') else None,
+                    object_id=str(instance.pk)
+                    if instance and hasattr(instance, "pk")
+                    else None,
                     old_value=old_values if old_values else None,
                     new_value=new_values if new_values else None,
-                    details={
-                        'operation': operation,
-                        'model': model_class.__name__
-                    }
+                    details={"operation": operation, "model": model_class.__name__},
                 )
 
                 audit_logger.log_event(event)
@@ -607,7 +640,7 @@ def audit_data_modification(model_class: type, operation: str):
                     username=user.username if user and user.is_authenticated else None,
                     model_name=model_class.__name__,
                     message=f"Erreur lors de {operation}: {str(e)}",
-                    details={'operation': operation, 'error': str(e)}
+                    details={"operation": operation, "error": str(e)},
                 )
 
                 audit_logger.log_event(event)
@@ -615,6 +648,7 @@ def audit_data_modification(model_class: type, operation: str):
                 raise
 
         return wrapper
+
     return decorator
 
 
@@ -631,11 +665,11 @@ def get_client_ip(request) -> Optional[str]:
     if not request:
         return None
 
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
     if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
+        ip = x_forwarded_for.split(",")[0]
     else:
-        ip = request.META.get('REMOTE_ADDR')
+        ip = request.META.get("REMOTE_ADDR")
 
     return ip
 

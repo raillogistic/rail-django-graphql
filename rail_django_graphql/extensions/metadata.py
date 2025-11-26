@@ -24,11 +24,18 @@ from rail_django_graphql.plugins import base
 from ..conf import get_core_schema_settings
 from ..core.settings import SchemaSettings
 from ..generators.introspector import ModelIntrospector
+from ..utils.graphql_meta import get_model_graphql_meta
 # Caching removed: no cache imports
 
 # Remove imports that cause AppRegistryNotReady error
 # from ..core.security import AuthorizationManager
-# from ..extensions.permissions import PermissionLevel, OperationType
+from ..extensions.permissions import PermissionLevel, OperationType
+from ..security.field_permissions import (
+    FieldAccessLevel,
+    FieldContext,
+    FieldVisibility,
+    field_permission_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +51,18 @@ _table_cache_stats = {
     "deletes": 0,
     "invalidations": 0,
 }
+
+
+def _is_fsm_field_instance(field: Any) -> bool:
+    """
+    Detect whether a field is provided by django_fsm.FSMField without forcing the dependency at import time.
+    """
+    try:
+        from django_fsm import FSMField
+
+        return isinstance(field, FSMField)
+    except Exception:
+        return False
 
 
 def _get_table_cache_timeout() -> int:
@@ -358,6 +377,53 @@ class MutationMetadataType(graphene.ObjectType):
     error_messages = graphene.JSONString(description="Error message templates")
 
 
+class FieldPermissionMetadataType(graphene.ObjectType):
+    """GraphQL type exposing field-level permission metadata."""
+
+    can_read = graphene.Boolean(
+        required=True, description="Whether the current user may read the field"
+    )
+    can_write = graphene.Boolean(
+        required=True, description="Whether the current user may edit the field"
+    )
+    visibility = graphene.String(
+        required=True,
+        description="Resolved visibility (visible, hidden, masked, redacted)",
+    )
+    access_level = graphene.String(
+        required=True, description="Access level value (none, read, write, admin)"
+    )
+    mask_value = graphene.String(
+        description="Mask value used when the field is partially hidden"
+    )
+    reason = graphene.String(
+        description="Optional explanation describing why the field is restricted"
+    )
+
+
+class ModelPermissionMatrixType(graphene.ObjectType):
+    """GraphQL type describing model-level permissions for the current user."""
+
+    can_create = graphene.Boolean(
+        required=True, description="Whether create operations are permitted"
+    )
+    can_update = graphene.Boolean(
+        required=True, description="Whether update operations are permitted"
+    )
+    can_delete = graphene.Boolean(
+        required=True, description="Whether delete operations are permitted"
+    )
+    can_read = graphene.Boolean(
+        required=True, description="Whether retrieve/detail operations are permitted"
+    )
+    can_list = graphene.Boolean(
+        required=True, description="Whether listing operations are permitted"
+    )
+    reasons = graphene.JSONString(
+        description="Optional mapping of operation identifiers to denial reasons"
+    )
+
+
 @dataclass
 class FieldMetadata:
     """Metadata for a single model field."""
@@ -403,6 +469,30 @@ class RelationshipMetadata:
     related_name: Optional[str]
     has_permission: bool
     verbose_name: str
+
+
+@dataclass
+class FieldPermissionMetadata:
+    """Permission snapshot for a field."""
+
+    can_read: bool
+    can_write: bool
+    visibility: str
+    access_level: str
+    mask_value: Optional[str] = None
+    reason: Optional[str] = None
+
+
+@dataclass
+class ModelPermissionMatrix:
+    """Model-level CRUD permissions for the current user."""
+
+    can_create: bool = True
+    can_update: bool = True
+    can_delete: bool = True
+    can_read: bool = True
+    can_list: bool = True
+    reasons: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
 @dataclass
@@ -467,6 +557,7 @@ class FormFieldMetadata:
     css_classes: Optional[str] = None
     data_attributes: Optional[Dict[str, str]] = None
     has_permission: bool = True
+    permissions: Optional[FieldPermissionMetadata] = None
 
 
 @dataclass
@@ -500,6 +591,7 @@ class FormRelationshipMetadata:
     css_classes: Optional[str] = None
     data_attributes: Optional[Dict[str, str]] = None
     has_permission: bool = True
+    permissions: Optional[FieldPermissionMetadata] = None
 
 
 @dataclass
@@ -536,6 +628,7 @@ class ModelFormMetadata:
     form_layout: Optional[Dict[str, Any]] = None
     css_classes: Optional[str] = None
     form_attributes: Optional[Dict[str, str]] = None
+    permissions: Optional[ModelPermissionMatrix] = None
 
 
 @dataclass
@@ -553,6 +646,7 @@ class TableFieldMetadata:
     helpText: str
     is_property: bool
     is_related: bool
+    permissions: Optional[FieldPermissionMetadata] = None
 
 
 @dataclass
@@ -571,7 +665,121 @@ class ModelTableMetadata:
     managers: List[str]
     managed: bool
     fields: List[TableFieldMetadata]
+    generics: List[TableFieldMetadata]
     filters: List[Dict[str, Any]]
+    permissions: Optional[ModelPermissionMatrix] = None
+
+
+def _build_field_permission_snapshot(
+    user,
+    model_class: Type[models.Model],
+    field_name: str,
+) -> Optional[FieldPermissionMetadata]:
+    """Build a permission snapshot for a field."""
+
+    if not user or not getattr(user, "is_authenticated", False):
+        return FieldPermissionMetadata(
+            can_read=False,
+            can_write=False,
+            visibility=FieldVisibility.HIDDEN.value,
+            access_level=FieldAccessLevel.NONE.value,
+            reason="Authentification requise.",
+        )
+
+    context = FieldContext(
+        user=user,
+        model_class=model_class,
+        field_name=field_name,
+        operation_type="read",
+    )
+    access_level = field_permission_manager.get_field_access_level(context)
+    visibility, mask_value = field_permission_manager.get_field_visibility(context)
+    can_read = access_level in (
+        FieldAccessLevel.READ,
+        FieldAccessLevel.WRITE,
+        FieldAccessLevel.ADMIN,
+    )
+    can_write = access_level in (FieldAccessLevel.WRITE, FieldAccessLevel.ADMIN)
+    reason = None if can_read else "Permission insuffisante pour consulter ce champ."
+    return FieldPermissionMetadata(
+        can_read=can_read,
+        can_write=can_write,
+        visibility=visibility.value,
+        access_level=access_level.value,
+        mask_value=mask_value,
+        reason=reason,
+    )
+
+
+def _build_model_permission_matrix(
+    model: Type[models.Model], user
+) -> ModelPermissionMatrix:
+    """Compute CRUD permissions for a model and user."""
+
+    app_label = model._meta.app_label
+    model_lower = model._meta.model_name
+    operations = {
+        "create": f"{app_label}.add_{model_lower}",
+        "update": f"{app_label}.change_{model_lower}",
+        "delete": f"{app_label}.delete_{model_lower}",
+        "read": f"{app_label}.view_{model_lower}",
+        "list": f"{app_label}.view_{model_lower}",
+    }
+    guard_map = {
+        "create": "create",
+        "update": "update",
+        "delete": "delete",
+        "read": "retrieve",
+        "list": "list",
+    }
+    reasons: Dict[str, Optional[str]] = {}
+
+    if not user or not getattr(user, "is_authenticated", False):
+        for op in operations.keys():
+            reasons[op] = "Authentification requise."
+        return ModelPermissionMatrix(
+            can_create=False,
+            can_update=False,
+            can_delete=False,
+            can_read=False,
+            can_list=False,
+            reasons=reasons,
+        )
+
+    guard_results: Dict[str, Dict[str, Any]] = {}
+    try:
+        graphql_meta = get_model_graphql_meta(model)
+    except Exception:
+        graphql_meta = None
+
+    if graphql_meta:
+        for guard_name in set(guard_map.values()):
+            guard_results[guard_name] = graphql_meta.describe_operation_guard(
+                guard_name, user=user
+            )
+
+    def evaluate(op: str) -> bool:
+        allowed = user.has_perm(operations[op])
+        reason = None if allowed else f"Permission {operations[op]} requise."
+        guard_name = guard_map.get(op)
+        if guard_name and guard_name in guard_results:
+            guard_info = guard_results[guard_name]
+            if not guard_info.get("allowed", True):
+                allowed = False
+                reason = guard_info.get("reason") or reason
+        if not allowed and reason:
+            reasons[op] = reason
+        return allowed
+
+    matrix = ModelPermissionMatrix(
+        can_create=evaluate("create"),
+        can_update=evaluate("update"),
+        can_delete=evaluate("delete"),
+        can_read=evaluate("read"),
+        can_list=evaluate("list"),
+        reasons=reasons,
+    )
+    return matrix
 
 
 class FieldMetadataType(graphene.ObjectType):
@@ -714,31 +922,24 @@ class FormFieldMetadataType(graphene.ObjectType):
     placeholder = graphene.String(description="Placeholder text for input")
     default_value = graphene.JSONString(description="Default value for the field")
     choices = graphene.List(ChoiceType, description="Field choices")
-    # Django CharField attributes
     max_length = graphene.Int(description="Maximum length for string fields")
     min_length = graphene.Int(description="Minimum length for string fields")
-    # Django DecimalField attributes
     decimal_places = graphene.Int(description="Number of decimal places")
     max_digits = graphene.Int(description="Maximum number of digits")
-    # Django IntegerField/FloatField attributes
     min_value = graphene.Float(description="Minimum value for numeric fields")
     max_value = graphene.Float(description="Maximum value for numeric fields")
-    # Django DateField/DateTimeField attributes
     auto_now = graphene.Boolean(required=True, description="Whether field has auto_now")
     auto_now_add = graphene.Boolean(
         required=True, description="Whether field has auto_now_add"
     )
-    # Common field attributes
     blank = graphene.Boolean(required=True, description="Whether field can be blank")
     null = graphene.Boolean(required=True, description="Whether field can be null")
     unique = graphene.Boolean(
         required=True, description="Whether field has unique constraint"
     )
     editable = graphene.Boolean(required=True, description="Whether field is editable")
-    # Validation attributes
     validators = graphene.List(graphene.String, description="Field validators")
     error_messages = graphene.JSONString(description="Custom error messages")
-    # Form-specific attributes
     disabled = graphene.Boolean(
         required=True, description="Whether field is disabled in form"
     )
@@ -750,8 +951,9 @@ class FormFieldMetadataType(graphene.ObjectType):
     has_permission = graphene.Boolean(
         required=True, description="Whether user has permission to access this field"
     )
-    has_permission = graphene.Boolean(
-        required=True, description="Whether user has permission to access this field"
+    permissions = graphene.Field(
+        FieldPermissionMetadataType,
+        description="Detailed permission metadata for the field",
     )
 
 
@@ -770,7 +972,6 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     is_required = graphene.Boolean(
         required=True, description="Whether field is required"
     )
-    # Related model information
     related_model = graphene.String(
         required=True,
         description="Related model name",
@@ -778,7 +979,6 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     related_app = graphene.String(required=True, description="Related model app")
     to_field = graphene.String(description="Target field name")
     from_field = graphene.String(required=True, description="Source field name")
-    # Relationship characteristics
     many_to_many = graphene.Boolean(
         required=True, description="Whether this is many-to-many"
     )
@@ -791,7 +991,6 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     is_reverse = graphene.Boolean(
         required=True, description="Whether this is a reverse relationship"
     )
-    # Form-specific attributes
     multiple = graphene.Boolean(
         required=True, description="Whether field accepts multiple values"
     )
@@ -800,7 +999,6 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     limit_choices_to = graphene.JSONString(
         description="Limit choices to specific criteria"
     )
-    # UI attributes
     disabled = graphene.Boolean(
         required=True, description="Whether field is disabled in form"
     )
@@ -809,6 +1007,13 @@ class FormRelationshipMetadataType(graphene.ObjectType):
     )
     css_classes = graphene.String(description="CSS classes for form field")
     data_attributes = graphene.JSONString(description="Data attributes for form field")
+    has_permission = graphene.Boolean(
+        required=True, description="Whether user has permission to access this field"
+    )
+    permissions = graphene.Field(
+        FieldPermissionMetadataType,
+        description="Detailed permission metadata for this relationship",
+    )
 
 
 class ModelFormMetadataType(graphene.ObjectType):
@@ -868,6 +1073,10 @@ class ModelFormMetadataType(graphene.ObjectType):
     form_layout = graphene.JSONString(description="Form layout configuration")
     css_classes = graphene.String(description="CSS classes for form")
     form_attributes = graphene.JSONString(description="Form HTML attributes")
+    permissions = graphene.Field(
+        ModelPermissionMatrixType,
+        description="Operation-level permissions for the current user",
+    )
 
 
 class TableFieldMetadataType(graphene.ObjectType):
@@ -888,6 +1097,10 @@ class TableFieldMetadataType(graphene.ObjectType):
         required=True, description="Whether field is a property"
     )
     is_related = graphene.Boolean(required=True, description="Whether field is related")
+    permissions = graphene.Field(
+        FieldPermissionMetadataType,
+        description="Permission metadata for this table column",
+    )
 
 
 class ModelTableType(graphene.ObjectType):
@@ -917,10 +1130,17 @@ class ModelTableType(graphene.ObjectType):
     fields = graphene.List(
         TableFieldMetadataType, required=True, description="All field metadata"
     )
+    generics = graphene.List(
+        TableFieldMetadataType, required=True, description="GenericRelation fields"
+    )
     filters = graphene.List(
         FilterFieldType,
         required=True,
         description="Available filters with field structure",
+    )
+    permissions = graphene.Field(
+        ModelPermissionMatrixType,
+        description="Operation-level permissions for listing and mutations",
     )
 
 
@@ -979,6 +1199,8 @@ class ModelMetadataExtractor:
 
         # Simplified permission flag; adjust with actual permission checks if needed
         has_permission = True
+        is_fsm_field = _is_fsm_field_instance(field)
+        editable_flag = bool(field.editable) and not is_fsm_field
         return FieldMetadata(
             name=field.name,
             field_type=field.__class__.__name__,
@@ -998,7 +1220,7 @@ class ModelMetadataExtractor:
             has_auto_now=getattr(field, "auto_now", False),
             has_auto_now_add=getattr(field, "auto_now_add", False),
             blank=field.blank,
-            editable=field.editable,
+            editable=editable_flag,
             verbose_name=str(field.verbose_name),
             has_permission=has_permission,
         )
@@ -2435,9 +2657,21 @@ class ModelFormMetadataExtractor:
         # Ensure JSONString fields receive JSON-serializable values
         default_value = self._to_json_safe(default_value)
 
-        # Check field permissions using the model from the field
         model = field.model
-        has_permission = self._has_field_permission(user, model, field.name)
+        permission_snapshot = _build_field_permission_snapshot(user, model, field.name)
+        if permission_snapshot and not permission_snapshot.can_read:
+            return None
+        has_permission = permission_snapshot.can_read if permission_snapshot else True
+
+        is_fsm_field = _is_fsm_field_instance(field)
+        editable_flag = bool(field.editable) and not is_fsm_field
+        disabled_flag = not editable_flag
+        readonly_flag = (not editable_flag) or bool(
+            getattr(field, "primary_key", False)
+        )
+        if permission_snapshot and not permission_snapshot.can_write:
+            disabled_flag = True
+            readonly_flag = True
 
         return FormFieldMetadata(
             name=field.name,
@@ -2460,14 +2694,15 @@ class ModelFormMetadataExtractor:
             blank=field.blank,
             null=field.null,
             unique=field.unique,
-            editable=field.editable,
+            editable=editable_flag,
             validators=[],  # TODO: Extract validators
             error_messages={},  # TODO: Extract error messages
             has_permission=has_permission,
-            disabled=not field.editable,
-            readonly=not field.editable or getattr(field, "primary_key", None),
+            disabled=disabled_flag,
+            readonly=readonly_flag,
             css_classes=self._get_css_classes(field),
             data_attributes=self._to_json_safe(self._get_data_attributes(field)),
+            permissions=permission_snapshot,
         )
 
     @cache_metadata(
@@ -2518,9 +2753,11 @@ class ModelFormMetadataExtractor:
         # Determine widget type for relationship
         widget_type = self._get_relationship_widget_type(field)
 
-        # Check permission for relationship field
         model = field.model
-        has_permission = self._has_field_permission(user, model, field.name)
+        permission_snapshot = _build_field_permission_snapshot(user, model, field.name)
+        if permission_snapshot and not permission_snapshot.can_read:
+            return None
+        has_permission = permission_snapshot.can_read if permission_snapshot else True
 
         # Handle verbose_name for reverse relationships
         if hasattr(field, "verbose_name"):
@@ -2591,10 +2828,16 @@ class ModelFormMetadataExtractor:
                 getattr(field, "limit_choices_to", None)
             ),
             has_permission=has_permission,
-            disabled=not field.editable,
-            readonly=not field.editable or getattr(field, "primary_key", None),
+            disabled=(not field.editable)
+            or (permission_snapshot and not permission_snapshot.can_write),
+            readonly=(
+                not field.editable
+                or getattr(field, "primary_key", None)
+                or (permission_snapshot and not permission_snapshot.can_write)
+            ),
             css_classes=self._get_css_classes(field),
             data_attributes=self._to_json_safe(self._get_data_attributes(field)),
+            permissions=permission_snapshot,
         )
 
     @cache_metadata(
@@ -2880,6 +3123,38 @@ class ModelFormMetadataExtractor:
                             nested_form_metadata.is_required = not getattr(
                                 field, "blank", True
                             )
+
+                            # Exclude parent-linking relationships from nested metadata
+                            # Example: when nesting Produit.famille, inside Famille's nested metadata,
+                            # exclude relationships that point back to Produit via to_field == "famille".
+                            try:
+                                parent_app = meta.app_label
+                                parent_model = model.__name__
+                                parent_field_name = field.name
+                                nested_form_metadata.relationships = [
+                                    r
+                                    for r in (nested_form_metadata.relationships or [])
+                                    if not (
+                                        (
+                                            getattr(r, "related_model", None)
+                                            == parent_model
+                                        )
+                                        and (
+                                            getattr(r, "related_app", None)
+                                            == parent_app
+                                        )
+                                        and (
+                                            getattr(r, "to_field", None)
+                                            == parent_field_name
+                                            or getattr(r, "from_field", None)
+                                            == parent_field_name
+                                        )
+                                    )
+                                ]
+                            except Exception:
+                                # If any attribute is missing, skip filtering gracefully
+                                pass
+
                             nested_metadata.append(nested_form_metadata)
                 except Exception as e:
                     logger.warning(
@@ -2915,6 +3190,7 @@ class ModelFormMetadataExtractor:
             form_layout=self._get_form_layout(model),
             css_classes=self._get_form_css_classes(model),
             form_attributes=self._get_form_attributes(model),
+            permissions=_build_model_permission_matrix(model, user),
         )
 
     def _get_form_widget_type(self, field) -> str:
@@ -3138,7 +3414,9 @@ class ModelTableExtractor:
             )
             return None
 
-    def _build_table_field_from_django_field(self, field) -> TableFieldMetadata:
+    def _build_table_field_from_django_field(
+        self, field, user=None
+    ) -> Optional[TableFieldMetadata]:
         from django.db import models
 
         field_type = field.__class__.__name__
@@ -3148,11 +3426,23 @@ class ModelTableExtractor:
             field, (models.ForeignKey, models.OneToOneField, models.ManyToManyField)
         )
 
+        permission_snapshot = (
+            _build_field_permission_snapshot(user, field.model, field.name)
+            if user is not None
+            else None
+        )
+        if permission_snapshot and not permission_snapshot.can_read:
+            return None
+
+        editable_flag = getattr(field, "editable", True)
+        if permission_snapshot and not permission_snapshot.can_write:
+            editable_flag = False
+
         return TableFieldMetadata(
             name=field.name,
             accessor=field.name,
             display=f"{field.name}.desc" if is_related else field.name,
-            editable=getattr(field, "editable", True),
+            editable=editable_flag,
             field_type=field_type,
             filterable=True,
             sortable=True,
@@ -3160,6 +3450,7 @@ class ModelTableExtractor:
             helpText=help_text,
             is_property=False,
             is_related=is_related,
+            permissions=permission_snapshot,
         )
 
     def _build_table_field_for_property(
@@ -3328,31 +3619,31 @@ class ModelTableExtractor:
         exclude_lookup: Optional[List[str]] = None,
         user=None,
     ) -> Optional[ModelTableMetadata]:
-        # TTL cache lookup for model_table metadata
-        try:
-            cache_key = _make_table_cache_key(
-                self.schema_name,
-                app_name,
-                model_name,
-                counts,
-                exclude=exclude or [],
-                only=only or [],
-                include_nested=include_nested,
-                only_lookup=only_lookup or [],
-                exclude_lookup=exclude_lookup or [],
-            )
-            now = time.time()
-            with _table_cache_lock:
-                entry = _table_cache.get(cache_key)
-                if entry and entry.get("expires_at", 0) > now:
-                    _table_cache_stats["hits"] += 1
-                    cached = entry.get("value")
-                    if cached is not None:
-                        return cached
-                _table_cache_stats["misses"] += 1
-        except Exception:
-            # Do not fail metadata resolution due to cache issues
-            pass
+        user_authenticated = bool(user and getattr(user, "is_authenticated", False))
+        if not user_authenticated:
+            try:
+                cache_key = _make_table_cache_key(
+                    self.schema_name,
+                    app_name,
+                    model_name,
+                    counts,
+                    exclude=exclude or [],
+                    only=only or [],
+                    include_nested=include_nested,
+                    only_lookup=only_lookup or [],
+                    exclude_lookup=exclude_lookup or [],
+                )
+                now = time.time()
+                with _table_cache_lock:
+                    entry = _table_cache.get(cache_key)
+                    if entry and entry.get("expires_at", 0) > now:
+                        _table_cache_stats["hits"] += 1
+                        cached = entry.get("value")
+                        if cached is not None:
+                            return cached
+                    _table_cache_stats["misses"] += 1
+            except Exception:
+                pass
 
         model = self._get_model(app_name, model_name)
         if not model:
@@ -3418,8 +3709,8 @@ class ModelTableExtractor:
         ]
         managed = bool(getattr(meta, "managed", True))
 
-        # Field metadata: include concrete fields
         table_fields: List[TableFieldMetadata] = []
+        generic_fields: List[TableFieldMetadata] = []
 
         # For polymorphic models, we need to handle inheritance hierarchy properly
         # to ensure fields from all parent classes are included in child metadata
@@ -3453,7 +3744,21 @@ class ModelTableExtractor:
                 and not getattr(f, "auto_created", False)
             ):
                 try:
-                    table_fields.append(self._build_table_field_from_django_field(f))
+                    try:
+                        from django.contrib.contenttypes.fields import GenericRelation
+
+                        if isinstance(f, GenericRelation):
+                            meta_val = self._build_table_field_from_django_field(
+                                f, user=user
+                            )
+                            if meta_val:
+                                generic_fields.append(meta_val)
+                            continue
+                    except Exception:
+                        pass
+                    field_meta = self._build_table_field_from_django_field(f, user=user)
+                    if field_meta:
+                        table_fields.append(field_meta)
                 except Exception as e:
                     logger.warning(f"Unable to build field metadata for {f.name}: {e}")
         # Properties from introspector should not surface polymorphic/internal links
@@ -4046,31 +4351,33 @@ class ModelTableExtractor:
             managers=managers,
             managed=managed,
             fields=table_fields,
+            generics=generic_fields,
             filters=filters,
+            permissions=_build_model_permission_matrix(model, user),
         )
         # Store in TTL cache
-        try:
-            timeout = _get_table_cache_timeout()
-            cache_key = _make_table_cache_key(
-                self.schema_name,
-                app_name,
-                model_name,
-                counts,
-                exclude=exclude or [],
-                only=only or [],
-                include_nested=include_nested,
-                only_lookup=only_lookup or [],
-                exclude_lookup=exclude_lookup or [],
-            )
-            with _table_cache_lock:
-                _table_cache[cache_key] = {
-                    "value": metadata,
-                    "expires_at": time.time() + timeout,
-                }
-                _table_cache_stats["sets"] += 1
-        except Exception:
-            # Do not prevent returning metadata due to cache issues
-            pass
+        if not user_authenticated:
+            try:
+                timeout = _get_table_cache_timeout()
+                cache_key = _make_table_cache_key(
+                    self.schema_name,
+                    app_name,
+                    model_name,
+                    counts,
+                    exclude=exclude or [],
+                    only=only or [],
+                    include_nested=include_nested,
+                    only_lookup=only_lookup or [],
+                    exclude_lookup=exclude_lookup or [],
+                )
+                with _table_cache_lock:
+                    _table_cache[cache_key] = {
+                        "value": metadata,
+                        "expires_at": time.time() + timeout,
+                    }
+                    _table_cache_stats["sets"] += 1
+            except Exception:
+                pass
         return metadata
 
 

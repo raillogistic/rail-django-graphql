@@ -389,7 +389,6 @@ class SchemaSettings:
         schema_settings = _get_schema_registry_settings(schema_name).get(
             "schema_settings", {}
         )
-        print("qmqmmmmmmmmmmmmmmmmmm", schema_name, schema_settings)
         # Also check for direct schema-level settings (backward compatibility)
         schema_registry_settings = _get_schema_registry_settings(schema_name)
         direct_settings = {

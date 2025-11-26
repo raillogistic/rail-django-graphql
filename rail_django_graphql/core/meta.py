@@ -243,6 +243,7 @@ class GraphQLMeta:
         """
 
         self.model_class = model_class
+        self.model_label = getattr(model_class._meta, "label_lower", model_class.__name__.lower())
         self._meta_config = self._resolve_meta_class(model_class)
 
         self.filtering: FilteringConfig = self._build_filtering_config()
@@ -635,7 +636,7 @@ class GraphQLMeta:
             condition = self._resolve_condition_callable(guard.condition)
             rule = FieldPermissionRule(
                 field_name=guard.field,
-                model_name=self.model_class.__name__,
+                model_name=self.model_label,
                 access_level=access_level,
                 visibility=visibility,
                 condition=condition,
@@ -879,6 +880,90 @@ class GraphQLMeta:
                 guard.deny_message
                 or f"Operation '{operation}' is not permitted on {self.model_class.__name__}"
             )
+
+    def describe_operation_guard(
+        self,
+        operation: str,
+        *,
+        user: Optional[Any] = None,
+        instance: Optional[models.Model] = None,
+    ) -> Dict[str, Any]:
+        """
+        Evaluate the configured access guard for a given operation without raising.
+
+        Returns a dictionary describing whether the guard allowed access and any reason otherwise.
+        """
+        guard = self._operation_guards.get(operation) or self._operation_guards.get("*")
+        if not guard:
+            return {"guarded": False, "allowed": True, "reason": None}
+
+        security = _load_security_components()
+        role_mgr = security["role_manager"]
+
+        if guard.allow_anonymous:
+            return {"guarded": True, "allowed": True, "reason": None}
+
+        if guard.require_authentication and not (user and user.is_authenticated):
+            return {
+                "guarded": True,
+                "allowed": False,
+                "reason": guard.deny_message
+                or "Authentification requise pour accéder à cette opération.",
+            }
+
+        criteria_results: List[bool] = []
+        failure_reasons: List[str] = []
+
+        if guard.roles:
+            try:
+                user_roles = set(role_mgr.get_user_roles(user))
+            except Exception:
+                user_roles = set()
+            role_allowed = bool(user_roles & set(guard.roles))
+            criteria_results.append(role_allowed)
+            if not role_allowed:
+                failure_reasons.append("Rôle requis manquant")
+
+        if guard.permissions:
+            permission_allowed = any(user.has_perm(perm) for perm in guard.permissions)
+            criteria_results.append(permission_allowed)
+            if not permission_allowed:
+                failure_reasons.append("Permission manquante")
+
+        if guard.condition:
+            condition_callable = self._resolve_condition_callable(guard.condition)
+            if condition_callable:
+                try:
+                    condition_allowed = bool(
+                        condition_callable(
+                            user=user,
+                            operation=operation,
+                            info=None,
+                            instance=instance,
+                            model=self.model_class,
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.warning(
+                        "Error evaluating guard condition '%s' on %s: %s",
+                        guard.name,
+                        self.model_class.__name__,
+                        exc,
+                    )
+                    condition_allowed = False
+                criteria_results.append(condition_allowed)
+                if not condition_allowed:
+                    failure_reasons.append("Condition d'accès non satisfaite")
+
+        if not criteria_results:
+            return {"guarded": True, "allowed": True, "reason": None}
+
+        match = guard.match.lower()
+        allowed = all(criteria_results) if match == "all" else any(criteria_results)
+        reason = None
+        if not allowed:
+            reason = guard.deny_message or "; ".join(failure_reasons) or "Accès refusé."
+        return {"guarded": True, "allowed": allowed, "reason": reason}
 
     def should_expose_field(self, field_name: str, *, for_input: bool = False) -> bool:
         """

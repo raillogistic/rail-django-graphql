@@ -744,8 +744,15 @@ class TypeGenerator:
             ):
                 continue
 
-            # Skip id field for create and update mutations (id is passed as separate argument for updates)
             if field_name == "id":
+                # Keep ID only for update mutations so the identifier travels inside the input payload
+                if mutation_type != "update":
+                    continue
+
+                field_type = self._get_input_field_type(field_info.field_type) or graphene.ID
+                input_fields[field_name] = graphene.InputField(
+                    graphene.NonNull(field_type), description=field_info.help_text
+                )
                 continue
 
             # Get field type, fallback to handle_custom_fields if not in mapping
@@ -778,8 +785,7 @@ class TypeGenerator:
                     and not partial
                 )
             else:  # update
-                # For updates, only id is required regardless of partial flag
-                # All other fields are optional for partial updates
+                # For updates, all non-id fields remain optional to support partial updates
                 is_required = self._should_field_be_required_for_update(
                     field_name, field_info, model
                 )

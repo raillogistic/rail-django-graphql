@@ -12,16 +12,20 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 from functools import wraps
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type, Union
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group, Permission
-from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from graphql import GraphQLError
 
 if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractUser
+    from django.contrib.auth.models import AbstractUser, Group
+
+
+def _get_group_model():
+    """Lazy import to avoid AppRegistryNotReady during Django setup."""
+    from django.contrib.auth.models import Group
+
+    return Group
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +79,7 @@ class RoleManager:
         self._roles_cache = {}
         self._permissions_cache = {}
         self._role_hierarchy = {}
+        self._model_roles_registry: Set[str] = set()
 
         # Rôles système prédéfinis
         self.system_roles = {
@@ -137,6 +142,9 @@ class RoleManager:
         Args:
             role_definition: Définition du rôle à enregistrer
         """
+        if role_definition.name in self.system_roles or role_definition.name in self._roles_cache:
+            logger.debug("Le rôle '%s' est déjà enregistré", role_definition.name)
+            return
         self._roles_cache[role_definition.name] = role_definition
 
         # Construire la hiérarchie
@@ -144,6 +152,58 @@ class RoleManager:
             self._role_hierarchy[role_definition.name] = role_definition.parent_roles
 
         logger.info(f"Rôle '{role_definition.name}' enregistré")
+
+    def register_default_model_roles(self, model_class: Type[models.Model]):
+        """Crée des rôles CRUD par défaut pour un modèle installé."""
+
+        if not model_class or model_class._meta.abstract or model_class._meta.auto_created:
+            return
+
+        model_label = model_class._meta.label_lower
+        if model_label in self._model_roles_registry:
+            return
+
+        app_label = model_class._meta.app_label
+        model_name = model_class._meta.model_name
+        base_role_name = model_label.replace('.', '_')
+
+        permissions = {
+            'view': f"{app_label}.view_{model_name}",
+            'add': f"{app_label}.add_{model_name}",
+            'change': f"{app_label}.change_{model_name}",
+            'delete': f"{app_label}.delete_{model_name}",
+        }
+
+        default_roles = [
+            RoleDefinition(
+                name=f"{base_role_name}_viewer",
+                description=f"Lecture du modèle {model_label}",
+                role_type=RoleType.BUSINESS,
+                permissions=[permissions['view']],
+            ),
+            RoleDefinition(
+                name=f"{base_role_name}_editor",
+                description=f"Gestion de base du modèle {model_label}",
+                role_type=RoleType.BUSINESS,
+                permissions=[permissions['view'], permissions['add'], permissions['change']],
+            ),
+            RoleDefinition(
+                name=f"{base_role_name}_manager",
+                description=f"Administration complète du modèle {model_label}",
+                role_type=RoleType.BUSINESS,
+                permissions=[
+                    permissions['view'],
+                    permissions['add'],
+                    permissions['change'],
+                    permissions['delete'],
+                ],
+            ),
+        ]
+
+        for role_def in default_roles:
+            self.register_role(role_def)
+
+        self._model_roles_registry.add(model_label)
 
     def get_role_definition(self, role_name: str) -> Optional[RoleDefinition]:
         """
@@ -377,13 +437,15 @@ class RoleManager:
             raise ValueError(f"Rôle '{role_name}' non trouvé")
 
         # Vérifier les limites de rôle
+        group_model = _get_group_model()
+
         if role_def.max_users:
-            current_count = Group.objects.get(name=role_name).user_set.count()
+            current_count = group_model.objects.get(name=role_name).user_set.count()
             if current_count >= role_def.max_users:
                 raise ValueError(f"Limite d'utilisateurs atteinte pour le rôle '{role_name}'")
 
         # Créer le groupe Django si nécessaire
-        group, created = Group.objects.get_or_create(name=role_name)
+        group, created = group_model.objects.get_or_create(name=role_name)
         user.groups.add(group)
 
         # Cache removed: no invalidation needed
@@ -398,14 +460,16 @@ class RoleManager:
             user: Utilisateur
             role_name: Nom du rôle à retirer
         """
+        group_model = _get_group_model()
+
         try:
-            group = Group.objects.get(name=role_name)
+            group = group_model.objects.get(name=role_name)
             user.groups.remove(group)
 
             # Cache removed: no invalidation needed
 
             logger.info(f"Rôle '{role_name}' retiré de l'utilisateur {user.username}")
-        except Group.DoesNotExist:
+        except group_model.DoesNotExist:
             logger.warning(f"Groupe '{role_name}' non trouvé")
 
 
