@@ -762,9 +762,13 @@ def _build_model_permission_matrix(
         allowed = user.has_perm(operations[op])
         reason = None if allowed else f"Permission {operations[op]} requise."
         guard_name = guard_map.get(op)
-        if guard_name and guard_name in guard_results:
-            guard_info = guard_results[guard_name]
-            if not guard_info.get("allowed", True):
+        guard_info = guard_results.get(guard_name) if guard_name else None
+        if guard_info:
+            guard_allowed = guard_info.get("allowed", True)
+            if guard_allowed:
+                allowed = True
+                reason = None
+            else:
                 allowed = False
                 reason = guard_info.get("reason") or reason
         if not allowed and reason:
