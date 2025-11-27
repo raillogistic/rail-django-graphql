@@ -23,6 +23,7 @@ from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
 from ..core.security import get_authz_manager
 from ..core.settings import QueryGeneratorSettings
+from ..security.field_permissions import mask_sensitive_fields
 from ..extensions.optimization import (
     QueryOptimizationConfig,
     get_optimizer,
@@ -117,6 +118,43 @@ class QueryGenerator:
     def filter_generator(self):
         """Access to the filter generator instance."""
         return self._filter_generator
+
+    def _apply_field_masks(
+        self,
+        data: Union[models.Model, List[models.Model]],
+        info: graphene.ResolveInfo,
+        model: Type[models.Model],
+    ):
+        """Hide or mask fields based on field-level permissions."""
+        context_user = getattr(getattr(info, "context", None), "user", None)
+        if (
+            not context_user
+            or not getattr(context_user, "is_authenticated", False)
+            or context_user.is_superuser
+        ):
+            return data
+
+        def mask_instance(instance: models.Model):
+            if not isinstance(instance, models.Model):
+                return instance
+            field_defs = list(instance._meta.concrete_fields)
+            field_names = [field.name for field in field_defs]
+            snapshot = {name: getattr(instance, name, None) for name in field_names}
+            masked = mask_sensitive_fields(
+                snapshot, context_user, model, instance=instance
+            )
+            for field in field_defs:
+                name = field.name
+                attname = getattr(field, "attname", name)
+                if name in masked:
+                    instance.__dict__[attname] = masked[name]
+                else:
+                    instance.__dict__[attname] = None
+            return instance
+
+        if isinstance(data, list):
+            return [mask_instance(item) for item in data]
+        return mask_instance(data)
 
     def _apply_count_annotations_for_ordering(
         self,
@@ -308,7 +346,7 @@ class QueryGenerator:
                 graphql_meta.ensure_operation_access(
                     "retrieve", info=info, instance=instance
                 )
-                return instance
+                return self._apply_field_masks(instance, info, model)
             except model.DoesNotExist:
                 return None
 
@@ -407,13 +445,13 @@ class QueryGenerator:
                         items = items[offset : offset + limit]
                     elif limit is not None:
                         items = items[:limit]
-                    return items
+                    return self._apply_field_masks(items, info, model)
                 else:
                     if offset is not None and limit is not None:
                         queryset = queryset[offset : offset + limit]
                     elif limit is not None:
                         queryset = queryset[:limit]
-                    return queryset
+                    return self._apply_field_masks(list(queryset), info, model)
 
             # Define arguments for the query
             arguments = {}
@@ -629,6 +667,7 @@ class QueryGenerator:
                 has_previous_page=page > 1,
             )
 
+            items = self._apply_field_masks(items, info, model)
             # Return a simple object with the required attributes
             return PaginatedResult(items=items, page_info=page_info)
 

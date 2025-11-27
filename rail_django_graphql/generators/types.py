@@ -258,6 +258,20 @@ class TypeGenerator:
                 self._meta_cache[model] = None
         return self._meta_cache[model]
 
+    def _get_maskable_fields(self, model: Type[models.Model]) -> set:
+        meta = self._get_model_meta(model)
+        if not meta or not getattr(meta, "access_config", None):
+            return set()
+        maskable: set = set()
+        for rule in getattr(meta.access_config, "fields", []):
+            visibility = getattr(rule, "visibility", "visible")
+            access = getattr(rule, "access", "read")
+            if str(visibility).lower() in {"hidden", "masked", "redacted"} or str(
+                access
+            ).lower() not in {"read", "all"}:
+                maskable.add(rule.field)
+        return maskable
+
     def _should_field_be_required_for_create(
         self,
         field_info: "FieldInfo",
@@ -411,6 +425,7 @@ class TypeGenerator:
         introspector = ModelIntrospector(model)
         fields = introspector.get_model_fields()
         relationships = introspector.get_model_relationships()
+        maskable_fields = self._get_maskable_fields(model)
 
         # Get excluded fields for this model
         exclude_fields = self._get_excluded_fields(model)
@@ -450,6 +465,15 @@ class TypeGenerator:
         for field_name, field_info in fields.items():
             if not self._should_include_field(model, field_name):
                 continue
+            if field_name in maskable_fields:
+                try:
+                    django_field = model._meta.get_field(field_name)
+                    graphql_type = self.FIELD_TYPE_MAP.get(
+                        type(django_field), graphene.String
+                    )
+                    type_attrs[field_name] = graphene.Field(graphql_type)
+                except Exception:
+                    pass
             resolver_name = f"resolve_{field_name}"
             if hasattr(self, resolver_name):
                 type_attrs[resolver_name] = getattr(self, resolver_name)

@@ -301,10 +301,13 @@ class FieldPermissionManager:
                 return rule.access_level
 
         # Accès par défaut basé sur les permissions Django
-        if context.instance:
-            model_class = context.instance.__class__
-            app_label = model_class._meta.app_label
-            model_name_lower = model_class._meta.model_name
+        target_model = context.model_class
+        if target_model is None and context.instance is not None:
+            target_model = context.instance.__class__
+
+        if target_model is not None:
+            app_label = target_model._meta.app_label
+            model_name_lower = target_model._meta.model_name
 
             if context.operation_type in ["create", "update", "delete"]:
                 perm_name = f"{app_label}.change_{model_name_lower}"
@@ -315,7 +318,8 @@ class FieldPermissionManager:
             if context.user.has_perm(perm_name):
                 return FieldAccessLevel.READ
 
-        return FieldAccessLevel.NONE
+        # Fallback: permettre la lecture si aucune règle spécifique n'existe
+        return FieldAccessLevel.READ
 
     def get_field_visibility(
         self, context: FieldContext
