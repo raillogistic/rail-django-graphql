@@ -1533,6 +1533,9 @@ class AdvancedFilterGenerator:
         except:
             pass
 
+        if not related_model:
+            return nested_filters
+
         # Track performance optimization suggestions
         optimization_suggestions = []
 
@@ -2323,12 +2326,6 @@ class AdvancedFilterGenerator:
             f"{field_name}": NumberFilter(
                 field_name=field_name, help_text=f"Filtrer par ID de {field_name}"
             ),
-            f"{field_name}__in": django_filters.ModelMultipleChoiceFilter(
-                field_name=field_name,
-                queryset=related_model.objects.all(),
-                to_field_name="pk",
-                help_text=f"Filtrer par plusieurs ID de {field_name}",
-            ),
             f"{field_name}__isnull": BooleanFilter(
                 field_name=field_name,
                 lookup_expr="isnull",
@@ -2356,6 +2353,14 @@ class AdvancedFilterGenerator:
                 help_text=f"Filtrer par le nombre de relations {field_name} inférieur ou égal à",
             ),
         }
+
+        if related_model:
+            filters[f"{field_name}__in"] = django_filters.ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                to_field_name="pk",
+                help_text=f"Filtrer par plusieurs ID de {field_name}",
+            )
 
         return filters
 
@@ -2804,7 +2809,7 @@ class AdvancedFilterGenerator:
         """
         filters = {}
 
-        if depth >= max_depth:
+        if depth >= max_depth or related_model is None:
             return filters
 
         # Get all fields from the related model
@@ -3009,42 +3014,52 @@ class AdvancedFilterGenerator:
         self, field_name: str, field
     ) -> Dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship foreign key fields."""
-        return {
-            f"{field_name}": ModelChoiceFilter(
-                field_name=field_name,
-                queryset=field.related_model.objects.all(),
-                help_text=f"Filter by {field_name} foreign key",
-            ),
-            f"{field_name}__in": ModelMultipleChoiceFilter(
-                field_name=field_name,
-                queryset=field.related_model.objects.all(),
-                to_field_name="pk",
-                help_text=f"Filter by multiple {field_name} foreign key IDs",
-            ),
+        filters: Dict[str, django_filters.Filter] = {
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
                 help_text=f"Filter by whether {field_name} is null",
             ),
         }
 
+        related_model = getattr(field, "related_model", None)
+        if related_model:
+            filters[f"{field_name}"] = ModelChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                help_text=f"Filter by {field_name} foreign key",
+            )
+            filters[f"{field_name}__in"] = ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} foreign key IDs",
+            )
+
+        return filters
+
     def _generate_reverse_many_to_many_filters(
         self, field_name: str, field
     ) -> Dict[str, django_filters.Filter]:
         """Generate filters for reverse relationship many-to-many fields."""
-        return {
-            f"{field_name}": ModelMultipleChoiceFilter(
-                field_name=field_name,
-                queryset=field.related_model.objects.all(),
-                help_text=f"Filter by {field_name} many-to-many relationship",
-            ),
-            f"{field_name}__in": ModelMultipleChoiceFilter(
-                field_name=field_name,
-                queryset=field.related_model.objects.all(),
-                to_field_name="pk",
-                help_text=f"Filter by multiple {field_name} many-to-many IDs",
-            ),
+        filters: Dict[str, django_filters.Filter] = {
             f"{field_name}__isnull": BooleanFilter(
                 field_name=f"{field_name}__isnull",
                 help_text=f"Filter by whether {field_name} has any related objects",
             ),
         }
+
+        related_model = getattr(field, "related_model", None)
+        if related_model:
+            filters[f"{field_name}"] = ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                help_text=f"Filter by {field_name} many-to-many relationship",
+            )
+            filters[f"{field_name}__in"] = ModelMultipleChoiceFilter(
+                field_name=field_name,
+                queryset=related_model.objects.all(),
+                to_field_name="pk",
+                help_text=f"Filter by multiple {field_name} many-to-many IDs",
+            )
+
+        return filters
