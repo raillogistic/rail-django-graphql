@@ -4467,6 +4467,23 @@ class ModelMetadataQuery(graphene.ObjectType):
         description="Get comprehensive table metadata for a Django model",
     )
 
+    app_models = graphene.List(
+        ModelMetadataType,
+        app_name=graphene.String(required=True, description="Django app name"),
+        nested_fields=graphene.Boolean(
+            default_value=True,
+            description="Include nested relationship metadata for each model",
+        ),
+        permissions_included=graphene.Boolean(
+            default_value=True,
+            description="Include permission metadata when the user is authenticated",
+        ),
+        max_depth=graphene.Int(
+            default_value=1, description="Maximum relationship depth to explore"
+        ),
+        description="Return the metadata for every model declared in the specified Django app.",
+    )
+
     def resolve_model_metadata(
         self,
         info,
@@ -4587,6 +4604,57 @@ class ModelMetadataQuery(graphene.ObjectType):
 
         # Return dataclass directly for Graphene to resolve attributes
         return metadata
+
+    def resolve_app_models(
+        self,
+        info,
+        app_name: str,
+        nested_fields: bool = True,
+        permissions_included: bool = True,
+        max_depth: int = 1,
+    ) -> List[ModelMetadataType]:
+        """
+        Resolve metadata for every model inside the provided Django app.
+
+        Args:
+            info: GraphQL resolve info
+            app_name: Django app label
+            nested_fields: Include relationship metadata
+            permissions_included: Include permission information when user is authenticated
+            max_depth: Maximum relationship depth for related metadata
+        """
+
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            permissions_included = False
+
+        try:
+            app_config = apps.get_app_config(app_name)
+        except LookupError:
+            logger.warning("app_models requested for unknown app '%s'", app_name)
+            return []
+
+        extractor = ModelMetadataExtractor(max_depth=max_depth)
+        models_metadata: List[ModelMetadataType] = []
+        for model in app_config.get_models():
+            try:
+                metadata = extractor.extract_model_metadata(
+                    app_name=app_name,
+                    model_name=model.__name__,
+                    user=user,
+                    nested_fields=nested_fields,
+                    permissions_included=permissions_included,
+                )
+                if metadata is not None:
+                    models_metadata.append(metadata)
+            except Exception as exc:
+                logger.warning(
+                    "Failed to load metadata for %s.%s: %s",
+                    app_name,
+                    model.__name__,
+                    exc,
+                )
+        return models_metadata
 
 
 # Cache invalidation signals - only invalidate when models actually change
