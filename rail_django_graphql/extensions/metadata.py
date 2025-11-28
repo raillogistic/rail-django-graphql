@@ -668,6 +668,7 @@ class ModelTableMetadata:
     generics: List[TableFieldMetadata]
     filters: List[Dict[str, Any]]
     permissions: Optional[ModelPermissionMatrix] = None
+    mutations: List[MutationMetadata] = field(default_factory=list)
 
 
 def _build_field_permission_snapshot(
@@ -1145,6 +1146,10 @@ class ModelTableType(graphene.ObjectType):
     permissions = graphene.Field(
         ModelPermissionMatrixType,
         description="Operation-level permissions for listing and mutations",
+    )
+    mutations = graphene.List(
+        MutationMetadataType,
+        description="Available GraphQL mutations relevant to this model",
     )
 
 
@@ -3408,6 +3413,7 @@ class ModelTableExtractor:
 
     def __init__(self, schema_name: str = "default"):
         self.schema_name = schema_name
+        self.metadata_extractor = ModelMetadataExtractor(schema_name=schema_name)
 
     def _get_model(self, app_name: str, model_name: str):
         try:
@@ -3655,6 +3661,16 @@ class ModelTableExtractor:
 
         meta = model._meta
         introspector = ModelIntrospector(model, self.schema_name)
+        try:
+            mutations = self.metadata_extractor.extract_mutations_metadata(model)
+        except Exception as exc:
+            logger.warning(
+                "Unable to extract mutations metadata for %s.%s: %s",
+                app_name,
+                model_name,
+                exc,
+            )
+            mutations = []
 
         # Detect polymorphic/multi-table inheritance and hide OneToOne relations
         # to avoid exposing parent/child or sibling pointers in table columns.
@@ -4358,6 +4374,7 @@ class ModelTableExtractor:
             generics=generic_fields,
             filters=filters,
             permissions=_build_model_permission_matrix(model, user),
+            mutations=mutations,
         )
         # Store in TTL cache
         if not user_authenticated:
