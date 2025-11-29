@@ -537,6 +537,7 @@ class PermissionInfo(graphene.ObjectType):
     """Informations sur les permissions d'un utilisateur."""
 
     model_name = graphene.String(description="Nom du modèle")
+    verbose_name = graphene.String(description="Nom verbeux du modèle")
     can_create = graphene.Boolean(description="Peut créer")
     can_read = graphene.Boolean(description="Peut lire")
     can_update = graphene.Boolean(description="Peut modifier")
@@ -588,6 +589,7 @@ class PermissionQuery(graphene.ObjectType):
             permissions.append(
                 PermissionInfo(
                     model_name=model_label,
+                    verbose_name=str(model._meta.verbose_name),
                     can_create=permission_manager.check_operation_permission(
                         user, model_label, OperationType.CREATE
                     ).allowed,

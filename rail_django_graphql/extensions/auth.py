@@ -7,10 +7,11 @@ for login, register, token refresh, and user management.
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import graphene
 import jwt
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
@@ -21,16 +22,81 @@ from graphene_django import DjangoObjectType
 if TYPE_CHECKING:
     from django.contrib.auth.models import AbstractUser
 
+from ..security.rbac import role_manager
+from ..extensions.permissions import (
+    OperationType,
+    PermissionInfo,
+    permission_manager,
+)
+
 logger = logging.getLogger(__name__)
 
 # User model will be retrieved dynamically when needed
 
 
-def get_user_type():
-    """Factory function to create UserType with proper model reference."""
+def _get_effective_permissions(user: "AbstractUser") -> List[str]:
+    """Return a sorted list of effective permissions for a user."""
+    if not user:
+        return []
 
-    class UserType(DjangoObjectType):
-        """GraphQL type for Django User model."""
+    try:
+        permissions = role_manager.get_effective_permissions(user)
+        return sorted(permissions)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Impossible de récupérer les permissions de %s: %s", user, exc)
+        return []
+
+
+def _build_model_permission_snapshot(user: "AbstractUser") -> List[PermissionInfo]:
+    """Return model-level CRUD permissions for a user."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return []
+
+    permissions: List[PermissionInfo] = []
+    for model in apps.get_models():
+        model_label = model._meta.label_lower
+        permissions.append(
+            PermissionInfo(
+                model_name=model_label,
+                verbose_name=str(model._meta.verbose_name),
+                can_create=permission_manager.check_operation_permission(
+                    user, model_label, OperationType.CREATE
+                ).allowed,
+                can_read=permission_manager.check_operation_permission(
+                    user, model_label, OperationType.READ
+                ).allowed,
+                can_update=permission_manager.check_operation_permission(
+                    user, model_label, OperationType.UPDATE
+                ).allowed,
+                can_delete=permission_manager.check_operation_permission(
+                    user, model_label, OperationType.DELETE
+                ).allowed,
+                can_list=permission_manager.check_operation_permission(
+                    user, model_label, OperationType.LIST
+                ).allowed,
+            )
+        )
+
+    return permissions
+
+
+def get_authenticated_user_type():
+    """Factory function to create the GraphQL type exposed by auth queries."""
+
+    class AuthenticatedUserType(DjangoObjectType):
+        """GraphQL type for authenticated user payloads."""
+
+        permissions = graphene.List(
+            graphene.String, description="Permissions effectives de l'utilisateur"
+        )
+        model_permissions = graphene.List(
+            PermissionInfo,
+            description="Permissions CRUD détaillées par modèle",
+        )
+        desc = graphene.String(description="Description de l'utilisateur")
+
+        def resolve_desc(self, info):
+            return self.get_full_name()
 
         class Meta:
             model = get_user_model()
@@ -40,24 +106,32 @@ def get_user_type():
                 "email",
                 "first_name",
                 "last_name",
+                "is_staff",
+                "is_superuser",
                 "is_active",
                 "date_joined",
                 "last_login",
             )
 
-    return UserType
+        def resolve_permissions(self, info):
+            return _get_effective_permissions(self)
+
+        def resolve_model_permissions(self, info):
+            return _build_model_permission_snapshot(self)
+
+    return AuthenticatedUserType
 
 
 # Create a lazy reference that will be resolved when needed
-_user_type = None
+_authenticated_user_type = None
 
 
 def UserType():
     """Lazy UserType that resolves the model when Django apps are ready."""
-    global _user_type
-    if _user_type is None:
-        _user_type = get_user_type()
-    return _user_type
+    global _authenticated_user_type
+    if _authenticated_user_type is None:
+        _authenticated_user_type = get_authenticated_user_type()
+    return _authenticated_user_type
 
 
 class AuthPayload(graphene.ObjectType):
@@ -65,6 +139,10 @@ class AuthPayload(graphene.ObjectType):
 
     ok = graphene.Boolean(required=True, description="Indique si l'opération a réussi")
     user = graphene.Field(lambda: UserType(), description="Utilisateur authentifié")
+    permissions = graphene.List(
+        graphene.String,
+        description="Liste des permissions effectives disponibles pour l'utilisateur",
+    )
     token = graphene.String(description="Token JWT d'authentification")
     refresh_token = graphene.String(description="Token de rafraîchissement")
     expires_at = graphene.DateTime(description="Date d'expiration du token")
@@ -135,12 +213,14 @@ class JWTManager:
             None if access_lifetime <= 0 else now + timedelta(seconds=access_lifetime)
         )
         refresh_expiration = now + timedelta(seconds=refresh_lifetime)
+        permission_snapshot = _get_effective_permissions(user)
 
         payload = {
             "user_id": user.id,
             "username": user.username,
             "iat": now,
             "type": "access",
+            "permissions": permission_snapshot,
         }
         # Only include 'exp' if token should expire
         if expiration is not None:
@@ -162,6 +242,7 @@ class JWTManager:
             "token": token,
             "refresh_token": refresh_token,
             "expires_at": expiration,
+            "permissions": permission_snapshot,
         }
 
     @classmethod
@@ -245,6 +326,7 @@ class LoginMutation(graphene.Mutation):
 
             # Génération du token JWT
             token_data = JWTManager.generate_token(user)
+            permissions = token_data.get("permissions", [])
 
             # Mise à jour de la dernière connexion
             user.last_login = timezone.now()
@@ -258,6 +340,7 @@ class LoginMutation(graphene.Mutation):
                 token=token_data["token"],
                 refresh_token=token_data["refresh_token"],
                 expires_at=token_data["expires_at"],
+                permissions=permissions,
                 errors=[],
             )
 
@@ -335,6 +418,7 @@ class RegisterMutation(graphene.Mutation):
 
             # Génération du token JWT
             token_data = JWTManager.generate_token(user)
+            permissions = token_data.get("permissions", [])
 
             logger.info(f"Inscription réussie pour l'utilisateur: {username}")
 
@@ -344,6 +428,7 @@ class RegisterMutation(graphene.Mutation):
                 token=token_data["token"],
                 refresh_token=token_data["refresh_token"],
                 expires_at=token_data["expires_at"],
+                permissions=permissions,
                 errors=[],
             )
 
@@ -386,6 +471,9 @@ class RefreshTokenMutation(graphene.Mutation):
             payload = JWTManager.verify_token(token_data["token"])
             User = get_user_model()
             user = User.objects.get(id=payload["user_id"])
+            permissions = token_data.get(
+                "permissions", []
+            ) or _get_effective_permissions(user)
 
             return AuthPayload(
                 ok=True,
@@ -393,6 +481,7 @@ class RefreshTokenMutation(graphene.Mutation):
                 token=token_data["token"],
                 refresh_token=token_data["refresh_token"],
                 expires_at=token_data["expires_at"],
+                permissions=permissions,
                 errors=[],
             )
 

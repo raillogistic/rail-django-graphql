@@ -4402,8 +4402,21 @@ class ModelTableExtractor:
         return metadata
 
 
+class AvailableModelType(graphene.ObjectType):
+    """GraphQL type for available models."""
+
+    app_label = graphene.String(required=True, description="App label")
+    model_name = graphene.String(required=True, description="Model name")
+    verbose_name = graphene.String(required=True, description="Verbose name")
+
+
 class ModelMetadataQuery(graphene.ObjectType):
     """GraphQL queries for model metadata."""
+
+    available_models = graphene.List(
+        AvailableModelType,
+        description="List all available models in the project.",
+    )
 
     model_metadata = graphene.Field(
         ModelMetadataType,
@@ -4504,6 +4517,24 @@ class ModelMetadataQuery(graphene.ObjectType):
         ),
         description="Return the metadata for every model declared in the specified Django app.",
     )
+
+    def resolve_available_models(self, info) -> List[AvailableModelType]:
+        """Resolve list of all available models."""
+        available_models = []
+        for app_config in apps.get_app_configs():
+            # Skip django internal apps if needed, or include all
+            # For now, let's include everything but maybe filter out some internals if they are too noisy
+            # But user asked for "list of apps and models", usually implies business apps.
+            # Let's include all for now, frontend can filter.
+            for model in app_config.get_models():
+                available_models.append(
+                    AvailableModelType(
+                        app_label=app_config.label,
+                        model_name=model.__name__,
+                        verbose_name=str(model._meta.verbose_name),
+                    )
+                )
+        return available_models
 
     def resolve_model_metadata(
         self,
