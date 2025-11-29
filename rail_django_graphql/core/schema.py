@@ -393,6 +393,60 @@ class SchemaBuilder:
         )
         logger.debug(f"Mutation fields: {list(self._mutation_fields.keys())}")
 
+    def _load_query_extensions(self) -> List[Type[graphene.ObjectType]]:
+        """
+        Load custom query extensions defined in schema settings.
+        """
+        extension_paths = self._get_schema_setting("query_extensions", [])
+        loaded = []
+        for path in extension_paths or []:
+            if not isinstance(path, str) or not path.strip():
+                continue
+            try:
+                module_path, class_name = path.rsplit(".", 1)
+            except ValueError:
+                logger.warning(
+                    f"Invalid query extension path '{path}' configured for schema '{self.schema_name}'"
+                )
+                continue
+            try:
+                module = importlib.import_module(module_path)
+                query_class = getattr(module, class_name)
+                loaded.append(query_class)
+            except Exception as e:
+                logger.warning(
+                    f"Could not import query extension '{path}' for schema '{self.schema_name}': {e}"
+                )
+        return loaded
+
+    def _attach_query_class_fields(
+        self, query_attrs: Dict[str, Any], query_class: Type[graphene.ObjectType]
+    ) -> None:
+        """
+        Merge fields from a custom query class into the root query attributes.
+        """
+        query_instance = query_class()
+
+        for field_name, field in query_class._meta.fields.items():
+            resolver_method_name = f"resolve_{field_name}"
+            if hasattr(query_instance, resolver_method_name):
+                resolver_method = getattr(query_instance, resolver_method_name)
+
+                def create_resolver_wrapper(method):
+                    def wrapper(root, info, **kwargs):
+                        return method(info, **kwargs)
+
+                    return wrapper
+
+                query_attrs[field_name] = graphene.Field(
+                    field.type,
+                    description=field.description,
+                    resolver=create_resolver_wrapper(resolver_method),
+                    args=getattr(field, "args", None),
+                )
+            else:
+                query_attrs[field_name] = field
+
     def rebuild_schema(self) -> None:
         """
         Rebuilds the entire GraphQL schema.
@@ -431,6 +485,14 @@ class SchemaBuilder:
                 # Create Query type with security extensions
                 query_attrs = {"debug": graphene.Field(DjangoDebug, name="_debug")}
                 query_attrs.update(self._query_fields)
+
+                custom_query_classes = self._load_query_extensions()
+                for query_class in custom_query_classes:
+                    self._attach_query_class_fields(query_attrs, query_class)
+                if custom_query_classes:
+                    logger.info(
+                        f"Custom query extensions integrated into schema '{self.schema_name}': {[cls.__name__ for cls in custom_query_classes]}"
+                    )
 
                 # Add security-related queries with proper resolver binding
                 # Import each extension class individually to avoid a single missing module

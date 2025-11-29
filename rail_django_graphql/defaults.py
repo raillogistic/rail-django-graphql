@@ -33,6 +33,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "auto_camelcase": False,
         "disable_security_mutations": False,
         "show_metadata": False,
+        "query_extensions": [],
     },
     "type_generation_settings": {
         "exclude_fields": {},

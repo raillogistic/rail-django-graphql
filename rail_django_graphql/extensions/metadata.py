@@ -4521,12 +4521,17 @@ class ModelMetadataQuery(graphene.ObjectType):
     def resolve_available_models(self, info) -> List[AvailableModelType]:
         """Resolve list of all available models."""
         available_models = []
+        excluded_apps = ["admin", "auth", "contenttypes", "sessions"]
+
         for app_config in apps.get_app_configs():
-            # Skip django internal apps if needed, or include all
-            # For now, let's include everything but maybe filter out some internals if they are too noisy
-            # But user asked for "list of apps and models", usually implies business apps.
-            # Let's include all for now, frontend can filter.
+            if app_config.label in excluded_apps:
+                continue
+
             for model in app_config.get_models():
+                # Filter out Historical models (django-simple-history)
+                if model.__name__.startswith("Historical"):
+                    continue
+
                 available_models.append(
                     AvailableModelType(
                         app_label=app_config.label,

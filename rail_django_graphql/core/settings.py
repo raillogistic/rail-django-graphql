@@ -367,6 +367,9 @@ class SchemaSettings:
     # Enable model metadata exposure for frontend rich tables and forms
     show_metadata: bool = False
 
+    # Custom GraphQL query extensions loaded by path
+    query_extensions: List[str] = field(default_factory=list)
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
         """
