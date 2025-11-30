@@ -198,18 +198,14 @@ class ModelExporter:
         # Try to use GraphQL filter generator first
         if self.filter_generator:
             try:
-                filter_class = self.filter_generator.generate_filter_set(self.model)
-                filter_instance = filter_class(data=variables, queryset=queryset)
-
-                if filter_instance.is_valid():
-                    filtered_queryset = filter_instance.qs
-                    self.logger.debug(f"Applied GraphQL filters: {variables}")
-                    return filtered_queryset
-                else:
-                    self.logger.warning(
-                        f"GraphQL filter validation failed: {filter_instance.errors}"
-                    )
-                    # Fall back to basic Django filtering
+                # Use apply_complex_filters to handle complex filter structures (AND/OR/NOT)
+                # variables likely contains the 'filters' structure from the frontend
+                filter_input = variables.get("filters", variables)
+                if filter_input is None:
+                    return queryset
+                return self.filter_generator.apply_complex_filters(
+                    queryset, filter_input
+                )
 
             except Exception as e:
                 self.logger.warning(

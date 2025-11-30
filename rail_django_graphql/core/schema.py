@@ -697,8 +697,10 @@ class SchemaBuilder:
                 extension_mutations: Dict[str, Any] = {}
                 try:
                     from ..extensions.health import RefreshSchemaMutation
+                    from ..extensions.audit import LogFrontendAuditMutation
                     extension_mutations.update({
                         "refresh_schema": RefreshSchemaMutation.Field(),
+                        "log_frontend_audit": LogFrontendAuditMutation.Field(),
                     })
                     logger.info(
                         f"Health extension mutations integrated into schema '{self.schema_name}'"

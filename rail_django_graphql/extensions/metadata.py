@@ -9,6 +9,7 @@ import hashlib
 import logging
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Dict, List, Optional, Type, Union
@@ -51,6 +52,45 @@ _table_cache_stats = {
     "deletes": 0,
     "invalidations": 0,
 }
+
+_metadata_version_lock = threading.RLock()
+_metadata_versions: Dict[str, str] = {}
+_global_metadata_seed = str(int(time.time() * 1000))
+
+
+def _generate_metadata_version() -> str:
+    """Generate a monotonic-ish metadata version token."""
+    return f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:6]}"
+
+
+def _metadata_version_scope(app_name: Optional[str], model_name: Optional[str]) -> str:
+    if not app_name or not model_name:
+        return "__global__"
+    return f"{app_name.lower()}:{model_name.lower()}"
+
+
+def _get_metadata_version_value(app_name: str, model_name: str) -> str:
+    """Return the current metadata version for the given model."""
+    scope = _metadata_version_scope(app_name, model_name)
+    with _metadata_version_lock:
+        version = _metadata_versions.get(scope)
+        if version:
+            return version
+        _metadata_versions[scope] = _global_metadata_seed
+        return _global_metadata_seed
+
+
+def _bump_metadata_version(app_name: Optional[str] = None, model_name: Optional[str] = None) -> None:
+    """Advance the metadata version for a specific model or globally."""
+    global _global_metadata_seed
+    token = _generate_metadata_version()
+    with _metadata_version_lock:
+        if app_name and model_name:
+            scope = _metadata_version_scope(app_name, model_name)
+            _metadata_versions[scope] = token
+        else:
+            _global_metadata_seed = token
+            _metadata_versions.clear()
 
 
 def _is_fsm_field_instance(field: Any) -> bool:
@@ -190,6 +230,10 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
                 inner.pop(k, None)
                 _table_cache_stats["deletes"] += 1
         _table_cache_stats["invalidations"] += 1
+    if app_name and model_name:
+        _bump_metadata_version(app_name=app_name, model_name=model_name)
+    else:
+        _bump_metadata_version()
 
 
 def invalidate_cache_on_startup() -> None:
@@ -598,6 +642,7 @@ class FormRelationshipMetadata:
 class ModelFormMetadata:
     """Complete metadata for Django model forms."""
 
+    metadata_version: str
     app_name: str
     model_name: str
     verbose_name: str
@@ -653,6 +698,7 @@ class TableFieldMetadata:
 class ModelTableMetadata:
     """Comprehensive table metadata for a Django model, including fields and filters."""
 
+    metadata_version: str
     app: str
     model: str
     verboseName: str
@@ -1024,6 +1070,11 @@ class FormRelationshipMetadataType(graphene.ObjectType):
 class ModelFormMetadataType(graphene.ObjectType):
     """GraphQL type for complete model form metadata."""
 
+    metadataVersion = graphene.String(
+        required=True,
+        description="Stable metadata version identifier for cache coordination",
+        source="metadata_version",
+    )
     app_name = graphene.String(required=True, description="Django app name")
     model_name = graphene.String(required=True, description="Model class name")
     verbose_name = graphene.String(required=True, description="Model verbose name")
@@ -1111,6 +1162,11 @@ class TableFieldMetadataType(graphene.ObjectType):
 class ModelTableType(graphene.ObjectType):
     """GraphQL type for comprehensive table metadata for a Django model."""
 
+    metadataVersion = graphene.String(
+        required=True,
+        description="Stable metadata version identifier for this table metadata",
+        source="metadata_version",
+    )
     app = graphene.String(required=True, description="Application name")
     model = graphene.String(required=True, description="Model name")
     verboseName = graphene.String(required=True, description="Singular verbose name")
@@ -3182,6 +3238,7 @@ class ModelFormMetadataExtractor:
         visited_models.discard(model_key)
 
         return ModelFormMetadata(
+            metadata_version=_get_metadata_version_value(app_name, model_name),
             app_name=app_name,
             model_name=model_name,
             verbose_name=str(meta.verbose_name),
@@ -4359,6 +4416,7 @@ class ModelTableExtractor:
             filters = []
         # Assemble final metadata
         metadata = ModelTableMetadata(
+            metadata_version=_get_metadata_version_value(app_name, model_name),
             app=app_label,
             model=model_label,
             verboseName=verbose_name,
