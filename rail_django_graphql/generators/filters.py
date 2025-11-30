@@ -2450,12 +2450,33 @@ class AdvancedFilterGenerator:
                 filter_fields[field_name] = graphene.Boolean()
             elif isinstance(filter_instance, ChoiceFilter):
                 filter_fields[field_name] = graphene.String()
-            elif isinstance(filter_instance, ModelMultipleChoiceFilter):
-                 # __in filters rely on multiple choice lists, default to ID list but fall back to Float for numeric filters
-                list_type = graphene.ID
-                if "Number" in filter_instance.__class__.__name__ or "Integer" in filter_instance.__class__.__name__:
+            elif isinstance(
+                filter_instance,
+                (
+                    ModelMultipleChoiceFilter,
+                    django_filters.MultipleChoiceFilter,
+                    django_filters.BaseInFilter,
+                ),
+            ):
+                # __in filters rely on multiple choice lists
+                list_type = graphene.String
+
+                if isinstance(filter_instance, ModelMultipleChoiceFilter):
+                    list_type = graphene.ID
+                elif isinstance(filter_instance, django_filters.BaseInFilter):
+                    # BaseInFilter is typically used for numeric arrays in this generator
                     list_type = graphene.Float
+
+                if (
+                    "Number" in filter_instance.__class__.__name__
+                    or "Integer" in filter_instance.__class__.__name__
+                ):
+                    list_type = graphene.Float
+
                 filter_fields[field_name] = graphene.List(graphene.NonNull(list_type))
+            else:
+                # Fallback for other filter types
+                filter_fields[field_name] = graphene.String()
 
         # Create the complex filter input type
         complex_filter_class = type(

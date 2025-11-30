@@ -414,7 +414,7 @@ class QueryGenerator:
                 basic_filters = {
                     k: v
                     for k, v in kwargs.items()
-                    if k not in ["filters", "order_by", "page", "per_page"]
+                    if k not in ["filters", "order_by", "limit", "offset"]
                 }
                 if basic_filters and filter_class:
                     filterset = filter_class(basic_filters, queryset)
@@ -465,6 +465,10 @@ class QueryGenerator:
             # Add basic filtering arguments if filter class is available
             if filter_class:
                 for name, field in filter_class.base_filters.items():
+                    # Only expose 'quick' filter as a direct argument
+                    if name != "quick":
+                        continue
+
                     field_type = graphene.String  # Default to String
 
                     # Map filter types to GraphQL types
@@ -694,6 +698,10 @@ class QueryGenerator:
         # Add basic filtering arguments if filter class is available (same as list queries)
         if filter_class:
             for name, field in filter_class.base_filters.items():
+                # Only expose 'quick' filter as a direct argument
+                if name != "quick":
+                    continue
+
                 field_type = graphene.String  # Default to String
 
                 # Map filter types to GraphQL types (same logic as list queries)
