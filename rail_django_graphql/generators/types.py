@@ -434,6 +434,7 @@ class TypeGenerator:
         meta_attrs = {
             "model": model,
             "exclude_fields": exclude_fields,
+            "convert_choices_to_enum": False,
             "interfaces": (graphene.relay.Node,)
             if self.settings.generate_filters
             else (),
@@ -477,6 +478,36 @@ class TypeGenerator:
             resolver_name = f"resolve_{field_name}"
             if hasattr(self, resolver_name):
                 type_attrs[resolver_name] = getattr(self, resolver_name)
+
+            # NEW: Check for choices and add _desc field
+            try:
+                django_field = model._meta.get_field(field_name)
+                if hasattr(django_field, "choices") and django_field.choices:
+                    # Force String type to avoid Graphene Enum conversion (which returns names like "KM" instead of values "km")
+                    # We want the raw value for the form to work correctly.
+                    type_attrs[field_name] = graphene.String(description=field_info.help_text)
+
+                    desc_field_name = f"{field_name}_desc"
+                    type_attrs[desc_field_name] = graphene.String(
+                        description=f"Display label for {field_name}"
+                    )
+
+                    # Create resolver closure
+                    def make_desc_resolver(fname):
+                        def resolver(self, info):
+                            # Ensure the method exists (Django adds it for fields with choices)
+                            display_method = getattr(self, f"get_{fname}_display", None)
+                            if display_method:
+                                return display_method()
+                            return getattr(self, fname)
+
+                        return resolver
+
+                    type_attrs[f"resolve_{desc_field_name}"] = make_desc_resolver(
+                        field_name
+                    )
+            except Exception:
+                pass
 
         # Override ManyToMany fields to use direct lists instead of connections
         for field_name, rel_info in relationships.items():
@@ -785,20 +816,10 @@ class TypeGenerator:
                 # Handle custom fields that aren't in FIELD_TYPE_MAP
                 field_type = self.handle_custom_fields(field_info.field_type)
 
-            # If this is a CharField/TextField with choices, generate/use an Enum type
-            try:
-                django_field_obj = model._meta.get_field(field_name)
-            except Exception:
-                django_field_obj = None
-            if (
-                django_field_obj is not None
-                and hasattr(django_field_obj, "choices")
-                and django_field_obj.choices
-                and issubclass(field_info.field_type, (models.CharField, models.TextField))
-            ):
-                enum_type = self._get_or_create_enum_for_field(model, django_field_obj)
-                if enum_type is not None:
-                    field_type = enum_type
+            # If this is a CharField/TextField with choices, we previously generated an Enum.
+            # However, to ensure consistency with metadata values (which use raw values like "km")
+            # and avoid Enum Name mismatches ("KM"), we now force String input for choices
+            # by skipping the enum conversion logic here.
 
             # Determine if field should be required based on mutation type
             if mutation_type == "create":
@@ -1313,20 +1334,8 @@ class TypeGenerator:
             if not field_type:
                 field_type = self.handle_custom_fields(field_info.field_type)
 
-            # If CharField/TextField has choices, use or generate a GraphQL Enum
-            try:
-                django_field_obj = model._meta.get_field(field_name)
-            except Exception:
-                django_field_obj = None
-            if (
-                django_field_obj is not None
-                and hasattr(django_field_obj, "choices")
-                and getattr(django_field_obj, "choices", None)
-                and issubclass(field_info.field_type, (models.CharField, models.TextField))
-            ):
-                enum_type = self._get_or_create_enum_for_field(model, django_field_obj)
-                if enum_type is not None:
-                    field_type = enum_type
+            # If CharField/TextField has choices, we skip Enum generation to ensure
+            # consistency with raw values (e.g. "km") expected by the frontend.
 
             # For nested inputs, make most fields optional to allow partial data
             is_required = False

@@ -35,7 +35,7 @@ class MutationError(graphene.ObjectType):
 
     field = graphene.String(description="Le nom du champ où l'erreur s'est produite")
     message = graphene.String(
-        required=True,
+        required=False,
         description="Le message d'erreur décrivant ce qui s'est mal passé",
     )
 
@@ -234,6 +234,9 @@ class MutationGenerator:
                 Returns:
                     Dict with sanitized data
                 """
+                # Ensure ID is a string if present (handles UUID objects)
+                if "id" in input_data and not isinstance(input_data["id"], str):
+                    input_data["id"] = str(input_data["id"])
 
                 def sanitize_value(value):
                     if isinstance(value, str):
@@ -600,8 +603,6 @@ class MutationGenerator:
                             message=f"Failed to update {model_name}: {str(e)}",
                         )
                     ]
-                    return UpdateMutation(ok=False, object=None, errors=error_objects)
-
             @classmethod
             def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
                 """
@@ -613,6 +614,9 @@ class MutationGenerator:
                 Returns:
                     Dict with sanitized data
                 """
+                # Ensure ID is a string if present (handles UUID objects)
+                if "id" in input_data and not isinstance(input_data["id"], str):
+                    input_data["id"] = str(input_data["id"])
 
                 def sanitize_value(value):
                     if isinstance(value, str):

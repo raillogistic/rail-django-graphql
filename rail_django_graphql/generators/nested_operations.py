@@ -7,6 +7,7 @@ validation, transaction management, and cascade handling for related objects.
 
 import logging
 import re
+import uuid
 from typing import Any, Dict, List, Optional, Set, Type, Union
 
 import graphene
@@ -181,17 +182,15 @@ class NestedOperationHandler:
                         regular_fields[field_name] = self.handle_nested_create(
                             field.related_model, value
                         )
-                elif isinstance(value, (str, int)):
+                elif isinstance(value, (str, int, uuid.UUID)):
                     # Reference to existing object - convert ID to model instance
-                    try:
-                        pk_value = int(value) if isinstance(value, str) else value
-                    except (TypeError, ValueError):
-                        # Explicitly map error to the input field name
-                        raise ValidationError(
-                            {
-                                field_name: f"Field '{field_name}' expected a number but got '{value}'."
-                            }
-                        )
+                    pk_value = value
+                    # Try to coerce to int if it looks like a digit string, but keep as-is otherwise (for UUIDs/Slugs)
+                    if isinstance(value, str) and value.isdigit():
+                        try:
+                            pk_value = int(value)
+                        except (TypeError, ValueError):
+                            pass
 
                     try:
                         related_instance = field.related_model.objects.get(pk=pk_value)
@@ -207,7 +206,7 @@ class NestedOperationHandler:
                         # Ensure numeric coercion issues are mapped to the correct field
                         raise ValidationError(
                             {
-                                field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                                field_name: f"Field '{field_name}' invalid ID format: '{value}'."
                             }
                         )
                 elif hasattr(value, "pk"):
@@ -233,16 +232,15 @@ class NestedOperationHandler:
                             # Create new object and set the foreign key to point to our instance
                             item[related_field.field.name] = instance.pk
                             self.handle_nested_create(related_field.related_model, item)
-                        elif isinstance(item, (str, int)):
+                        elif isinstance(item, (str, int, uuid.UUID)):
                             # Connect existing object to this instance
-                            try:
-                                pk_value = int(item) if isinstance(item, str) else item
-                            except (TypeError, ValueError):
-                                raise ValidationError(
-                                    {
-                                        field_name: f"Field '{field_name}' expected a list of numeric IDs but got '{item}'."
-                                    }
-                                )
+                            pk_value = item
+                            if isinstance(item, str) and item.isdigit():
+                                try:
+                                    pk_value = int(item)
+                                except (TypeError, ValueError):
+                                    pass
+
                             try:
                                 related_field.related_model.objects.filter(
                                     pk=pk_value
@@ -306,7 +304,7 @@ class NestedOperationHandler:
                                     field.related_model, item
                                 )
                             related_objects.append(related_obj)
-                        elif isinstance(item, (str, int)):
+                        elif isinstance(item, (str, int, uuid.UUID)):
                             # Direct ID reference - always allowed
                             related_obj = field.related_model.objects.get(pk=item)
                             related_objects.append(related_obj)
@@ -475,16 +473,14 @@ class NestedOperationHandler:
                             field.related_model, value
                         )
                         setattr(instance, field_name, new_instance)
-                elif isinstance(value, (str, int)):
+                elif isinstance(value, (str, int, uuid.UUID)):
                     # Reference to existing object
-                    try:
-                        pk_value = int(value) if isinstance(value, str) else value
-                    except (TypeError, ValueError):
-                        raise ValidationError(
-                            {
-                                field_name: f"Field '{field_name}' expected a number but got '{value}'."
-                            }
-                        )
+                    pk_value = value
+                    if isinstance(value, str) and value.isdigit():
+                        try:
+                            pk_value = int(value)
+                        except (TypeError, ValueError):
+                            pass
 
                     try:
                         related_instance = field.related_model.objects.get(pk=pk_value)
@@ -498,7 +494,7 @@ class NestedOperationHandler:
                     except (TypeError, ValueError):
                         raise ValidationError(
                             {
-                                field_name: f"Field '{field_name}' expected a number but got '{value}'."
+                                field_name: f"Field '{field_name}' invalid ID format: '{value}'."
                             }
                         )
 
@@ -559,10 +555,17 @@ class NestedOperationHandler:
                                                 if isinstance(field, models.ForeignKey):
                                                     if val is None:
                                                         setattr(existing_obj, key, None)
-                                                    elif isinstance(val, (str, int)):
+                                                    elif isinstance(val, (str, int, uuid.UUID)):
                                                         # Convert ID to related object instance
+                                                        pk_val = val
+                                                        if isinstance(val, str) and val.isdigit():
+                                                            try:
+                                                                pk_val = int(val)
+                                                            except (TypeError, ValueError):
+                                                                pass
+                                                        
                                                         related_obj = field.related_model.objects.get(
-                                                            pk=val
+                                                            pk=pk_val
                                                         )
                                                         setattr(
                                                             existing_obj,
@@ -625,11 +628,18 @@ class NestedOperationHandler:
                                         if isinstance(field, models.ForeignKey):
                                             if val is None:
                                                 processed_item[key] = None
-                                            elif isinstance(val, (str, int)):
+                                            elif isinstance(val, (str, int, uuid.UUID)):
                                                 # Convert ID to related object instance
+                                                pk_val = val
+                                                if isinstance(val, str) and val.isdigit():
+                                                    try:
+                                                        pk_val = int(val)
+                                                    except (TypeError, ValueError):
+                                                        pass
+
                                                 related_obj = (
                                                     field.related_model.objects.get(
-                                                        pk=val
+                                                        pk=pk_val
                                                     )
                                                 )
                                                 processed_item[key] = related_obj
@@ -674,15 +684,22 @@ class NestedOperationHandler:
                                 )
                                 if hasattr(new_obj, "pk"):
                                     updated_object_ids.add(new_obj.pk)
-                        elif isinstance(item, (str, int)):
+                        elif isinstance(item, (str, int, uuid.UUID)):
                             # Connect existing object to this instance
+                            pk_val = item
+                            if isinstance(item, str) and item.isdigit():
+                                try:
+                                    pk_val = int(item)
+                                except (TypeError, ValueError):
+                                    pass
+
                             try:
                                 related_field.related_model.objects.filter(
-                                    pk=item
+                                    pk=pk_val
                                 ).update(**{related_field.field.name: instance})
                                 updated_object_ids.add(
-                                    int(item)
-                                )  # Convert to int for consistent comparison
+                                    pk_val
+                                )  # Store actual PK value
                             except Exception as e:
                                 raise ValidationError(
                                     f"Failed to connect {related_field.related_model.__name__} with id {item}: {str(e)}"
@@ -723,9 +740,15 @@ class NestedOperationHandler:
                                             field.related_model, item
                                         )
                                     related_objects.append(related_obj)
-                                elif isinstance(item, (str, int)):
+                                elif isinstance(item, (str, int, uuid.UUID)):
+                                    pk_val = item
+                                    if isinstance(item, str) and item.isdigit():
+                                        try:
+                                            pk_val = int(item)
+                                        except (TypeError, ValueError):
+                                            pass
                                     related_obj = field.related_model.objects.get(
-                                        pk=item
+                                        pk=pk_val
                                     )
                                     related_objects.append(related_obj)
                             m2m_manager.set(related_objects)
@@ -735,9 +758,15 @@ class NestedOperationHandler:
                         connect_data = value["connect"]
                         if isinstance(connect_data, list):
                             for item in connect_data:
-                                if isinstance(item, (str, int)):
+                                if isinstance(item, (str, int, uuid.UUID)):
+                                    pk_val = item
+                                    if isinstance(item, str) and item.isdigit():
+                                        try:
+                                            pk_val = int(item)
+                                        except (TypeError, ValueError):
+                                            pass
                                     related_obj = field.related_model.objects.get(
-                                        pk=item
+                                        pk=pk_val
                                     )
                                     m2m_manager.add(related_obj)
 
@@ -756,9 +785,15 @@ class NestedOperationHandler:
                         disconnect_data = value["disconnect"]
                         if isinstance(disconnect_data, list):
                             for item in disconnect_data:
-                                if isinstance(item, (str, int)):
+                                if isinstance(item, (str, int, uuid.UUID)):
+                                    pk_val = item
+                                    if isinstance(item, str) and item.isdigit():
+                                        try:
+                                            pk_val = int(item)
+                                        except (TypeError, ValueError):
+                                            pass
                                     related_obj = field.related_model.objects.get(
-                                        pk=item
+                                        pk=pk_val
                                     )
                                     m2m_manager.remove(related_obj)
 
@@ -829,7 +864,7 @@ class NestedOperationHandler:
                                 field.related_model, {name_field: item}
                             )
                             related_objects.append(related_obj)
-                        elif isinstance(item, int):
+                        elif isinstance(item, (int, uuid.UUID)):
                             # Get existing object by ID
                             related_obj = field.related_model.objects.get(pk=item)
                             related_objects.append(related_obj)

@@ -414,7 +414,7 @@ class QueryGenerator:
                 basic_filters = {
                     k: v
                     for k, v in kwargs.items()
-                    if k not in ["filters", "order_by", "limit", "offset"]
+                    if k not in ["filters", "order_by", "limit", "offset", "include"]
                 }
                 if basic_filters and filter_class:
                     filterset = filter_class(basic_filters, queryset)
@@ -465,8 +465,8 @@ class QueryGenerator:
             # Add basic filtering arguments if filter class is available
             if filter_class:
                 for name, field in filter_class.base_filters.items():
-                    # Only expose 'quick' filter as a direct argument
-                    if name != "quick":
+                    # Only expose 'quick' and 'include' filters as direct arguments
+                    if name not in ["quick", "include"]:
                         continue
 
                     field_type = graphene.String  # Default to String
@@ -600,7 +600,7 @@ class QueryGenerator:
             basic_filters = {
                 k: v
                 for k, v in kwargs.items()
-                if k not in ["filters", "order_by", "page", "per_page"]
+                if k not in ["filters", "order_by", "page", "per_page", "include"]
             }
             filter_class = self.filter_generator.generate_filter_set(model)
             if basic_filters and filter_class:
@@ -698,8 +698,8 @@ class QueryGenerator:
         # Add basic filtering arguments if filter class is available (same as list queries)
         if filter_class:
             for name, field in filter_class.base_filters.items():
-                # Only expose 'quick' filter as a direct argument
-                if name != "quick":
+                # Only expose 'quick' and 'include' filters as direct arguments
+                if name not in ["quick", "include"]:
                     continue
 
                 field_type = graphene.String  # Default to String
