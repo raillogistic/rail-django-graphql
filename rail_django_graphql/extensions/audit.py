@@ -587,7 +587,7 @@ class AuditLogger:
         # - Système de monitoring (PagerDuty, etc.)
         pass
 
-def _get_client_ip(self, request: HttpRequest) -> str:
+    def _get_client_ip(self, request: HttpRequest) -> str:
         """
         Récupère l'adresse IP du client.
 
@@ -618,7 +618,9 @@ class FrontendAuditEventInput(graphene.InputObjectType):
     app_name = graphene.String(required=True, description="Nom de l'application ciblée")
     model_name = graphene.String(required=True, description="Nom du modèle ciblé")
     operation = graphene.String(required=True, description="Action métier déclenchée")
-    component = graphene.String(required=True, description="Composant UI source de l'action")
+    component = graphene.String(
+        required=True, description="Composant UI source de l'action"
+    )
     description = graphene.String(description="Description libre de l'action")
     severity = graphene.String(
         description="Niveau de gravité (low, medium, high, critical)",
