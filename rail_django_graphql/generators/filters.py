@@ -1585,7 +1585,11 @@ class AdvancedFilterGenerator:
                 )
             elif isinstance(related_field, models.ForeignKey):
                 # Add basic foreign key filter
-                nested_filters[nested_field_name] = NumberFilter(
+                filter_cls = NumberFilter
+                if isinstance(related_field.related_model._meta.pk, models.UUIDField):
+                    filter_cls = CharFilter
+
+                nested_filters[nested_field_name] = filter_cls(
                     field_name=nested_field_name,
                     help_text=f"Filtrer par ID de {nested_field_name}",
                 )
@@ -2284,8 +2288,12 @@ class AdvancedFilterGenerator:
         self, field_name: str, related_model: Type[models.Model] = None
     ) -> Dict[str, django_filters.Filter]:
         """Generate foreign key filters: exact, in, isnull."""
+        filter_cls = NumberFilter
+        if related_model and isinstance(related_model._meta.pk, models.UUIDField):
+            filter_cls = CharFilter
+
         filters = {
-            f"{field_name}": NumberFilter(
+            f"{field_name}": filter_cls(
                 field_name=field_name, help_text=f"Filtrer par ID de {field_name}"
             ),
         }
@@ -2321,9 +2329,13 @@ class AdvancedFilterGenerator:
         Returns:
             Dictionary of filter name to Filter instance mappings
         """
+        filter_cls = NumberFilter
+        if related_model and isinstance(related_model._meta.pk, models.UUIDField):
+            filter_cls = CharFilter
+
         filters = {
             # Basic ManyToMany filters
-            f"{field_name}": NumberFilter(
+            f"{field_name}": filter_cls(
                 field_name=field_name, help_text=f"Filtrer par ID de {field_name}"
             ),
             f"{field_name}__isnull": BooleanFilter(
