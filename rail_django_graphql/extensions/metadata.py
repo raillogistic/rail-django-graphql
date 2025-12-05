@@ -19,6 +19,7 @@ from django.apps import apps
 from django.db import models
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
+from django.utils.encoding import force_str
 from graphql import GraphQLError
 from rail_django_graphql.plugins import base
 
@@ -296,9 +297,11 @@ class MutationMetadata:
     """Metadata for GraphQL mutations."""
 
     name: str
+    method_name: Optional[str] = None
     description: Optional[str] = None
     input_fields: List[InputFieldMetadata] = field(default_factory=list)
     return_type: Optional[str] = None
+    input_type: Optional[str] = None
     requires_authentication: bool = True
     required_permissions: List[str] = field(default_factory=list)
     mutation_type: str = "custom"  # create, update, delete, custom
@@ -307,6 +310,7 @@ class MutationMetadata:
     validation_schema: Optional[Dict[str, Any]] = None
     success_message: Optional[str] = None
     error_messages: Optional[Dict[str, str]] = None
+    action: Optional[Dict[str, Any]] = None
 
 
 # ChoiceType : {"value":str,"label":str}    graphene class
@@ -394,6 +398,7 @@ class MutationMetadataType(graphene.ObjectType):
     """GraphQL type for mutation metadata."""
 
     name = graphene.String(required=True, description="Mutation name")
+    method_name = graphene.String(description="Underlying model method name")
     description = graphene.String(description="Mutation description")
     input_fields = graphene.List(
         InputFieldMetadataType,
@@ -401,6 +406,7 @@ class MutationMetadataType(graphene.ObjectType):
         description="Input fields for the mutation",
     )
     return_type = graphene.String(description="Return type of the mutation")
+    input_type = graphene.String(description="GraphQL input type for the mutation")
     requires_authentication = graphene.Boolean(
         required=True, description="Whether mutation requires authentication"
     )
@@ -419,6 +425,7 @@ class MutationMetadataType(graphene.ObjectType):
     )
     success_message = graphene.String(description="Success message template")
     error_messages = graphene.JSONString(description="Error message templates")
+    action = graphene.JSONString(description="UI action metadata for row actions")
 
 
 class FieldPermissionMetadataType(graphene.ObjectType):
@@ -1227,6 +1234,29 @@ class ModelMetadataExtractor:
         self.max_depth = max_depth
         # self.settings = get_schema_settings(schema_name)
 
+    def _json_safe_value(self, value: Any) -> Any:
+        """Convert Django/Python values (dates, decimals, lazy translations) to JSON-serializable primitives."""
+        from datetime import date, datetime, time
+        from decimal import Decimal
+
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (datetime, date, time)):
+            try:
+                return value.isoformat()
+            except Exception:
+                return force_str(value)
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, dict):
+            return {
+                force_str(key): self._json_safe_value(val)
+                for key, val in value.items()
+            }
+        if isinstance(value, (list, tuple, set)):
+            return [self._json_safe_value(val) for val in value]
+        return force_str(value)
+
     @cache_metadata(
         timeout=0,
         user_specific=True,
@@ -1249,7 +1279,11 @@ class ModelMetadataExtractor:
         choices = None
         if hasattr(field, "choices") and field.choices:
             choices = [
-                {"value": choice[0], "label": choice[1]} for choice in field.choices
+                {
+                    "value": self._json_safe_value(choice[0]),
+                    "label": force_str(choice[1]),
+                }
+                for choice in field.choices
             ]
 
         # Get max length
@@ -1266,15 +1300,19 @@ class ModelMetadataExtractor:
         has_permission = True
         is_fsm_field = _is_fsm_field_instance(field)
         editable_flag = bool(field.editable) and not is_fsm_field
+        default_value = (
+            self._json_safe_value(field.default)
+            if field.default != models.NOT_PROVIDED
+            else None
+        )
+
         return FieldMetadata(
             name=field.name,
             field_type=field.__class__.__name__,
             is_required=not field.blank and field.default == models.NOT_PROVIDED,
             is_nullable=field.null,
             null=field.null,
-            default_value=str(field.default)
-            if field.default != models.NOT_PROVIDED
-            else None,
+            default_value=default_value,
             help_text=field.help_text or "",
             max_length=max_length,
             choices=choices,
@@ -1630,7 +1668,10 @@ class ModelMetadataExtractor:
                         if raw_choices:
                             try:
                                 option_choices = [
-                                    {"value": str(val), "label": str(lbl)}
+                                    {
+                                        "value": self._json_safe_value(val),
+                                        "label": force_str(lbl),
+                                    }
                                     for val, lbl in raw_choices
                                 ]
                             except Exception:
@@ -1900,7 +1941,12 @@ class ModelMetadataExtractor:
                                     if raw_choices:
                                         try:
                                             option_choices = [
-                                                {"value": str(val), "label": str(lbl)}
+                                                {
+                                                    "value": self._json_safe_value(
+                                                        val
+                                                    ),
+                                                    "label": force_str(lbl),
+                                                }
                                                 for val, lbl in raw_choices
                                             ]
                                         except Exception:
@@ -2450,19 +2496,41 @@ class ModelMetadataExtractor:
 
             # Extract input fields from method signature
             input_fields = self._extract_input_fields_from_method(method)
+            input_type_name = None
 
             # Get custom attributes from decorators
             description = getattr(method, "_mutation_description", method.__doc__)
             custom_name = getattr(method, "_custom_mutation_name", None)
             requires_permission = getattr(method, "_requires_permission", None)
+            action_meta = getattr(method, "_action_ui", None)
+            action_kind = getattr(method, "_action_kind", None)
 
             mutation_name = custom_name or f"{model_name.lower()}_{method_name}"
+            if input_fields:
+                input_type_name = (
+                    getattr(method, "_mutation_input_type", None).__name__
+                    if getattr(method, "_mutation_input_type", None)
+                    else f"{model_name}{method_name.title()}Input"
+                )
+            action_payload = None
+            if action_meta:
+                action_payload = {
+                    **action_meta,
+                    "kind": action_kind or action_meta.get("mode"),
+                    "label": action_meta.get("title")
+                    or method_name.replace("_", " ").title(),
+                }
+                if action_kind == "confirm":
+                    input_fields = []
+                    input_type_name = None
 
             return MutationMetadata(
                 name=mutation_name,
+                method_name=method_name,
                 description=description or f"Execute {method_name} on {model_name}",
                 input_fields=input_fields,
                 return_type="JSONString",
+                input_type=input_type_name,
                 requires_authentication=True,
                 required_permissions=[requires_permission]
                 if requires_permission
@@ -2470,6 +2538,7 @@ class ModelMetadataExtractor:
                 mutation_type="custom",
                 model_name=model_name,
                 success_message=f"{method_name} executed successfully",
+                action=action_payload,
             )
 
         except Exception as e:
@@ -2544,7 +2613,11 @@ class ModelMetadataExtractor:
             choices = None
             if hasattr(field, "choices") and field.choices:
                 choices = [
-                    {"value": choice[0], "label": choice[1]} for choice in field.choices
+                    {
+                        "value": self._json_safe_value(choice[0]),
+                        "label": force_str(choice[1]),
+                    }
+                    for choice in field.choices
                 ]
 
             # Determine widget type
@@ -2568,7 +2641,6 @@ class ModelMetadataExtractor:
                 else None,
                 multiple=isinstance(field, models.ManyToManyField),
             )
-
         except Exception as e:
             logger.error(f"Error converting field {field.name}: {e}")
             return None
@@ -2681,7 +2753,11 @@ class ModelFormMetadataExtractor:
         choices = None
         if hasattr(field, "choices") and field.choices:
             choices = [
-                {"value": choice[0], "label": choice[1]} for choice in field.choices
+                {
+                    "value": self._json_safe_value(choice[0]),
+                    "label": force_str(choice[1]),
+                }
+                for choice in field.choices
             ]
 
         # Determine widget type based on field type
@@ -4096,7 +4172,10 @@ class ModelTableExtractor:
                         raw_choices = getattr(field_obj, "choices", None)
                         if raw_choices and lookup_expr in ("exact", "in"):
                             option_choices = [
-                                {"value": str(val), "label": str(lbl)}
+                                {
+                                    "value": self._json_safe_value(val),
+                                    "label": force_str(lbl),
+                                }
                                 for val, lbl in raw_choices
                             ]
                 except Exception:
@@ -4200,7 +4279,10 @@ class ModelTableExtractor:
                         raw_choices = getattr(final_field_obj, "choices", None)
                         if raw_choices and nested_lookup_expr in ("exact", "in"):
                             nested_option_choices = [
-                                {"value": str(val), "label": str(lbl)}
+                                {
+                                    "value": self._json_safe_value(val),
+                                    "label": force_str(lbl),
+                                }
                                 for val, lbl in raw_choices
                             ]
                 except Exception:

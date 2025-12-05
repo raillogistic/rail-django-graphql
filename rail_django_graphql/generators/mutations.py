@@ -1385,10 +1385,13 @@ class MutationGenerator:
         is_business_logic = getattr(method, "_is_business_logic", False)
         requires_permission = getattr(method, "_requires_permission", None)
         atomic = getattr(method, "_atomic", True)
+        action_kind = getattr(method, "_action_kind", None)
 
         # Create input type for method arguments
         if custom_input_type:
             input_type = custom_input_type
+        elif action_kind == "confirm":
+            input_type = None
         else:
             input_fields = {}
             for param_name, param in signature.parameters.items():
@@ -1486,15 +1489,42 @@ class MutationGenerator:
                     return cls(
                         ok=False,
                         result=None,
-                        errors=[f"{model.__name__} with id {id} does not exist"],
+                        errors=[
+                            {
+                                "field": "id",
+                                "message": f"{model.__name__} with id {id} does not exist",
+                            }
+                        ],
                     )
+                except ValidationError as exc:
+                    if atomic:
+                        transaction.set_rollback(True)
+                    error_payload: List[Dict[str, Optional[str]]] = []
+                    if hasattr(exc, "message_dict"):
+                        for field, messages in exc.message_dict.items():
+                            if not isinstance(messages, (list, tuple)):
+                                messages = [messages]
+                            for message in messages:
+                                error_payload.append(
+                                    {"field": field or None, "message": str(message)}
+                                )
+                    else:
+                        messages = exc.messages if hasattr(exc, "messages") else [str(exc)]
+                        for message in messages:
+                            error_payload.append({"field": None, "message": str(message)})
+                    return cls(ok=False, result=None, errors=error_payload)
                 except Exception as e:
                     if atomic:
                         transaction.set_rollback(True)
                     return cls(
                         ok=False,
                         result=None,
-                        errors=[f"Failed to execute {method_name}: {str(e)}"],
+                        errors=[
+                            {
+                                "field": None,
+                                "message": f"Failed to execute {method_name}: {str(e)}",
+                            }
+                        ],
                     )
 
         # Use custom name if provided

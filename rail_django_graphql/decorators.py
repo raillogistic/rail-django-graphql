@@ -50,6 +50,105 @@ def mutation(
     return decorator
 
 
+def confirm_action(
+    *,
+    title: Optional[str] = None,
+    message: Optional[str] = None,
+    confirm_label: str = "Confirmer",
+    cancel_label: str = "Annuler",
+    severity: str = "default",
+    icon: Optional[str] = None,
+    description: Optional[str] = None,
+):
+    """
+    Decorator to expose a **confirmation-only** model method as a GraphQL mutation.
+
+    The generated metadata carries enough UI hints for frontends to render a
+    confirmation dialog (no additional inputs, only the record identifier).
+
+    Example::
+        @confirm_action(
+            title=\"Valider l'ordre\",
+            message=\"Confirmer la validation ?\",
+            confirm_label=\"Valider\",
+            severity=\"destructive\",
+        )
+        def validate(self):
+            self.status = \"validated\"
+            self.save()
+            return True
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        wrapper._is_mutation = True
+        wrapper._action_kind = "confirm"
+        wrapper._action_ui = {
+            "mode": "confirm",
+            "title": title or func.__name__.replace("_", " ").title(),
+            "message": message or description or func.__doc__,
+            "confirm_label": confirm_label,
+            "cancel_label": cancel_label,
+            "severity": severity,
+            "icon": icon,
+        }
+        wrapper._mutation_description = (description or message) or func.__doc__
+        wrapper._requires_permission = getattr(func, "_requires_permission", None)
+        # Confirmation mutations are atomic by default
+        wrapper._atomic = getattr(func, "_atomic", True)
+        return wrapper
+
+    return decorator
+
+
+def action_form(
+    *,
+    title: Optional[str] = None,
+    description: Optional[str] = None,
+    submit_label: str = "Exécuter",
+    cancel_label: str = "Annuler",
+    icon: Optional[str] = None,
+    severity: str = "default",
+):
+    """
+    Decorator to expose a **form-based** model method as a GraphQL mutation.
+
+    The method signature drives the generated input fields; UI hints are added so
+    the frontend can render a small form dialog automatically.
+
+    Example::
+        @action_form(title=\"Planifier\", submit_label=\"Planifier\")
+        def schedule(self, planned_start: date, planned_end: date | None = None):
+            ...
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        wrapper._is_mutation = True
+        wrapper._action_kind = "form"
+        wrapper._action_ui = {
+            "mode": "form",
+            "title": title or func.__name__.replace("_", " ").title(),
+            "description": description or func.__doc__,
+            "submit_label": submit_label,
+            "cancel_label": cancel_label,
+            "severity": severity,
+            "icon": icon,
+        }
+        wrapper._mutation_description = description or func.__doc__
+        wrapper._requires_permission = getattr(func, "_requires_permission", None)
+        wrapper._atomic = getattr(func, "_atomic", True)
+        return wrapper
+
+    return decorator
+
+
 def business_logic(
     category: str = "general",
     requires_permission: Optional[str] = None,
