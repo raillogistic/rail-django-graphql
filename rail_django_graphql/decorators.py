@@ -59,6 +59,7 @@ def confirm_action(
     severity: str = "default",
     icon: Optional[str] = None,
     description: Optional[str] = None,
+    permissions: Optional[List[str]] = None,
 ):
     """
     Decorator to expose a **confirmation-only** model method as a GraphQL mutation.
@@ -96,7 +97,16 @@ def confirm_action(
             "icon": icon,
         }
         wrapper._mutation_description = (description or message) or func.__doc__
-        wrapper._requires_permission = getattr(func, "_requires_permission", None)
+        wrapper._requires_permissions = (
+            permissions
+            if permissions is not None
+            else getattr(func, "_requires_permissions", None)
+            or (
+                [getattr(func, "_requires_permission", None)]
+                if getattr(func, "_requires_permission", None)
+                else None
+            )
+        )
         # Confirmation mutations are atomic by default
         wrapper._atomic = getattr(func, "_atomic", True)
         return wrapper
@@ -112,6 +122,12 @@ def action_form(
     cancel_label: str = "Annuler",
     icon: Optional[str] = None,
     severity: str = "default",
+    fields: Optional[Dict[str, Dict[str, Any]]] = None,
+    section: Optional[Dict[str, Any]] = None,
+    ordering: Optional[List[str]] = None,
+    returns: Optional[str] = None,
+    on_finish: Optional[str] = None,
+    permissions: Optional[List[str]] = None,
 ):
     """
     Decorator to expose a **form-based** model method as a GraphQL mutation.
@@ -140,9 +156,23 @@ def action_form(
             "cancel_label": cancel_label,
             "severity": severity,
             "icon": icon,
+            "fields": fields or {},
+            "section": section or {},
+            "ordering": ordering or [],
+            "returns": returns,
+            "on_finish": on_finish,
         }
         wrapper._mutation_description = description or func.__doc__
-        wrapper._requires_permission = getattr(func, "_requires_permission", None)
+        wrapper._requires_permissions = (
+            permissions
+            if permissions is not None
+            else getattr(func, "_requires_permissions", None)
+            or (
+                [getattr(func, "_requires_permission", None)]
+                if getattr(func, "_requires_permission", None)
+                else None
+            )
+        )
         wrapper._atomic = getattr(func, "_atomic", True)
         return wrapper
 

@@ -1225,6 +1225,8 @@ class MutationGenerator:
             return_type = signature.return_annotation
             if return_type == inspect.Parameter.empty:
                 output_type = graphene.Boolean
+            elif return_type == dict:
+                output_type = graphene.JSONString
             else:
                 output_type = self._convert_python_type_to_graphql(return_type)
 
@@ -1347,6 +1349,7 @@ class MutationGenerator:
             int: graphene.Int,
             float: graphene.Float,
             bool: graphene.Boolean,
+            dict: graphene.JSONString,
             Any: graphene.String,
             type(None): graphene.String,
         }
@@ -1383,7 +1386,10 @@ class MutationGenerator:
         custom_name = getattr(method, "_custom_mutation_name", None)
         description = getattr(method, "_mutation_description", method.__doc__)
         is_business_logic = getattr(method, "_is_business_logic", False)
-        requires_permission = getattr(method, "_requires_permission", None)
+        requires_permissions = getattr(method, "_requires_permissions", None)
+        if requires_permissions is None:
+            legacy_perm = getattr(method, "_requires_permission", None)
+            requires_permissions = [legacy_perm] if legacy_perm else None
         atomic = getattr(method, "_atomic", True)
         action_kind = getattr(method, "_action_kind", None)
 
@@ -1450,9 +1456,22 @@ class MutationGenerator:
                 input: Dict[str, Any] = None,
             ):
                 # Permission check if required
-                if requires_permission and hasattr(info.context, "user"):
-                    if not info.context.user.has_perm(requires_permission):
-                        return cls(ok=False, result=None, errors=["Permission denied"])
+                if requires_permissions and hasattr(info.context, "user"):
+                    user = info.context.user
+                    missing = [
+                        perm for perm in requires_permissions if not user.has_perm(perm)
+                    ]
+                    if missing:
+                        return cls(
+                            ok=False,
+                            result=None,
+                            errors=[
+                                {
+                                    "field": None,
+                                    "message": f"Permission refusée ({', '.join(missing)})",
+                                }
+                            ],
+                        )
 
                 # Wrap in transaction if atomic is True
                 if atomic:

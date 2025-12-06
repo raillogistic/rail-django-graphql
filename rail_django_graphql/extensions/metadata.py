@@ -6,13 +6,14 @@ complex forms with nested fields.
 """
 
 import hashlib
+import json
 import logging
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
 from functools import wraps
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type, Union, get_args, get_origin
 
 import graphene
 from django.apps import apps
@@ -1257,6 +1258,21 @@ class ModelMetadataExtractor:
             return [self._json_safe_value(val) for val in value]
         return force_str(value)
 
+    def _sanitize_action_payload(self, payload: Any) -> Any:
+        """Strip callables and non-serializable values from action metadata."""
+        if payload is None:
+            return None
+        if isinstance(payload, dict):
+            cleaned: Dict[str, Any] = {}
+            for key, val in payload.items():
+                if callable(val):
+                    continue
+                cleaned[force_str(key)] = self._sanitize_action_payload(val)
+            return cleaned
+        if isinstance(payload, (list, tuple, set)):
+            return [self._sanitize_action_payload(val) for val in payload if not callable(val)]
+        return self._json_safe_value(payload)
+
     @cache_metadata(
         timeout=0,
         user_specific=True,
@@ -1540,10 +1556,8 @@ class ModelMetadataExtractor:
         # Extract filter metadata
         filters = self._extract_filter_metadata(model)
 
-        # Extract mutations metadata
-        mutations = self.extract_mutations_metadata(
-            model,
-        )
+        # Extract mutations metadata (user-aware for permission filtering)
+        mutations = self.extract_mutations_metadata(model, user)
 
         return ModelMetadata(
             app_name=model._meta.app_label,
@@ -2200,11 +2214,9 @@ class ModelMetadataExtractor:
         else:
             return f"Filtre pour {verbose_name}"
 
-    @cache_metadata(
-        timeout=900, user_specific=False
-    )  # 15 minutes cache for mutations metadata (not user-specific)
+    @cache_metadata(timeout=900, user_specific=True)
     def extract_mutations_metadata(
-        self, model: Type[models.Model]
+        self, model: Type[models.Model], user=None
     ) -> List[MutationMetadata]:
         """
         Extract mutation metadata for a Django model.
@@ -2264,7 +2276,7 @@ class ModelMetadataExtractor:
             # Generate method mutations if enabled
             if mutation_settings.enable_method_mutations:
                 method_mutations = self._extract_method_mutations_metadata(
-                    model, mutation_generator
+                    model, mutation_generator, user=user
                 )
                 mutations.extend(method_mutations)
 
@@ -2462,7 +2474,7 @@ class ModelMetadataExtractor:
         return mutations
 
     def _extract_method_mutations_metadata(
-        self, model: Type[models.Model], mutation_generator
+        self, model: Type[models.Model], mutation_generator, user=None
     ) -> List[MutationMetadata]:
         """Extract metadata for method-based mutations."""
         mutations = []
@@ -2476,7 +2488,7 @@ class ModelMetadataExtractor:
             for method_name, method_info in model_methods.items():
                 if method_info.is_mutation and not method_info.is_private:
                     method_mutation = self._extract_method_mutation_metadata(
-                        model, method_name, method_info
+                        model, method_name, method_info, user=user
                     )
                     if method_mutation:
                         mutations.append(method_mutation)
@@ -2487,7 +2499,7 @@ class ModelMetadataExtractor:
         return mutations
 
     def _extract_method_mutation_metadata(
-        self, model: Type[models.Model], method_name: str, method_info
+        self, model: Type[models.Model], method_name: str, method_info, user=None
     ) -> Optional[MutationMetadata]:
         """Extract metadata for a specific method mutation."""
         try:
@@ -2501,7 +2513,10 @@ class ModelMetadataExtractor:
             # Get custom attributes from decorators
             description = getattr(method, "_mutation_description", method.__doc__)
             custom_name = getattr(method, "_custom_mutation_name", None)
-            requires_permission = getattr(method, "_requires_permission", None)
+            requires_permissions = getattr(method, "_requires_permissions", None)
+            if requires_permissions is None:
+                legacy = getattr(method, "_requires_permission", None)
+                requires_permissions = [legacy] if legacy else []
             action_meta = getattr(method, "_action_ui", None)
             action_kind = getattr(method, "_action_kind", None)
 
@@ -2514,15 +2529,23 @@ class ModelMetadataExtractor:
                 )
             action_payload = None
             if action_meta:
-                action_payload = {
-                    **action_meta,
-                    "kind": action_kind or action_meta.get("mode"),
-                    "label": action_meta.get("title")
-                    or method_name.replace("_", " ").title(),
-                }
+                action_payload = self._sanitize_action_payload(
+                    {
+                        **action_meta,
+                        "kind": action_kind or action_meta.get("mode"),
+                        "label": action_meta.get("title")
+                        or method_name.replace("_", " ").title(),
+                    }
+                )
                 if action_kind == "confirm":
                     input_fields = []
                     input_type_name = None
+                # Graphene JSONString will serialize the dict; avoid pre-dumping to keep a single level
+
+            if user and requires_permissions:
+                missing = [perm for perm in requires_permissions if not user.has_perm(perm)]
+                if missing:
+                    return None
 
             return MutationMetadata(
                 name=mutation_name,
@@ -2532,9 +2555,7 @@ class ModelMetadataExtractor:
                 return_type="JSONString",
                 input_type=input_type_name,
                 requires_authentication=True,
-                required_permissions=[requires_permission]
-                if requires_permission
-                else [],
+                required_permissions=requires_permissions or [],
                 mutation_type="custom",
                 model_name=model_name,
                 success_message=f"{method_name} executed successfully",
@@ -2675,11 +2696,14 @@ class ModelMetadataExtractor:
             return "text"
 
     def _extract_input_fields_from_method(self, method) -> List[InputFieldMetadata]:
-        """Extract input fields from method signature."""
+        """Extract input fields from method signature (with decorator overrides)."""
         import inspect
+        from datetime import date, datetime, time
 
-        input_fields = []
+        input_fields: List[InputFieldMetadata] = []
         signature = inspect.signature(method)
+        action_ui = getattr(method, "_action_ui", {}) or {}
+        field_overrides: Dict[str, Dict[str, Any]] = action_ui.get("fields", {}) or {}
 
         for param_name, param in signature.parameters.items():
             if param_name == "self":
@@ -2691,18 +2715,37 @@ class ModelMetadataExtractor:
                 param.default if param.default != inspect.Parameter.empty else None
             )
 
-            # Try to infer type from annotation
+            # Try to infer type from annotation (with Optional/Union support)
             if param.annotation != inspect.Parameter.empty:
                 annotation = param.annotation
-                if annotation == int:
+                origin = get_origin(annotation)
+                args = get_args(annotation)
+                base_annotation = annotation
+                if origin is Union:
+                    non_none = [arg for arg in args if arg is not type(None)]
+                    if non_none:
+                        base_annotation = non_none[0]
+                        required = False
+                if base_annotation == int:
                     field_type = "Int"
-                elif annotation == float:
+                elif base_annotation == float:
                     field_type = "Float"
-                elif annotation == bool:
+                elif base_annotation == bool:
                     field_type = "Boolean"
-                elif hasattr(annotation, "__origin__"):
-                    if annotation.__origin__ == list:
-                        field_type = "List[String]"
+                elif base_annotation in (date, datetime):
+                    field_type = "Date" if base_annotation is date else "DateTime"
+                elif base_annotation is time:
+                    field_type = "Time"
+                elif origin in (list, List, tuple, set):
+                    inner = args[0] if args else Any
+                    inner_type = "String"
+                    if inner == int:
+                        inner_type = "Int"
+                    elif inner == float:
+                        inner_type = "Float"
+                    elif inner == bool:
+                        inner_type = "Boolean"
+                    field_type = f"List[{inner_type}]"
 
             input_field = InputFieldMetadata(
                 name=param_name,
@@ -2711,6 +2754,76 @@ class ModelMetadataExtractor:
                 default_value=default_value,
                 description=f"Parameter {param_name} for method execution",
             )
+
+            override = field_overrides.get(param_name) or {}
+            if override:
+                if "label" in override:
+                    input_field.description = force_str(override.get("label"))
+                if "required" in override:
+                    input_field.required = bool(override.get("required"))
+                if "choices" in override and override.get("choices"):
+                    try:
+                        input_field.choices = [
+                            {
+                                "value": self._json_safe_value(choice.get("value")),
+                                "label": force_str(choice.get("label")),
+                            }
+                            for choice in override.get("choices", [])
+                            if isinstance(choice, dict)
+                        ]
+                    except Exception:
+                        input_field.choices = None
+                if "widget_type" in override:
+                    input_field.widget_type = override.get("widget_type")
+                if "placeholder" in override:
+                    input_field.placeholder = override.get("placeholder")
+                if "help_text" in override:
+                    input_field.help_text = override.get("help_text")
+                if "related_model" in override or "model" in override:
+                    input_field.related_model = override.get(
+                        "related_model", override.get("model")
+                    )
+                if "default_value" in override:
+                    input_field.default_value = self._json_safe_value(
+                        override.get("default_value")
+                    )
+                if "queryset" in override and override.get("queryset") is not None:
+                    try:
+                        qs = override.get("queryset")
+                        related_label = override.get("related_model") or override.get(
+                            "model"
+                        )
+                        model_cls = None
+                        if related_label:
+                            try:
+                                model_cls = apps.get_model(related_label)
+                            except Exception:
+                                model_cls = None
+                        if callable(qs):
+                            try:
+                                if model_cls:
+                                    qs = qs(model_cls)
+                                else:
+                                    qs = qs()
+                            except TypeError:
+                                qs = qs()
+                        from django.db.models.query import QuerySet  # type: ignore
+
+                        if isinstance(qs, QuerySet):
+                            sample = list(qs[:50])
+                            input_field.choices = [
+                                {
+                                    "value": self._json_safe_value(
+                                        getattr(obj, "pk", None)
+                                    ),
+                                    "label": force_str(obj),
+                                }
+                                for obj in sample
+                            ]
+                    except Exception:
+                        # silently ignore queryset override failures
+                        pass
+
             input_fields.append(input_field)
 
         return input_fields
@@ -3795,7 +3908,9 @@ class ModelTableExtractor:
         meta = model._meta
         introspector = ModelIntrospector(model, self.schema_name)
         try:
-            mutations = self.metadata_extractor.extract_mutations_metadata(model)
+            mutations = self.metadata_extractor.extract_mutations_metadata(
+                model, user=user
+            )
         except Exception as exc:
             logger.warning(
                 "Unable to extract mutations metadata for %s.%s: %s",
