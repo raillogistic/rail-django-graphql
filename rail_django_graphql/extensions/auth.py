@@ -83,6 +83,7 @@ def _build_model_permission_snapshot(user: "AbstractUser") -> List[PermissionInf
 # Lazy cache for UserSettingsType
 _user_settings_type = None
 
+
 def _get_user_settings_type():
     """Lazily resolve UserSettingsType to avoid AppRegistryNotReady."""
     global _user_settings_type
@@ -91,10 +92,11 @@ def _get_user_settings_type():
 
     try:
         from django.apps import apps
+
         # Check if apps are ready before calling get_model
         if not apps.ready:
             return None
-            
+
         UserSettingsModel = apps.get_model("users", "UserSettings")
 
         class UserSettingsType(DjangoObjectType):
@@ -108,14 +110,24 @@ def _get_user_settings_type():
                     "font_size",
                     "font_family",
                 )
+
         _user_settings_type = UserSettingsType
         return _user_settings_type
     except (LookupError, Exception):
         return None
 
+
 class DummySettingsType(graphene.ObjectType):
     """Fallback type when UserSettings model is not available."""
+
     info = graphene.String(description="Placeholder for missing UserSettings model")
+    theme = graphene.String(description="Thème de l'interface")
+    mode = graphene.String(description="Mode d'affichage")
+    layout = graphene.String(description="Disposition de l'interface")
+    sidebar_collapse_mode = graphene.String(description="Mode de repli de la barre latérale")
+    font_size = graphene.String(description="Taille de police")
+    font_family = graphene.String(description="Famille de police")
+
 
 def _get_safe_settings_type():
     """Returns real UserSettingsType or a dummy fallback to prevent Graphene errors."""
@@ -124,9 +136,6 @@ def _get_safe_settings_type():
 
 def get_authenticated_user_type():
     """Factory function to create the GraphQL type exposed by auth queries."""
-
-    # Try to resolve settings type immediately since we are in a lazy factory
-    user_settings_type = _get_user_settings_type()
 
     class AuthenticatedUserType(DjangoObjectType):
         """GraphQL type for authenticated user payloads."""
@@ -140,12 +149,10 @@ def get_authenticated_user_type():
         )
         desc = graphene.String(description="Description de l'utilisateur")
 
-        # Add settings field only if type is available
-        if user_settings_type:
-            settings = graphene.Field(
-                user_settings_type, 
-                description="Préférences d'interface utilisateur"
-            )
+        settings = graphene.Field(
+            lambda: _get_safe_settings_type(),
+            description="Préférences d'interface utilisateur",
+        )
 
         def resolve_desc(self, info):
             return self.get_full_name()
@@ -158,6 +165,7 @@ def get_authenticated_user_type():
                 "email",
                 "first_name",
                 "last_name",
+                "bio",
                 "is_staff",
                 "is_superuser",
                 "is_active",
@@ -171,12 +179,15 @@ def get_authenticated_user_type():
         def resolve_model_permissions(self, info):
             return _build_model_permission_snapshot(self)
 
-        if user_settings_type:
-            def resolve_settings(self, info):
-                try:
-                    return self.settings
-                except Exception:
-                    return None
+        def resolve_settings(self, info):
+            # Only resolve settings if the model and GraphQL type exist
+            if not _get_user_settings_type():
+                return None
+
+            try:
+                return self.settings
+            except Exception:
+                return None
 
     return AuthenticatedUserType
 
@@ -194,7 +205,7 @@ class UpdateMySettingsMutation(graphene.Mutation):
 
     ok = graphene.Boolean(required=True)
     errors = graphene.List(graphene.String, required=True)
-    
+
     # Use lambda with fallback for lazy resolution
     settings = graphene.Field(lambda: _get_safe_settings_type())
 
@@ -202,19 +213,22 @@ class UpdateMySettingsMutation(graphene.Mutation):
         user = info.context.user
         if not user or not user.is_authenticated:
             return UpdateMySettingsMutation(
-                ok=False, errors=["Vous devez être connecté pour modifier vos paramètres."]
+                ok=False,
+                errors=["Vous devez être connecté pour modifier vos paramètres."],
             )
 
         # Check if settings system is active
         if not _get_user_settings_type():
             return UpdateMySettingsMutation(
-                ok=False, errors=["Le système de préférences utilisateur n'est pas activé."]
+                ok=False,
+                errors=["Le système de préférences utilisateur n'est pas activé."],
             )
 
         try:
             from django.apps import apps
+
             UserSettingsModel = apps.get_model("users", "UserSettings")
-            
+
             # Get or create settings
             settings_obj, created = UserSettingsModel.objects.get_or_create(user=user)
 
@@ -222,17 +236,18 @@ class UpdateMySettingsMutation(graphene.Mutation):
             for field, value in kwargs.items():
                 if value is not None and hasattr(settings_obj, field):
                     setattr(settings_obj, field, value)
-            
+
             settings_obj.save()
 
-            return UpdateMySettingsMutation(
-                ok=True, errors=[], settings=settings_obj
-            )
+            return UpdateMySettingsMutation(ok=True, errors=[], settings=settings_obj)
 
         except Exception as e:
-            logger.error(f"Erreur lors de la mise à jour des paramètres utilisateur: {e}")
+            logger.error(
+                f"Erreur lors de la mise à jour des paramètres utilisateur: {e}"
+            )
             return UpdateMySettingsMutation(
-                ok=False, errors=["Erreur interne lors de la mise à jour des paramètres."]
+                ok=False,
+                errors=["Erreur interne lors de la mise à jour des paramètres."],
             )
 
 
@@ -644,6 +659,7 @@ class MeQuery(graphene.ObjectType):
     me = graphene.Field(
         lambda: UserType(), description="Informations de l'utilisateur connecté"
     )
+    xx = graphene.String()
 
     def resolve_me(self, info):
         """
