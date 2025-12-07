@@ -471,6 +471,10 @@ class ModelPermissionMatrixType(graphene.ObjectType):
     can_list = graphene.Boolean(
         required=True, description="Whether listing operations are permitted"
     )
+    can_history = graphene.Boolean(
+        required=True,
+        description="Whether history operations are permitted",
+    )
     reasons = graphene.JSONString(
         description="Optional mapping of operation identifiers to denial reasons"
     )
@@ -544,6 +548,7 @@ class ModelPermissionMatrix:
     can_delete: bool = True
     can_read: bool = True
     can_list: bool = True
+    can_history: bool = True
     reasons: Dict[str, Optional[str]] = field(default_factory=dict)
 
 
@@ -779,6 +784,7 @@ def _build_model_permission_matrix(
         "delete": f"{app_label}.delete_{model_lower}",
         "read": f"{app_label}.view_{model_lower}",
         "list": f"{app_label}.view_{model_lower}",
+        "history": f"{app_label}.view_{model_lower}",
     }
     guard_map = {
         "create": "create",
@@ -786,6 +792,7 @@ def _build_model_permission_matrix(
         "delete": "delete",
         "read": "retrieve",
         "list": "list",
+        "history": "history",
     }
     reasons: Dict[str, Optional[str]] = {}
 
@@ -836,6 +843,7 @@ def _build_model_permission_matrix(
         can_delete=evaluate("delete"),
         can_read=evaluate("read"),
         can_list=evaluate("list"),
+        can_history=evaluate("history"),
         reasons=reasons,
     )
     return matrix
@@ -2845,6 +2853,29 @@ class ModelFormMetadataExtractor:
         """
         self.schema_name = schema_name
         self.max_depth = max_depth
+
+    def _json_safe_value(self, value: Any) -> Any:
+        """Convert values into JSON-friendly primitives."""
+        from datetime import date, datetime, time
+        from decimal import Decimal
+
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, (datetime, date, time)):
+            try:
+                return value.isoformat()
+            except Exception:
+                return force_str(value)
+        if isinstance(value, Decimal):
+            return str(value)
+        if isinstance(value, dict):
+            return {
+                force_str(key): self._json_safe_value(val)
+                for key, val in value.items()
+            }
+        if isinstance(value, (list, tuple, set)):
+            return [self._json_safe_value(val) for val in value]
+        return force_str(value)
 
     @cache_metadata(
         timeout=1200, user_specific=True

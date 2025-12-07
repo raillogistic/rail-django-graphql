@@ -40,6 +40,7 @@ class OperationType(Enum):
     UPDATE = "update"
     DELETE = "delete"
     LIST = "list"
+    HISTORY = "history"
 
 
 class PermissionLevel(Enum):
@@ -336,6 +337,7 @@ _OPERATION_PERMISSION_MAP = {
     OperationType.UPDATE: "change",
     OperationType.DELETE: "delete",
     OperationType.LIST: "view",
+    OperationType.HISTORY: "view",
 }
 
 _GRAPHQL_GUARD_MAP = {
@@ -344,6 +346,7 @@ _GRAPHQL_GUARD_MAP = {
     OperationType.UPDATE: "update",
     OperationType.DELETE: "delete",
     OperationType.LIST: "list",
+    OperationType.HISTORY: "history",
 }
 
 
@@ -543,6 +546,7 @@ class PermissionInfo(graphene.ObjectType):
     can_update = graphene.Boolean(description="Peut modifier")
     can_delete = graphene.Boolean(description="Peut supprimer")
     can_list = graphene.Boolean(description="Peut lister")
+    can_history = graphene.Boolean(description="Peut consulter l'historique")
 
 
 class PermissionQuery(graphene.ObjectType):
@@ -604,6 +608,9 @@ class PermissionQuery(graphene.ObjectType):
                     ).allowed,
                     can_list=permission_manager.check_operation_permission(
                         user, model_label, OperationType.LIST
+                    ).allowed,
+                    can_history=permission_manager.check_operation_permission(
+                        user, model_label, OperationType.HISTORY
                     ).allowed,
                 )
             )

@@ -8,6 +8,7 @@ GraphQL queries for Django models, including single object, list, and filtered q
 from typing import Any, Dict, List, Optional, Type, Union
 
 import graphene
+from django.apps import apps
 from django.db import models
 from django.db.models import Q, Count
 from graphene_django import DjangoObjectType
@@ -118,6 +119,75 @@ class QueryGenerator:
     def filter_generator(self):
         """Access to the filter generator instance."""
         return self._filter_generator
+
+    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+        """Return True if the model corresponds to a django-simple-history model."""
+        try:
+            name = getattr(model, "__name__", "")
+            module = getattr(model, "__module__", "")
+        except Exception:
+            return False
+        if name.startswith("Historical"):
+            return True
+        if "simple_history" in module:
+            return True
+        return False
+
+    def get_manager_queryset_model(
+        self, model: Type[models.Model], manager_name: str
+    ) -> Optional[Type[models.Model]]:
+        """Return the model class produced by the given manager's queryset."""
+        try:
+            manager = getattr(model, manager_name)
+        except Exception:
+            return None
+
+        if manager is None:
+            return None
+
+        queryset_model: Optional[Type[models.Model]] = None
+        try:
+            queryset = manager.get_queryset()
+            queryset_model = getattr(queryset, "model", None)
+        except Exception:
+            try:
+                queryset = manager.all()
+                queryset_model = getattr(queryset, "model", None)
+            except Exception:
+                queryset_model = None
+
+        if queryset_model is None:
+            queryset_model = getattr(manager, "model", None)
+
+        return queryset_model
+
+    def is_history_related_manager(
+        self, model: Type[models.Model], manager_name: str
+    ) -> bool:
+        """Return True when the given manager is the HistoricalRecords manager."""
+        manager = None
+        try:
+            manager = getattr(model, manager_name, None)
+        except Exception:
+            manager = None
+
+        if manager is None:
+            return False
+
+        manager_model = self.get_manager_queryset_model(model, manager_name)
+        if manager_model is not None and self._is_historical_model(manager_model):
+            return True
+
+        manager_class = getattr(manager, "__class__", None)
+        class_name = getattr(manager_class, "__name__", "").lower()
+        class_module = getattr(manager_class, "__module__", "")
+
+        if "simple_history" in class_module:
+            return True
+        if "historical" in class_name or "history" in class_name:
+            return True
+
+        return manager_name.lower().startswith("history")
 
     def _apply_field_masks(
         self,
@@ -541,24 +611,35 @@ class QueryGenerator:
             )
 
     def generate_paginated_query(
-        self, model: Type[models.Model], manager_name: str = "objects"
+        self,
+        model: Type[models.Model],
+        manager_name: str = "objects",
+        result_model: Optional[Type[models.Model]] = None,
+        operation_name: str = "paginated",
     ) -> graphene.Field:
         """
         Generates a query field with advanced pagination support using the specified manager.
-        Returns both the paginated results and pagination metadata.
+        Returns both the paginated results and pagination metadata. When result_model is
+        provided (e.g., for HistoricalRecords managers), it controls the GraphQL type used
+        for the paginated items so that history entries expose their specific schema.
+        The ``operation_name`` argument lets callers enforce specific GraphQLMeta guards
+        (``history`` when listing audit trails, ``paginated`` otherwise).
 
         Args:
             model: Django model class
             manager_name: Name of the manager to use (defaults to "objects")
+            result_model: Optional model class describing the actual queryset items.
+            operation_name: Guard name to enforce via GraphQLMeta.
         """
-        model_type = self.type_generator.generate_object_type(model)
-        model_name = model.__name__.lower()
+        result_model = result_model or model
+        model_type = self.type_generator.generate_object_type(result_model)
+        model_name = result_model.__name__.lower()
 
         # Create a pagination info type (using module-level class)
         # PaginationInfo is now defined at module level for pickle support
 
         # Create a model-specific connection type for the paginated results
-        connection_name = f"{model.__name__}PaginatedConnection"
+        connection_name = f"{result_model.__name__}PaginatedConnection"
         PaginatedConnection = type(
             connection_name,
             (graphene.ObjectType,),
@@ -584,7 +665,7 @@ class QueryGenerator:
         ) -> PaginatedConnection:
             manager = getattr(model, manager_name)
             queryset = manager.all()
-            graphql_meta.ensure_operation_access("paginated", info=info)
+            graphql_meta.ensure_operation_access(operation_name, info=info)
 
             # Apply query optimization first
             queryset = self.optimizer.optimize_queryset(queryset, info, model)

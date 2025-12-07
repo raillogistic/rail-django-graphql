@@ -328,45 +328,75 @@ class SchemaBuilder:
 
             # Generate queries for each manager
             for manager_name, manager_info in managers.items():
+                is_history_manager = self.query_generator.is_history_related_manager(
+                    model, manager_name
+                )
+                history_result_model = None
+                if is_history_manager:
+                    history_result_model = self.query_generator.get_manager_queryset_model(
+                        model, manager_name
+                    ) or model
+
+                if is_history_manager and not self.settings.enable_pagination:
+                    logger.debug(
+                        "Skipping manager %s for %s because pagination is disabled",
+                        manager_name,
+                        model.__name__,
+                    )
+                    continue
+
                 if manager_info.is_default:
                     # Default manager keeps standard naming
-                    # Single object query
-                    single_query = self.query_generator.generate_single_query(
-                        model, manager_name
-                    )
+                    # Single and list queries are not exposed for history managers
+                    if not is_history_manager:
+                        # Single object query
+                        single_query = self.query_generator.generate_single_query(
+                            model, manager_name
+                        )
 
-                    self._query_fields[model_name] = single_query
+                        self._query_fields[model_name] = single_query
 
-                    # List query
-                    list_query = self.query_generator.generate_list_query(
-                        model, manager_name
-                    )
-                    self._query_fields[f"{model_name}s"] = list_query
+                        # List query
+                        list_query = self.query_generator.generate_list_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}s"] = list_query
 
                     # Paginated query
                     if self.settings.enable_pagination:
                         paginated_query = self.query_generator.generate_paginated_query(
-                            model, manager_name
+                            model,
+                            manager_name,
+                            result_model=history_result_model,
+                            operation_name="history" if is_history_manager else "paginated",
                         )
                         self._query_fields[f"{model_name}s_pages"] = paginated_query
                 else:
                     # Custom managers use new naming convention
                     # Single object query: modelname__custommanager
-                    single_query = self.query_generator.generate_single_query(
-                        model, manager_name
-                    )
-                    self._query_fields[f"{model_name}__{manager_name}"] = single_query
+                    if not is_history_manager:
+                        single_query = self.query_generator.generate_single_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}__{manager_name}"] = (
+                            single_query
+                        )
 
-                    # List query: modelname__custommanager (plural form)
-                    list_query = self.query_generator.generate_list_query(
-                        model, manager_name
-                    )
-                    self._query_fields[f"{model_name}s__{manager_name}"] = list_query
+                        # List query: modelname__custommanager (plural form)
+                        list_query = self.query_generator.generate_list_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}s__{manager_name}"] = (
+                            list_query
+                        )
 
                     # Paginated query: modelname_pages_custommanager
                     if self.settings.enable_pagination:
                         paginated_query = self.query_generator.generate_paginated_query(
-                            model, manager_name
+                            model,
+                            manager_name,
+                            result_model=history_result_model,
+                            operation_name="history" if is_history_manager else "paginated",
                         )
                         self._query_fields[f"{model_name}s_pages_{manager_name}"] = (
                             paginated_query
@@ -669,6 +699,7 @@ class SchemaBuilder:
                         LogoutMutation,
                         RefreshTokenMutation,
                         RegisterMutation,
+                        UpdateMySettingsMutation,
                     )
 
                     disable_security = self.settings.disable_security_mutations
@@ -683,6 +714,7 @@ class SchemaBuilder:
                                 "register": RegisterMutation.Field(),
                                 "refresh_token": RefreshTokenMutation.Field(),
                                 "logout": LogoutMutation.Field(),
+                                "update_my_settings": UpdateMySettingsMutation.Field(),
                             }
                         )
                         logger.info(
