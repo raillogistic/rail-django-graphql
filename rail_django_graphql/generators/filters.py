@@ -32,6 +32,7 @@ from django_filters import (
     FilterSet,
     ModelChoiceFilter,
     ModelMultipleChoiceFilter,
+    MultipleChoiceFilter,
     NumberFilter,
 )
 
@@ -585,6 +586,47 @@ class AdvancedFilterGenerator:
             f"enable_nested_filters={self.enable_nested_filters}"
         )
 
+    def _is_historical_model(self, model: Type[models.Model]) -> bool:
+        """Return True when the model originates from django-simple-history."""
+        try:
+            name = getattr(model, "__name__", "")
+            module = getattr(model, "__module__", "")
+        except Exception:
+            return False
+        if name.startswith("Historical"):
+            return True
+        return "simple_history" in module
+
+    def _generate_historical_filters(
+        self, model: Type[models.Model]
+    ) -> Dict[str, django_filters.Filter]:
+        """Expose friendly filters for simple-history specific fields."""
+        filters: Dict[str, django_filters.Filter] = {}
+
+        # Allow filtering revisions by the original instance primary keys.
+        filters["instance__in"] = django_filters.BaseInFilter(
+            field_name="id",
+            lookup_expr="in",
+            label="Instances",
+            help_text="Filtrer par identifiants d'instance d'origine.",
+        )
+
+        # Mirror the manual chips used in the frontend for create/update/delete types.
+        try:
+            history_field = model._meta.get_field("history_type")
+            choices = getattr(history_field, "choices", None)
+            if choices:
+                filters["history_type__in"] = MultipleChoiceFilter(
+                    field_name="history_type",
+                    choices=choices,
+                    label="Type de changement",
+                    help_text="Filtrer par type de modification (création, modification, suppression).",
+                )
+        except Exception:
+            pass
+
+        return filters
+
     def generate_filter_set(
         self, model: Type[models.Model], current_depth: int = 0
     ) -> Type[FilterSet]:
@@ -676,6 +718,9 @@ class AdvancedFilterGenerator:
             # Generate property filters
             property_filters = self._generate_property_filters(model)
             filters.update(property_filters)
+
+            if self._is_historical_model(model):
+                filters.update(self._generate_historical_filters(model))
 
             # Generate dynamic filter methods for count filters
             filter_methods = self._generate_count_filter_methods(model, filters)

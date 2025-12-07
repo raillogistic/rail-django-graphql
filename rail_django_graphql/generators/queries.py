@@ -632,6 +632,7 @@ class QueryGenerator:
             operation_name: Guard name to enforce via GraphQLMeta.
         """
         result_model = result_model or model
+        filter_model = result_model or model
         model_type = self.type_generator.generate_object_type(result_model)
         model_name = result_model.__name__.lower()
 
@@ -683,7 +684,6 @@ class QueryGenerator:
                 for k, v in kwargs.items()
                 if k not in ["filters", "order_by", "page", "per_page", "include"]
             }
-            filter_class = self.filter_generator.generate_filter_set(model)
             if basic_filters and filter_class:
                 filterset = filter_class(basic_filters, queryset)
                 if filterset.is_valid():
@@ -766,9 +766,9 @@ class QueryGenerator:
         }
 
         # Add complex filtering argument (same as list queries)
-        filter_class = self.filter_generator.generate_filter_set(model)
+        filter_class = self.filter_generator.generate_filter_set(filter_model)
         complex_filter_input = self.filter_generator.generate_complex_filter_input(
-            model
+            filter_model
         )
 
         arguments["filters"] = graphene.Argument(
