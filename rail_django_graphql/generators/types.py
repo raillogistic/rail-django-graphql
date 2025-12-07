@@ -29,6 +29,7 @@ from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
 from ..core.scalars import get_custom_scalar, get_enabled_scalars
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
+from ..utils.history import serialize_history_changes
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
 
@@ -484,6 +485,14 @@ class TypeGenerator:
                 return str(raw) if raw is not None else None
 
             type_attrs["resolve_instance_id"] = resolve_instance_id
+            type_attrs["history_changes"] = graphene.JSONString(
+                description="Liste structurée des modifications effectuées lors de cette révision"
+            )
+
+            def resolve_history_changes(self, info):
+                return serialize_history_changes(self)
+
+            type_attrs["resolve_history_changes"] = resolve_history_changes
 
         for field_name, field_info in fields.items():
             if not self._should_include_field(model, field_name):
