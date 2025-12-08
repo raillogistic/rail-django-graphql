@@ -218,6 +218,8 @@ class TemplateMeta:
     guard: Optional[str] = None
     require_authentication: bool = True
     title: Optional[str] = None
+    allow_client_data: bool = False
+    client_data_fields: Sequence[str] = field(default_factory=tuple)
 
 
 @dataclass
@@ -236,6 +238,8 @@ class TemplateDefinition:
     guard: Optional[str]
     require_authentication: bool
     title: str
+    allow_client_data: bool
+    client_data_fields: Sequence[str]
 
 
 @dataclass
@@ -265,6 +269,21 @@ def _derive_template_title(model: models.Model, method_name: str) -> str:
     if verbose_name:
         return f"{base} ({verbose_name})"
     return base
+
+
+def _clean_client_value(value: Any) -> str:
+    """Normalize client-provided values to bounded strings."""
+
+    try:
+        if value is None:
+            return ""
+        if isinstance(value, (bytes, bytearray)):
+            value = value.decode("utf-8", "ignore")
+        text = str(value)
+    except Exception:
+        text = ""
+
+    return text[:1024]
 
 
 class TemplateRegistry:
@@ -311,6 +330,8 @@ class TemplateRegistry:
             guard=meta.guard,
             require_authentication=meta.require_authentication,
             title=title,
+            allow_client_data=bool(meta.allow_client_data),
+            client_data_fields=tuple(meta.client_data_fields or ()),
         )
 
         self._templates[url_path] = definition
@@ -346,6 +367,8 @@ def model_pdf_template(
     guard: Optional[str] = None,
     require_authentication: bool = True,
     title: Optional[str] = None,
+    allow_client_data: bool = False,
+    client_data_fields: Optional[Iterable[str]] = None,
 ) -> Callable:
     """
     Decorator to expose a model method as a PDF endpoint rendered with WeasyPrint.
@@ -362,6 +385,8 @@ def model_pdf_template(
         guard: Optional GraphQL guard name (defaults to "retrieve" when omitted).
         require_authentication: Whether authentication is mandatory (default True).
         title: Optional human-readable label surfaced to the frontend.
+        allow_client_data: When True, whitelisted query parameters can be injected into the template context.
+        client_data_fields: Iterable of allowed client data keys (whitelist). Ignored when allow_client_data is False.
 
     Returns:
         The original function with attached metadata for automatic registration.
@@ -379,6 +404,8 @@ def model_pdf_template(
             guard=guard,
             require_authentication=require_authentication,
             title=title,
+            allow_client_data=allow_client_data,
+            client_data_fields=tuple(client_data_fields or ()),
         )
         return func
 
@@ -577,8 +604,7 @@ def evaluate_template_access(
             if not permission_state.allowed:
                 return TemplateAccessDecision(
                     allowed=False,
-                    reason=permission_state.reason
-                    or "Accès refusé pour ce document.",
+                    reason=permission_state.reason or "Accès refusé pour ce document.",
                     status_code=403,
                 )
 
@@ -615,8 +641,10 @@ def evaluate_template_access(
                     status_code=403,
                 )
 
-            if guard_state and guard_state.get("guarded") and not guard_state.get(
-                "allowed", True
+            if (
+                guard_state
+                and guard_state.get("guarded")
+                and not guard_state.get("allowed", True)
             ):
                 return TemplateAccessDecision(
                     allowed=False,
@@ -626,6 +654,28 @@ def evaluate_template_access(
                 )
 
     return TemplateAccessDecision(allowed=True)
+
+
+def _extract_client_data(
+    request: HttpRequest, template_def: TemplateDefinition
+) -> Dict[str, Any]:
+    """
+    Extract whitelisted client-provided values from the request (query params only).
+    """
+
+    if not template_def.allow_client_data:
+        return {}
+
+    allowed_keys = {str(k) for k in (template_def.client_data_fields or [])}
+    if not allowed_keys:
+        return {}
+
+    data: Dict[str, Any] = {}
+    for key in allowed_keys:
+        if key in request.GET:
+            data[key] = _clean_client_value(request.GET.get(key))
+
+    return data
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -687,7 +737,10 @@ class PdfTemplateView(View):
         if denial:
             return denial
 
-        context = self._build_context(request, instance, template_def)
+        client_data = _extract_client_data(request, template_def)
+        setattr(request, "rail_template_client_data", client_data)
+
+        context = self._build_context(request, instance, template_def, client_data)
 
         try:
             pdf_bytes = self._render_pdf(template_def, context)
@@ -712,6 +765,7 @@ class PdfTemplateView(View):
         request: HttpRequest,
         instance: models.Model,
         template_def: TemplateDefinition,
+        client_data: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Build template context combining the model instance and method payload.
@@ -738,6 +792,7 @@ class PdfTemplateView(View):
             "data": data,
             "request": request,
             "template_config": template_def.config,
+            "client_data": client_data or {},
         }
 
     def _authorize_template_access(
