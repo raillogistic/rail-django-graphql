@@ -370,6 +370,9 @@ class SchemaSettings:
     # Custom GraphQL query extensions loaded by path
     query_extensions: List[str] = field(default_factory=list)
 
+    # Custom GraphQL mutation extensions loaded by path
+    mutation_extensions: List[str] = field(default_factory=list)
+
     @classmethod
     def from_schema(cls, schema_name: str) -> "SchemaSettings":
         """

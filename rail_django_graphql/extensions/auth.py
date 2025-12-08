@@ -165,7 +165,6 @@ def get_authenticated_user_type():
                 "email",
                 "first_name",
                 "last_name",
-                "bio",
                 "is_staff",
                 "is_superuser",
                 "is_active",
@@ -691,7 +690,7 @@ class AuthMutations(graphene.ObjectType):
     """Mutations d'authentification disponibles."""
 
     login = LoginMutation.Field(description="Connexion utilisateur")
-    register = RegisterMutation.Field(description="Inscription utilisateur")
+    # register = RegisterMutation.Field(description="Inscription utilisateur")
     refresh_token = RefreshTokenMutation.Field(description="Rafraîchissement du token")
     logout = LogoutMutation.Field(description="Déconnexion utilisateur")
 

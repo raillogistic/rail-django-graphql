@@ -742,6 +742,26 @@ class SchemaBuilder:
                         f"Could not import health extension mutations for schema '{self.schema_name}': {e}"
                     )
 
+                # Load custom mutation extensions from settings
+                mutation_extensions_path = self._get_schema_setting("mutation_extensions", [])
+                for path in mutation_extensions_path or []:
+                    if not isinstance(path, str) or not path.strip():
+                        continue
+                    try:
+                        module_path, class_name = path.rsplit(".", 1)
+                        module = importlib.import_module(module_path)
+                        mutation_class = getattr(module, class_name)
+                        
+                        # Iterate over fields of the ObjectType and add them to extension_mutations
+                        for field_name, field in mutation_class._meta.fields.items():
+                             extension_mutations[field_name] = field
+                             
+                        logger.info(f"Loaded mutation extension: {path}")
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not import mutation extension '{path}' for schema '{self.schema_name}': {e}"
+                        )
+
                 # Combine all mutations
                 all_mutations = {**self._mutation_fields, **security_mutations, **extension_mutations}
 
