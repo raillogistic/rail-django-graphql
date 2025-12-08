@@ -5,6 +5,7 @@ URL patterns for GraphQL schema management REST API.
 from django.urls import path
 
 from ..extensions.exporting import ExportView
+from ..extensions.templating import template_urlpatterns
 from .views import (
     SchemaDetailAPIView,
     SchemaDiscoveryAPIView,
@@ -38,3 +39,5 @@ urlpatterns = [
     # Export data operations
     path("export/", ExportView.as_view(), name="model_export"),
 ]
+
+urlpatterns += template_urlpatterns()

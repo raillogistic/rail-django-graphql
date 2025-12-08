@@ -50,6 +50,14 @@ from .metadata import (
     RelationshipMetadataType,
 )
 
+# PDF templating helpers
+from .templating import (
+    PdfTemplateView,
+    model_pdf_template,
+    template_registry,
+    template_urlpatterns,
+)
+
 # Multi-factor authentication
 from .mfa import MFAManager
 
@@ -68,8 +76,6 @@ __all__ = [
     "jwt_optional",
     "get_user_from_jwt",
     "require_permissions",
-    # Multi-factor authentication
-    "MFAManager",
     # "TOTPSetupMutation",
     # "TOTPVerifyMutation",
     # "SMSSetupMutation",
@@ -93,4 +99,11 @@ __all__ = [
     "FieldMetadataType",
     "RelationshipMetadataType",
     "ModelMetadataExtractor",
+    # PDF templating
+    "PdfTemplateView",
+    "model_pdf_template",
+    "template_registry",
+    "template_urlpatterns",
+    # Multi-factor authentication
+    "MFAManager",
 ]

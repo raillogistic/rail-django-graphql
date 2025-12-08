@@ -40,6 +40,19 @@ from ..security.field_permissions import (
     field_permission_manager,
 )
 
+try:
+    from .templating import (
+        template_registry,
+        _url_prefix as _templating_url_prefix,
+        evaluate_template_access,
+    )
+except Exception:  # pragma: no cover - optional dependency during early startup
+    template_registry = None
+    evaluate_template_access = None
+
+    def _templating_url_prefix() -> str:
+        return "templates"
+
 logger = logging.getLogger(__name__)
 
 ## Metadata cache configuration removed: caching is not supported.
@@ -708,6 +721,23 @@ class TableFieldMetadata:
 
 
 @dataclass
+class TemplateActionMetadata:
+    """Metadata describing a printable template action exposed to the frontend."""
+
+    key: str
+    method_name: str
+    title: str
+    endpoint: str
+    url_path: str
+    guard: Optional[str]
+    require_authentication: bool
+    roles: List[str]
+    permissions: List[str]
+    allowed: bool
+    denial_reason: Optional[str] = None
+
+
+@dataclass
 class ModelTableMetadata:
     """Comprehensive table metadata for a Django model, including fields and filters."""
 
@@ -728,6 +758,7 @@ class ModelTableMetadata:
     filters: List[Dict[str, Any]]
     permissions: Optional[ModelPermissionMatrix] = None
     mutations: List[MutationMetadata] = field(default_factory=list)
+    pdf_templates: List[TemplateActionMetadata] = field(default_factory=list)
 
 
 def _build_field_permission_snapshot(
@@ -1175,6 +1206,52 @@ class TableFieldMetadataType(graphene.ObjectType):
     )
 
 
+class TemplateActionMetadataType(graphene.ObjectType):
+    """GraphQL type exposing printable template metadata for ModelTable consumers."""
+
+    key = graphene.String(required=True, description="Stable identifier for the template")
+    methodName = graphene.String(
+        required=True,
+        description="Model method name declared with @model_pdf_template",
+        source="method_name",
+    )
+    title = graphene.String(required=True, description="Human readable title")
+    endpoint = graphene.String(
+        required=True,
+        description="Relative endpoint prefix under /api for this template",
+    )
+    urlPath = graphene.String(
+        required=True,
+        description="Template path appended to the templating URL prefix",
+        source="url_path",
+    )
+    guard = graphene.String(
+        description="GraphQL guard name enforced when rendering this template"
+    )
+    requireAuthentication = graphene.Boolean(
+        required=True,
+        description="Whether authentication is required to hit this endpoint",
+        source="require_authentication",
+    )
+    roles = graphene.List(
+        graphene.String,
+        required=True,
+        description="Roles required to access the template",
+    )
+    permissions = graphene.List(
+        graphene.String,
+        required=True,
+        description="Permissions required to access the template",
+    )
+    allowed = graphene.Boolean(
+        required=True, description="Whether the current user passes static checks"
+    )
+    denialReason = graphene.String(
+        description="Reason describing why the template is unavailable",
+        source="denial_reason",
+    )
+
+
 class ModelTableType(graphene.ObjectType):
     """GraphQL type for comprehensive table metadata for a Django model."""
 
@@ -1222,6 +1299,11 @@ class ModelTableType(graphene.ObjectType):
     mutations = graphene.List(
         MutationMetadataType,
         description="Available GraphQL mutations relevant to this model",
+    )
+    pdfTemplates = graphene.List(
+        TemplateActionMetadataType,
+        description="Printable templates derived from @model_pdf_template decorators",
+        source="pdf_templates",
     )
 
 
@@ -3801,6 +3883,56 @@ class ModelTableExtractor:
             is_related=False,
         )
 
+    def _collect_pdf_templates(
+        self, model: Type[models.Model], user=None
+    ) -> List[TemplateActionMetadata]:
+        """
+        Gather template metadata registered via @model_pdf_template for the model.
+        """
+
+        if not template_registry:
+            return []
+
+        try:
+            registry_entries = template_registry.all().items()
+        except Exception:  # pragma: no cover - defensive
+            return []
+
+        prefix = _templating_url_prefix().strip("/")
+        api_prefix = f"/api/{prefix}".rstrip("/")
+        templates: List[TemplateActionMetadata] = []
+
+        for url_path, definition in registry_entries:
+            if definition.model is not model:
+                continue
+
+            endpoint = f"{api_prefix}/{url_path.strip('/')}"
+            decision = (
+                evaluate_template_access(definition, user=user)
+                if evaluate_template_access
+                else None
+            )
+            allowed = decision.allowed if decision else True
+            denial_reason = decision.reason if decision and not decision.allowed else None
+            templates.append(
+                TemplateActionMetadata(
+                    key=f"{model._meta.app_label}.{model._meta.model_name}.{definition.method_name}",
+                    method_name=definition.method_name,
+                    title=definition.title,
+                    endpoint=endpoint,
+                    url_path=url_path,
+                    guard=definition.guard or "retrieve",
+                    require_authentication=definition.require_authentication,
+                    roles=list(definition.roles or []),
+                    permissions=list(definition.permissions or []),
+                    allowed=allowed,
+                    denial_reason=denial_reason,
+                )
+            )
+
+        templates.sort(key=lambda tpl: tpl.title.lower())
+        return templates
+
     def _build_table_field_for_reverse_count(
         self, introspector, model
     ) -> TableFieldMetadata:
@@ -4661,6 +4793,7 @@ class ModelTableExtractor:
             filters=filters,
             permissions=_build_model_permission_matrix(model, user),
             mutations=mutations,
+            pdf_templates=self._collect_pdf_templates(model, user=user),
         )
         # Store in TTL cache
         if not user_authenticated:
