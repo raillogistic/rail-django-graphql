@@ -735,6 +735,8 @@ class TemplateActionMetadata:
     permissions: List[str]
     allowed: bool
     denial_reason: Optional[str] = None
+    allow_client_data: bool = False
+    client_data_fields: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -1249,6 +1251,17 @@ class TemplateActionMetadataType(graphene.ObjectType):
     denialReason = graphene.String(
         description="Reason describing why the template is unavailable",
         source="denial_reason",
+    )
+    allowClientData = graphene.Boolean(
+        required=True,
+        description="Permet à l'utilisateur de fournir des données personnalisées",
+        source="allow_client_data",
+    )
+    clientDataFields = graphene.List(
+        graphene.String,
+        required=True,
+        description="Clés autorisées pour les données client",
+        source="client_data_fields",
     )
 
 
@@ -3927,6 +3940,8 @@ class ModelTableExtractor:
                     permissions=list(definition.permissions or []),
                     allowed=allowed,
                     denial_reason=denial_reason,
+                    allow_client_data=definition.allow_client_data,
+                    client_data_fields=list(definition.client_data_fields or []),
                 )
             )
 
