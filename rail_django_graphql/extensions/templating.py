@@ -563,10 +563,15 @@ def evaluate_template_access(
                 user, model_label, OperationType.READ
             )
         except Exception as exc:  # pragma: no cover - defensive logging
-            logger.debug(
-                "Permission manager check failed for %s: %s",
+            logger.warning(
+                "Permission manager check failed for %s: %s (denying access)",
                 template_def.model.__name__,
                 exc,
+            )
+            return TemplateAccessDecision(
+                allowed=False,
+                reason="Vérification de permission indisponible.",
+                status_code=403,
             )
         else:
             if not permission_state.allowed:
@@ -599,10 +604,15 @@ def evaluate_template_access(
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning(
-                    "Failed to evaluate guard '%s' for %s: %s",
+                    "Failed to evaluate guard '%s' for %s: %s (denying access)",
                     guard_name,
                     template_def.model.__name__,
                     exc,
+                )
+                return TemplateAccessDecision(
+                    allowed=False,
+                    reason="Garde d'opération indisponible.",
+                    status_code=403,
                 )
 
             if guard_state and guard_state.get("guarded") and not guard_state.get(
