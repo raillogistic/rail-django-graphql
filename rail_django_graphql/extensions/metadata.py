@@ -152,6 +152,10 @@ def _make_table_cache_key(
     include_nested: bool = True,
     only_lookup: Optional[List[str]] = None,
     exclude_lookup: Optional[List[str]] = None,
+    include_filters: bool = True,
+    include_mutations: bool = True,
+    include_templates: bool = True,
+    user_cache_key: Optional[str] = None,
 ) -> str:
     """
     Purpose: Build a stable cache key for model_table metadata.
@@ -169,7 +173,7 @@ def _make_table_cache_key(
     Raises: None
     Example:
         >>> _make_table_cache_key('default','app','Model',False, only=["name"], include_nested=False)
-        'model-table:default:app:Model:counts=0:cf=f9b1f2b3'
+        'model-table:default:app:Model:counts=0:filters=1:mutations=1:templates=1:cf=f9b1f2b3'
     """
     try:
         # Build a compact signature hash for filter controls to avoid overly long keys
@@ -179,13 +183,50 @@ def _make_table_cache_key(
             "include_nested": "1" if include_nested else "0",
             "only_lookup": ",".join(sorted(only_lookup or [])),
             "exclude_lookup": ",".join(sorted(exclude_lookup or [])),
+            "filters": "1" if include_filters else "0",
+            "mutations": "1" if include_mutations else "0",
+            "templates": "1" if include_templates else "0",
+            "user": user_cache_key or "",
         }
         signature = "|".join(f"{k}={v}" for k, v in parts.items())
         digest = hashlib.sha1(signature.encode("utf-8")).hexdigest()[:8]
-        return f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}:cf={digest}"
+        user_part = f":user={user_cache_key}" if user_cache_key else ""
+        return (
+            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
+            f":filters={1 if include_filters else 0}:mutations={1 if include_mutations else 0}"
+            f":templates={1 if include_templates else 0}:cf={digest}{user_part}"
+        )
     except Exception:
         # Fallback to legacy key format if hashing fails
-        return f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
+        fallback = (
+            f"model-table:{schema_name}:{app_name}:{model_name}:counts={1 if counts else 0}"
+            f":filters={1 if include_filters else 0}:mutations={1 if include_mutations else 0}"
+            f":templates={1 if include_templates else 0}"
+        )
+        if user_cache_key:
+            fallback = f"{fallback}:user={user_cache_key}"
+        return fallback
+
+
+def _get_user_cache_key(user: Any) -> Optional[str]:
+    """
+    Build a stable cache key for an authenticated user without leaking raw identifiers.
+    """
+    if not user:
+        return None
+    try:
+        identifier = (
+            getattr(user, "cache_key", None)
+            or getattr(user, "sub", None)
+            or getattr(user, "pk", None)
+            or getattr(user, "id", None)
+        )
+        if identifier is None:
+            return None
+        digest = hashlib.sha1(str(identifier).encode("utf-8")).hexdigest()[:12]
+        return digest
+    except Exception:
+        return None
 
 
 def cache_metadata(
@@ -228,23 +269,21 @@ def invalidate_metadata_cache(model_name: str = None, app_name: str = None):
     with _table_cache_lock:
         if not _table_cache:
             return
-        for schema_name, inner in _table_cache.items():
-            keys_to_delete = []
-            for k in list(inner.keys()):
-                parts = k.split(":")
-                # Format: model-table:schema:app:model:counts=X:depth=Y:cf=...
-                cache_app = parts[3] if len(parts) > 3 else None
-                cache_model = parts[4] if len(parts) > 4 else None
-                if model_name or app_name:
-                    if (not app_name or app_name == cache_app) and (
-                        not model_name or model_name == cache_model
-                    ):
-                        keys_to_delete.append(k)
-                else:
+        keys_to_delete = []
+        for k in list(_table_cache.keys()):
+            parts = k.split(":")
+            cache_app = parts[3] if len(parts) > 3 else None
+            cache_model = parts[4] if len(parts) > 4 else None
+            if model_name or app_name:
+                if (not app_name or app_name == cache_app) and (
+                    not model_name or model_name == cache_model
+                ):
                     keys_to_delete.append(k)
-            for k in keys_to_delete:
-                inner.pop(k, None)
-                _table_cache_stats["deletes"] += 1
+            else:
+                keys_to_delete.append(k)
+        for k in keys_to_delete:
+            _table_cache.pop(k, None)
+            _table_cache_stats["deletes"] += 1
         _table_cache_stats["invalidations"] += 1
     if app_name and model_name:
         _bump_metadata_version(app_name=app_name, model_name=model_name)
@@ -275,6 +314,28 @@ def invalidate_cache_on_startup() -> None:
             logger.info("Metadata cache invalidated on application startup")
     except Exception as e:
         logger.debug(f"Skipping startup cache invalidation: {e}")
+
+
+def _get_requested_field_names(info) -> set:
+    """
+    Extract top-level selection field names from a GraphQL resolve info object.
+    """
+    names = set()
+    try:
+        field_nodes = getattr(info, "field_nodes", None) or getattr(
+            info, "field_asts", None
+        )
+        for node in field_nodes or []:
+            selection_set = getattr(node, "selection_set", None)
+            if not selection_set:
+                continue
+            for selection in selection_set.selections:
+                sel_name = getattr(getattr(selection, "name", None), "value", None)
+                if sel_name:
+                    names.add(sel_name)
+    except Exception:
+        return set()
+    return names
 
 
 # Use lazy import to avoid AppRegistryNotReady error
@@ -4074,10 +4135,16 @@ class ModelTableExtractor:
         include_nested: bool = True,
         only_lookup: Optional[List[str]] = None,
         exclude_lookup: Optional[List[str]] = None,
+        include_filters: bool = True,
+        include_mutations: bool = True,
+        include_pdf_templates: bool = True,
         user=None,
     ) -> Optional[ModelTableMetadata]:
         user_authenticated = bool(user and getattr(user, "is_authenticated", False))
-        if not user_authenticated:
+        user_cache_key = _get_user_cache_key(user) if user_authenticated else None
+        cache_enabled = (not user_authenticated) or bool(user_cache_key)
+        cache_key = None
+        if cache_enabled:
             try:
                 cache_key = _make_table_cache_key(
                     self.schema_name,
@@ -4089,6 +4156,10 @@ class ModelTableExtractor:
                     include_nested=include_nested,
                     only_lookup=only_lookup or [],
                     exclude_lookup=exclude_lookup or [],
+                    include_filters=include_filters,
+                    include_mutations=include_mutations,
+                    include_templates=include_pdf_templates,
+                    user_cache_key=user_cache_key,
                 )
                 now = time.time()
                 with _table_cache_lock:
@@ -4108,18 +4179,20 @@ class ModelTableExtractor:
 
         meta = model._meta
         introspector = ModelIntrospector(model, self.schema_name)
-        try:
-            mutations = self.metadata_extractor.extract_mutations_metadata(
-                model, user=user
-            )
-        except Exception as exc:
-            logger.warning(
-                "Unable to extract mutations metadata for %s.%s: %s",
-                app_name,
-                model_name,
-                exc,
-            )
-            mutations = []
+        mutations: List[MutationMetadata] = []
+        if include_mutations:
+            try:
+                mutations = self.metadata_extractor.extract_mutations_metadata(
+                    model, user=user
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Unable to extract mutations metadata for %s.%s: %s",
+                    app_name,
+                    model_name,
+                    exc,
+                )
+                mutations = []
 
         # Detect polymorphic/multi-table inheritance and hide OneToOne relations
         # to avoid exposing parent/child or sibling pointers in table columns.
@@ -4298,521 +4371,528 @@ class ModelTableExtractor:
             )
         # Filters: exclusively use AdvancedFilterGenerator for table filter extraction
         filters: List[Dict[str, Any]] = []
-        try:
-            from ..generators.filters import AdvancedFilterGenerator
-
-            filter_generator = AdvancedFilterGenerator(
-                enable_nested_filters=True, schema_name=self.schema_name
-            )
-            filter_class = filter_generator.generate_filter_set(model)
-
-            # Collect property metadata to label property-based filters
+        if include_filters:
             try:
-                properties_dict = getattr(introspector, "properties", {}) or {}
-            except Exception:
-                properties_dict = {}
+                from ..generators.filters import AdvancedFilterGenerator
 
-            grouped_filter_dict: Dict[str, Dict[str, Any]] = {}
-            base_filters = getattr(filter_class, "base_filters", {}) or {}
-
-            for fname, finstance in base_filters.items():
-                # Skip quick filter
-                if (
-                    "quick" in fname
-                    or "_ptr" in fname
-                    or "polymorphic_ctype" in fname
-                    or "_id" in fname
-                    or fname == "pk"
-                    or fname == "id"
-                ):
-                    continue
-
-                parts = fname.split("__")
-                base_name = parts[0]
-                if (
-                    base_name == "id"
-                    or base_name == "pk"
-                    or "report_rows" in base_name
-                    or "_snapshots" in base_name
-                    or "_policies" in base_name
-                ):
-                    continue
-                # Determine lookup expression; if no explicit lookup, treat as exact
-                lookup_expr = "__".join(parts[1:]) or "exact"
-
-                # Special handling for time-based Boolean filters named with single underscores
-                # e.g., created_date_today, created_date_yesterday, etc.
-                # These should be grouped under the base field (created_date) with proper lookup.
-                rel_suffix_map = {
-                    "_today": "today",
-                    "_yesterday": "yesterday",
-                    "_this_week": "this_week",
-                    "_this_month": "this_month",
-                    "_this_year": "this_year",
-                    "_past_week": "past_week",
-                    "_past_month": "past_month",
-                    "_past_year": "past_year",
-                    # Support 'last_*' synonyms used in some docs/exports
-                    "_last_week": "past_week",
-                    "_last_month": "past_month",
-                    "_last_year": "past_year",
-                }
-                matched_suffix = None
-                for suf, lookup_val in rel_suffix_map.items():
-                    if fname.endswith(suf):
-                        matched_suffix = suf
-                        lookup_expr = lookup_val
-                        # Reset base_name to the field name without the suffix
-                        base_name = fname[: -len(suf)]
-                        break
-                # A filter is considered nested only when it references a deeper path
-                # beyond the base field (e.g., famille__name__icontains). Direct
-                # lookups on the base field (famille__in, famille__isnull, famille__exact)
-                # must remain at the parent level.
-                is_nested = (len(parts) > 2) and not fname.endswith("_count")
-
-                # Parent group key
-                group_key = base_name
-
-                # Resolve field and labels
-                field_obj = None
-                verbose_name_val = group_key
-                related_model_name = None
-                try:
-                    field_obj = model._meta.get_field(base_name)
-                    # Prefer using the related model's verbose names for relation groups
-                    if getattr(field_obj, "related_model", None):
-                        related_model_name = field_obj.related_model.__name__
-                        rel_meta = field_obj.related_model._meta
-                        verbose_name_val = str(
-                            getattr(rel_meta, "verbose_name_plural", None)
-                            or getattr(rel_meta, "verbose_name", base_name)
-                        )
-                    else:
-                        verbose_name_val = str(
-                            getattr(field_obj, "verbose_name", base_name)
-                        )
-                except Exception:
-                    # Property-based filters
-                    prop_info = properties_dict.get(base_name)
-                    if "_count" in base_name:
-                        # remove "_count"
-                        related_model = model._meta.get_field(
-                            base_name.replace("_count", "")
-                        ).related_model
-                        label = base_name.replace("_count", "").upper()
-                        if (
-                            related_model._meta.verbose_name_plural
-                            or related_model._meta.model_name
-                        ):
-                            label = (
-                                related_model._meta.verbose_name_plural
-                                or related_model._meta.model_name
-                            ).lower()
-
-                        verbose_name_val = f"Nombre total des {label} "
-
-                    if prop_info is not None:
-                        verbose_name_val = (
-                            getattr(
-                                getattr(prop_info, "fget", None),
-                                "short_description",
-                                None,
-                            )
-                            or getattr(prop_info, "verbose_name", None)
-                            or "Nombre de "
-                            or base_name
-                        )
-
-                    # Reverse relation filters: if base_name is an accessor/related_name,
-                    # derive label from the related model's verbose name(s)
-                    if field_obj is None and (prop_info is None):
-                        try:
-                            reverse_rel = None
-                            for f in model._meta.get_fields():
-                                # ManyToOneRel / ManyToManyRel have get_accessor_name
-                                accessor = getattr(f, "get_accessor_name", None)
-                                if callable(accessor) and accessor() == base_name:
-                                    reverse_rel = f
-                                    break
-                            if reverse_rel is not None:
-                                rel_model = getattr(reverse_rel, "related_model", None)
-                                if rel_model is not None:
-                                    related_model_name = rel_model.__name__
-                                    rel_meta = rel_model._meta
-                                    # Prefer plural for reverse relations (manager-like)
-                                    verbose_name_val = str(
-                                        getattr(rel_meta, "verbose_name_plural", None)
-                                        or getattr(rel_meta, "verbose_name", base_name)
-                                    )
-                        except Exception as e:
-                            logger.debug(
-                                f"Reverse relation label resolution failed for {model.__name__}.{base_name}: {e}"
-                            )
-
-                # Initialize group with nested container
-                if group_key not in grouped_filter_dict:
-                    grouped_filter_dict[group_key] = {
-                        "field_name": group_key,
-                        "is_nested": False,
-                        "related_model": related_model_name,
-                        "is_custom": False,
-                        "field_label": verbose_name_val,
-                        "options": [],
-                        # Nested will be a list of FilterFieldType-like dicts
-                        "nested": [],
-                        # Internal: track seen parent lookups to avoid duplicates
-                        "_seen_parent": set(),
-                    }
-
-                # Helper to build an option dict
-                def _make_option(
-                    name: str, lookup: str, label_for_help: str, choices_src: Any
-                ) -> Dict[str, Any]:
-                    return {
-                        "name": name,
-                        "lookup_expr": lookup,
-                        "help_text": self._translate_help_text_to_french(
-                            lookup, label_for_help
-                        ),
-                        "filter_type": finstance.__class__.__name__,
-                        "choices": choices_src,
-                    }
-
-                # Compute choices for CharField choices on exact and in lookups
-                option_choices = None
-                try:
-                    if field_obj is not None and isinstance(
-                        field_obj, models.CharField
-                    ):
-                        raw_choices = getattr(field_obj, "choices", None)
-                        if raw_choices and lookup_expr in ("exact", "in"):
-                            option_choices = [
-                                {
-                                    "value": self._json_safe_value(val),
-                                    "label": force_str(lbl),
-                                }
-                                for val, lbl in raw_choices
-                            ]
-                except Exception:
-                    option_choices = None
-
-                if not is_nested:
-                    # Determine if this is a relation (ForeignKey/ManyToMany/etc.)
-                    is_relation_field = bool(getattr(field_obj, "is_relation", False))
-
-                    # For parent-level options, avoid duplicates (e.g., base and __exact)
-                    seen_parent = grouped_filter_dict[group_key].setdefault(
-                        "_seen_parent", set()
-                    )
-
-                    # Related fields: keep only exact, in, isnull at parent level
-                    if is_relation_field:
-                        if lookup_expr in ("exact", "in", "isnull"):
-                            # Canonical name for exact is the base field without lookup
-                            if lookup_expr == "exact":
-                                if "exact" not in seen_parent:
-                                    grouped_filter_dict[group_key]["options"].append(
-                                        _make_option(
-                                            base_name,
-                                            lookup_expr,
-                                            verbose_name_val,
-                                            option_choices,
-                                        )
-                                    )
-                                    seen_parent.add("exact")
-                            else:
-                                key = f"rel:{lookup_expr}"
-                                if key not in seen_parent:
-                                    grouped_filter_dict[group_key]["options"].append(
-                                        _make_option(
-                                            fname,
-                                            lookup_expr,
-                                            verbose_name_val,
-                                            option_choices,
-                                        )
-                                    )
-                                    seen_parent.add(key)
-                        # Skip other lookups for relation parent field
-                        continue
-
-                    # Simple (non-relation) fields: include all available lookups
-                    if lookup_expr == "exact":
-                        if "exact" not in seen_parent:
-                            grouped_filter_dict[group_key]["options"].append(
-                                _make_option(
-                                    base_name,
-                                    lookup_expr,
-                                    verbose_name_val,
-                                    option_choices,
-                                )
-                            )
-                            seen_parent.add("exact")
-                    else:
-                        key = f"simple:{lookup_expr}"
-                        if key not in seen_parent:
-                            grouped_filter_dict[group_key]["options"].append(
-                                _make_option(
-                                    fname,
-                                    lookup_expr,
-                                    verbose_name_val,
-                                    option_choices,
-                                )
-                            )
-                            seen_parent.add(key)
-                    continue
-
-                # Nested: group under 'nested' for the specific nested field path
-                nested_path = fname.rsplit("__", 1)[0]
-                # For nested lookups, only the final token should be the lookup (e.g., 'exact')
-                nested_lookup_expr = (
-                    fname.split("__")[-1] if "__" in fname else lookup_expr
+                filter_generator = AdvancedFilterGenerator(
+                    enable_nested_filters=True, schema_name=self.schema_name
                 )
+                filter_class = filter_generator.generate_filter_set(model)
 
-                # Determine nested field label by traversing the path
-                nested_label = nested_path
-                nested_option_choices = None
+                # Collect property metadata to label property-based filters
                 try:
-                    current_model = model
-                    segments = nested_path.split("__")
-                    final_field_obj = None
-                    # Walk segments to find the final field verbose name
-                    for i, seg in enumerate(segments):
-                        fobj = current_model._meta.get_field(seg)
-                        if i < len(segments) - 1:
-                            # Relation hop
-                            if getattr(fobj, "related_model", None) is not None:
-                                current_model = fobj.related_model
-                            else:
-                                break
-                        else:
-                            final_field_obj = fobj
-                            nested_label = str(getattr(fobj, "verbose_name", seg))
-                    # If nested field has choices and lookup is exact or in, expose them
-                    if final_field_obj is not None and isinstance(
-                        final_field_obj, models.CharField
+                    properties_dict = getattr(introspector, "properties", {}) or {}
+                except Exception:
+                    properties_dict = {}
+
+                grouped_filter_dict: Dict[str, Dict[str, Any]] = {}
+                base_filters = getattr(filter_class, "base_filters", {}) or {}
+
+                for fname, finstance in base_filters.items():
+                    # Skip quick filter
+                    if (
+                        "quick" in fname
+                        or "_ptr" in fname
+                        or "polymorphic_ctype" in fname
+                        or "_id" in fname
+                        or fname == "pk"
+                        or fname == "id"
                     ):
-                        raw_choices = getattr(final_field_obj, "choices", None)
-                        if raw_choices and nested_lookup_expr in ("exact", "in"):
-                            nested_option_choices = [
-                                {
-                                    "value": self._json_safe_value(val),
-                                    "label": force_str(lbl),
-                                }
-                                for val, lbl in raw_choices
-                            ]
-                except Exception:
-                    nested_label = (
-                        segments[-1]
-                        if "segments" in locals() and segments
-                        else nested_path
-                    )
+                        continue
 
-                # Find or create nested entry
-                nested_groups = grouped_filter_dict[group_key].setdefault(
-                    "_nested_groups", {}
-                )
-                if nested_path not in nested_groups:
-                    nested_groups[nested_path] = {
-                        "field_name": nested_path,
-                        "is_nested": True,
-                        "related_model": related_model_name,
-                        "is_custom": False,
-                        "field_label": nested_label,
-                        "options": [],
+                    parts = fname.split("__")
+                    base_name = parts[0]
+                    if (
+                        base_name == "id"
+                        or base_name == "pk"
+                        or "report_rows" in base_name
+                        or "_snapshots" in base_name
+                        or "_policies" in base_name
+                    ):
+                        continue
+                    # Determine lookup expression; if no explicit lookup, treat as exact
+                    lookup_expr = "__".join(parts[1:]) or "exact"
+
+                    # Special handling for time-based Boolean filters named with single underscores
+                    # e.g., created_date_today, created_date_yesterday, etc.
+                    # These should be grouped under the base field (created_date) with proper lookup.
+                    rel_suffix_map = {
+                        "_today": "today",
+                        "_yesterday": "yesterday",
+                        "_this_week": "this_week",
+                        "_this_month": "this_month",
+                        "_this_year": "this_year",
+                        "_past_week": "past_week",
+                        "_past_month": "past_month",
+                        "_past_year": "past_year",
+                        # Support 'last_*' synonyms used in some docs/exports
+                        "_last_week": "past_week",
+                        "_last_month": "past_month",
+                        "_last_year": "past_year",
                     }
+                    matched_suffix = None
+                    for suf, lookup_val in rel_suffix_map.items():
+                        if fname.endswith(suf):
+                            matched_suffix = suf
+                            lookup_expr = lookup_val
+                            # Reset base_name to the field name without the suffix
+                            base_name = fname[: -len(suf)]
+                            break
+                    # A filter is considered nested only when it references a deeper path
+                    # beyond the base field (e.g., famille__name__icontains). Direct
+                    # lookups on the base field (famille__in, famille__isnull, famille__exact)
+                    # must remain at the parent level.
+                    is_nested = (len(parts) > 2) and not fname.endswith("_count")
 
-                # For exact nested lookups, include both 'path' and full 'fname' entries
-                if nested_lookup_expr == "exact":
-                    nested_groups[nested_path]["options"].append(
-                        _make_option(
-                            nested_path,
-                            nested_lookup_expr,
-                            nested_label,
-                            nested_option_choices,
-                        )
-                    )
-                    nested_groups[nested_path]["options"].append(
-                        _make_option(
-                            fname,
-                            nested_lookup_expr,
-                            nested_label,
-                            nested_option_choices,
-                        )
-                    )
-                else:
-                    nested_groups[nested_path]["options"].append(
-                        _make_option(
-                            fname,
-                            nested_lookup_expr,
-                            nested_label,
-                            nested_option_choices,
-                        )
-                    )
+                    # Parent group key
+                    group_key = base_name
 
-            # Finalize nested lists
-            filters = []
-            for gval in grouped_filter_dict.values():
-                nested_groups = gval.pop("_nested_groups", {})
-                # Remove internal tracking key if present
-                gval.pop("_seen_parent", None)
-                # Ensure 'exact' appears first in options if present
-                try:
-                    opts = list(gval.get("options") or [])
-                    if opts:
-                        opts.sort(
-                            key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
-                        )
-                        gval["options"] = opts
-                except Exception:
-                    # Non-critical ordering step; ignore on failure
-                    pass
-                gval["nested"] = list(nested_groups.values()) if nested_groups else []
-                filters.append(gval)
-
-            # Apply filter selection variables (exclude, only, include_nested, only_lookup, exclude_lookup)
-            def _apply_filter_selection(
-                filters_in: List[Dict[str, Any]],
-                only_fields: Optional[List[str]] = None,
-                exclude_fields: Optional[List[str]] = None,
-                include_nested_val: bool = True,
-                only_lk: Optional[List[str]] = None,
-                exclude_lk: Optional[List[str]] = None,
-            ) -> List[Dict[str, Any]]:
-                """
-                Purpose: Filter the computed filters according to selection variables.
-                Args:
-                    filters_in: List of grouped filter dicts
-                    only_fields: Field names to include (parent or nested paths)
-                    exclude_fields: Field names to exclude (parent or nested paths)
-                    include_nested_val: Whether to include nested groups globally
-                    only_lk: Lookup expressions to include (e.g., ['exact','in'])
-                    exclude_lk: Lookup expressions to exclude
-                Returns:
-                    Filter list after applying selection rules
-                Raises:
-                    None
-                Example:
-                    >>> _apply_filter_selection(filters, only_fields=['name'], include_nested_val=False)
-                    [{... 'field_name': 'name', 'nested': []}]
-                """
-                only_fields_set = set(only_fields or [])
-                exclude_fields_set = set(exclude_fields or [])
-                only_lk_set = set(only_lk or [])
-                exclude_lk_set = set(exclude_lk or [])
-
-                result: List[Dict[str, Any]] = []
-                for grp in filters_in:
-                    parent_name = grp.get("field_name")
-
-                    # Exclude parent group if in exclude set
-                    if parent_name in exclude_fields_set:
-                        continue
-
-                    # Determine if parent group should be included based on 'only'
-                    include_parent = True
-                    if only_fields_set:
-                        include_parent = parent_name in only_fields_set or any(
-                            (nested.get("field_name") in only_fields_set)
-                            for nested in (grp.get("nested") or [])
-                        )
-                    if not include_parent:
-                        continue
-
-                    # Copy group to avoid modifying original
-                    new_grp = dict(grp)
-
-                    # Options: apply lookup filters
-                    opts = list(new_grp.get("options") or [])
-                    if only_lk_set:
-                        opts = [o for o in opts if o.get("lookup_expr") in only_lk_set]
-                    if exclude_lk_set:
-                        opts = [
-                            o
-                            for o in opts
-                            if o.get("lookup_expr") not in exclude_lk_set
-                        ]
-                    # Reorder to place 'exact' first, preserving relative order otherwise
+                    # Resolve field and labels
+                    field_obj = None
+                    verbose_name_val = group_key
+                    related_model_name = None
                     try:
-                        if opts:
-                            opts.sort(
-                                key=lambda o: 0
-                                if o.get("lookup_expr") == "exact"
-                                else 1
+                        field_obj = model._meta.get_field(base_name)
+                        # Prefer using the related model's verbose names for relation groups
+                        if getattr(field_obj, "related_model", None):
+                            related_model_name = field_obj.related_model.__name__
+                            rel_meta = field_obj.related_model._meta
+                            verbose_name_val = str(
+                                getattr(rel_meta, "verbose_name_plural", None)
+                                or getattr(rel_meta, "verbose_name", base_name)
+                            )
+                        else:
+                            verbose_name_val = str(
+                                getattr(field_obj, "verbose_name", base_name)
                             )
                     except Exception:
-                        pass
-                    new_grp["options"] = opts
+                        # Property-based filters
+                        prop_info = properties_dict.get(base_name)
+                        if "_count" in base_name:
+                            # remove "_count"
+                            related_model = model._meta.get_field(
+                                base_name.replace("_count", "")
+                            ).related_model
+                            label = base_name.replace("_count", "").upper()
+                            if (
+                                related_model._meta.verbose_name_plural
+                                or related_model._meta.model_name
+                            ):
+                                label = (
+                                    related_model._meta.verbose_name_plural
+                                    or related_model._meta.model_name
+                                ).lower()
 
-                    # Nested handling
-                    nested_list = list(new_grp.get("nested") or [])
-                    # First, apply include_nested flag
-                    if not include_nested_val:
-                        # Allow nested entries only if explicitly requested via 'only'
-                        if only_fields_set:
-                            nested_list = [
-                                n
-                                for n in nested_list
-                                if n.get("field_name") in only_fields_set
-                            ]
+                            verbose_name_val = f"Nombre total des {label} "
+
+                        if prop_info is not None:
+                            verbose_name_val = (
+                                getattr(
+                                    getattr(prop_info, "fget", None),
+                                    "short_description",
+                                    None,
+                                )
+                                or getattr(prop_info, "verbose_name", None)
+                                or "Nombre de "
+                                or base_name
+                            )
+
+                        # Reverse relation filters: if base_name is an accessor/related_name,
+                        # derive label from the related model's verbose name(s)
+                        if field_obj is None and (prop_info is None):
+                            try:
+                                reverse_rel = None
+                                for f in model._meta.get_fields():
+                                    # ManyToOneRel / ManyToManyRel have get_accessor_name
+                                    accessor = getattr(f, "get_accessor_name", None)
+                                    if callable(accessor) and accessor() == base_name:
+                                        reverse_rel = f
+                                        break
+                                if reverse_rel is not None:
+                                    rel_model = getattr(reverse_rel, "related_model", None)
+                                    if rel_model is not None:
+                                        related_model_name = rel_model.__name__
+                                        rel_meta = rel_model._meta
+                                        # Prefer plural for reverse relations (manager-like)
+                                        verbose_name_val = str(
+                                            getattr(rel_meta, "verbose_name_plural", None)
+                                            or getattr(rel_meta, "verbose_name", base_name)
+                                        )
+                            except Exception as e:
+                                logger.debug(
+                                    f"Reverse relation label resolution failed for {model.__name__}.{base_name}: {e}"
+                                )
+
+                    # Compute choices for CharField choices on exact and in lookups
+                    option_choices = None
+                    try:
+                        if field_obj is not None and isinstance(
+                            field_obj, models.CharField
+                        ):
+                            raw_choices = getattr(field_obj, "choices", None)
+                            if raw_choices and lookup_expr in ("exact", "in"):
+                                option_choices = [
+                                    {
+                                        "value": self._json_safe_value(val),
+                                        "label": force_str(lbl),
+                                    }
+                                    for val, lbl in raw_choices
+                                ]
+                    except Exception:
+                        option_choices = None
+
+                    # Initialize group with nested container
+                    if group_key not in grouped_filter_dict:
+                        grouped_filter_dict[group_key] = {
+                            "field_name": group_key,
+                            "is_nested": False,
+                            "related_model": related_model_name,
+                            "is_custom": False,
+                            "field_label": verbose_name_val,
+                            "options": [],
+                            # Nested will be a list of FilterFieldType-like dicts
+                            "nested": [],
+                            # Internal: track seen parent lookups to avoid duplicates
+                            "_seen_parent": set(),
+                        }
+
+                    # Helper to build an option dict
+                    def _make_option(
+                        name: str, lookup: str, label_for_help: str, choices_src: Any
+                    ) -> Dict[str, Any]:
+                        return {
+                            "name": name,
+                            "lookup_expr": lookup,
+                            "help_text": self._translate_help_text_to_french(
+                                lookup, label_for_help
+                            ),
+                            "filter_type": finstance.__class__.__name__,
+                            "choices": choices_src,
+                        }
+
+                    if not is_nested:
+                        # Determine if this is a relation (ForeignKey/ManyToMany/etc.)
+                        is_relation_field = bool(getattr(field_obj, "is_relation", False))
+
+                        # For parent-level options, avoid duplicates (e.g., base and __exact)
+                        seen_parent = grouped_filter_dict[group_key].setdefault(
+                            "_seen_parent", set()
+                        )
+
+                        # Related fields: keep only exact, in, isnull at parent level
+                        if is_relation_field:
+                            if lookup_expr in ("exact", "in", "isnull"):
+                                # Canonical name for exact is the base field without lookup
+                                if lookup_expr == "exact":
+                                    if "exact" not in seen_parent:
+                                        grouped_filter_dict[group_key]["options"].append(
+                                            _make_option(
+                                                base_name,
+                                                lookup_expr,
+                                                verbose_name_val,
+                                                option_choices,
+                                            )
+                                        )
+                                        seen_parent.add("exact")
+                                else:
+                                    key = f"rel:{lookup_expr}"
+                                    if key not in seen_parent:
+                                        grouped_filter_dict[group_key]["options"].append(
+                                            _make_option(
+                                                fname,
+                                                lookup_expr,
+                                                verbose_name_val,
+                                                option_choices,
+                                            )
+                                        )
+                                        seen_parent.add(key)
+                            # Skip other lookups for relation parent field
+                            continue
+
+                        # Simple (non-relation) fields: include all available lookups
+                        if lookup_expr == "exact":
+                            if "exact" not in seen_parent:
+                                grouped_filter_dict[group_key]["options"].append(
+                                    _make_option(
+                                        base_name,
+                                        lookup_expr,
+                                        verbose_name_val,
+                                        option_choices,
+                                    )
+                                )
+                                seen_parent.add("exact")
                         else:
-                            nested_list = []
-                    # Next, apply only/exclude field sets
-                    if only_fields_set:
-                        nested_list = [
-                            n
-                            for n in nested_list
-                            if n.get("field_name") in only_fields_set
-                        ]
-                    if exclude_fields_set:
-                        nested_list = [
-                            n
-                            for n in nested_list
-                            if n.get("field_name") not in exclude_fields_set
-                        ]
+                            key = f"simple:{lookup_expr}"
+                            if key not in seen_parent:
+                                grouped_filter_dict[group_key]["options"].append(
+                                    _make_option(
+                                        fname,
+                                        lookup_expr,
+                                        verbose_name_val,
+                                        option_choices,
+                                    )
+                                )
+                                seen_parent.add(key)
+                        continue
 
-                    # Finally, apply lookup filters to nested options
-                    for n in nested_list:
-                        n_opts = list(n.get("options") or [])
+                    # Nested: group under 'nested' for the specific nested field path
+                    nested_path = fname.rsplit("__", 1)[0]
+                    # For nested lookups, only the final token should be the lookup (e.g., 'exact')
+                    nested_lookup_expr = (
+                        fname.split("__")[-1] if "__" in fname else lookup_expr
+                    )
+
+                    # Determine nested field label by traversing the path
+                    nested_label = nested_path
+                    nested_option_choices = None
+                    try:
+                        current_model = model
+                        segments = nested_path.split("__")
+                        final_field_obj = None
+                        # Walk segments to find the final field verbose name
+                        for i, seg in enumerate(segments):
+                            fobj = current_model._meta.get_field(seg)
+                            if i < len(segments) - 1:
+                                # Relation hop
+                                if getattr(fobj, "related_model", None) is not None:
+                                    current_model = fobj.related_model
+                                else:
+                                    break
+                            else:
+                                final_field_obj = fobj
+                                nested_label = str(getattr(fobj, "verbose_name", seg))
+                        # If nested field has choices and lookup is exact or in, expose them
+                        if final_field_obj is not None and isinstance(
+                            final_field_obj, models.CharField
+                        ):
+                            raw_choices = getattr(final_field_obj, "choices", None)
+                            if raw_choices and nested_lookup_expr in ("exact", "in"):
+                                nested_option_choices = [
+                                    {
+                                        "value": self._json_safe_value(val),
+                                        "label": force_str(lbl),
+                                    }
+                                    for val, lbl in raw_choices
+                                ]
+                    except Exception:
+                        nested_label = (
+                            segments[-1]
+                            if "segments" in locals() and segments
+                            else nested_path
+                        )
+
+                    # Find or create nested entry
+                    nested_groups = grouped_filter_dict[group_key].setdefault(
+                        "_nested_groups", {}
+                    )
+                    if nested_path not in nested_groups:
+                        nested_groups[nested_path] = {
+                            "field_name": nested_path,
+                            "is_nested": True,
+                            "related_model": related_model_name,
+                            "is_custom": False,
+                            "field_label": nested_label,
+                            "options": [],
+                        }
+
+                    # For exact nested lookups, include both 'path' and full 'fname' entries
+                    if nested_lookup_expr == "exact":
+                        nested_groups[nested_path]["options"].append(
+                            _make_option(
+                                nested_path,
+                                nested_lookup_expr,
+                                nested_label,
+                                nested_option_choices,
+                            )
+                        )
+                        nested_groups[nested_path]["options"].append(
+                            _make_option(
+                                fname,
+                                nested_lookup_expr,
+                                nested_label,
+                                nested_option_choices,
+                            )
+                        )
+                    else:
+                        nested_groups[nested_path]["options"].append(
+                            _make_option(
+                                fname,
+                                nested_lookup_expr,
+                                nested_label,
+                                nested_option_choices,
+                            )
+                        )
+
+                # Finalize nested lists
+                filters = []
+                for gval in grouped_filter_dict.values():
+                    nested_groups = gval.pop("_nested_groups", {})
+                    # Remove internal tracking key if present
+                    gval.pop("_seen_parent", None)
+                    # Ensure 'exact' appears first in options if present
+                    try:
+                        opts = list(gval.get("options") or [])
+                        if opts:
+                            opts.sort(
+                                key=lambda o: 0 if o.get("lookup_expr") == "exact" else 1
+                            )
+                            gval["options"] = opts
+                    except Exception:
+                        # Non-critical ordering step; ignore on failure
+                        pass
+                    gval["nested"] = list(nested_groups.values()) if nested_groups else []
+                    filters.append(gval)
+
+                # Apply filter selection variables (exclude, only, include_nested, only_lookup, exclude_lookup)
+                def _apply_filter_selection(
+                    filters_in: List[Dict[str, Any]],
+                    only_fields: Optional[List[str]] = None,
+                    exclude_fields: Optional[List[str]] = None,
+                    include_nested_val: bool = True,
+                    only_lk: Optional[List[str]] = None,
+                    exclude_lk: Optional[List[str]] = None,
+                ) -> List[Dict[str, Any]]:
+                    """
+                    Purpose: Filter the computed filters according to selection variables.
+                    Args:
+                        filters_in: List of grouped filter dicts
+                        only_fields: Field names to include (parent or nested paths)
+                        exclude_fields: Field names to exclude (parent or nested paths)
+                        include_nested_val: Whether to include nested groups globally
+                        only_lk: Lookup expressions to include (e.g., ['exact','in'])
+                        exclude_lk: Lookup expressions to exclude
+                    Returns:
+                        Filter list after applying selection rules
+                    Raises:
+                        None
+                    Example:
+                        >>> _apply_filter_selection(filters, only_fields=['name'], include_nested_val=False)
+                        [{... 'field_name': 'name', 'nested': []}]
+                    """
+                    only_fields_set = set(only_fields or [])
+                    exclude_fields_set = set(exclude_fields or [])
+                    only_lk_set = set(only_lk or [])
+                    exclude_lk_set = set(exclude_lk or [])
+
+                    result: List[Dict[str, Any]] = []
+                    for grp in filters_in:
+                        parent_name = grp.get("field_name")
+
+                        # Exclude parent group if in exclude set
+                        if parent_name in exclude_fields_set:
+                            continue
+
+                        # Determine if parent group should be included based on 'only'
+                        include_parent = True
+                        if only_fields_set:
+                            include_parent = parent_name in only_fields_set or any(
+                                (nested.get("field_name") in only_fields_set)
+                                for nested in (grp.get("nested") or [])
+                            )
+                        if not include_parent:
+                            continue
+
+                        # Copy group to avoid modifying original
+                        new_grp = dict(grp)
+
+                        # Options: apply lookup filters
+                        opts = list(new_grp.get("options") or [])
                         if only_lk_set:
-                            n_opts = [
-                                o for o in n_opts if o.get("lookup_expr") in only_lk_set
-                            ]
+                            opts = [o for o in opts if o.get("lookup_expr") in only_lk_set]
                         if exclude_lk_set:
-                            n_opts = [
+                            opts = [
                                 o
-                                for o in n_opts
+                                for o in opts
                                 if o.get("lookup_expr") not in exclude_lk_set
                             ]
-                        # Reorder nested options to place 'exact' first
+                        # Reorder to place 'exact' first, preserving relative order otherwise
                         try:
-                            if n_opts:
-                                n_opts.sort(
+                            if opts:
+                                opts.sort(
                                     key=lambda o: 0
                                     if o.get("lookup_expr") == "exact"
                                     else 1
                                 )
                         except Exception:
                             pass
-                        n["options"] = n_opts
+                        new_grp["options"] = opts
 
-                    new_grp["nested"] = nested_list
-                    result.append(new_grp)
+                        # Nested handling
+                        nested_list = list(new_grp.get("nested") or [])
+                        # First, apply include_nested flag
+                        if not include_nested_val:
+                            # Allow nested entries only if explicitly requested via 'only'
+                            if only_fields_set:
+                                nested_list = [
+                                    n
+                                    for n in nested_list
+                                    if n.get("field_name") in only_fields_set
+                                ]
+                            else:
+                                nested_list = []
+                        # Next, apply only/exclude field sets
+                        if only_fields_set:
+                            nested_list = [
+                                n
+                                for n in nested_list
+                                if n.get("field_name") in only_fields_set
+                            ]
+                        if exclude_fields_set:
+                            nested_list = [
+                                n
+                                for n in nested_list
+                                if n.get("field_name") not in exclude_fields_set
+                            ]
 
-                return result
+                        # Finally, apply lookup filters to nested options
+                        for n in nested_list:
+                            n_opts = list(n.get("options") or [])
+                            if only_lk_set:
+                                n_opts = [
+                                    o for o in n_opts if o.get("lookup_expr") in only_lk_set
+                                ]
+                            if exclude_lk_set:
+                                n_opts = [
+                                    o
+                                    for o in n_opts
+                                    if o.get("lookup_expr") not in exclude_lk_set
+                                ]
+                            # Reorder nested options to place 'exact' first
+                            try:
+                                if n_opts:
+                                    n_opts.sort(
+                                        key=lambda o: 0
+                                        if o.get("lookup_expr") == "exact"
+                                        else 1
+                                    )
+                            except Exception:
+                                pass
+                            n["options"] = n_opts
 
-            filters = _apply_filter_selection(
-                filters,
-                only_fields=only or [],
-                exclude_fields=exclude or [],
-                include_nested_val=include_nested,
-                only_lk=only_lookup or [],
-                exclude_lk=exclude_lookup or [],
-            )
-        except Exception as e:
-            logger.warning(f"Error extracting filters for {model_label}: {e}")
-            filters = []
+                        new_grp["nested"] = nested_list
+                        result.append(new_grp)
+
+                    return result
+
+                filters = _apply_filter_selection(
+                    filters,
+                    only_fields=only or [],
+                    exclude_fields=exclude or [],
+                    include_nested_val=include_nested,
+                    only_lk=only_lookup or [],
+                    exclude_lk=exclude_lookup or [],
+                )
+            except Exception as e:
+                logger.warning(f"Error extracting filters for {model_label}: {e}")
+                filters = []
         # Assemble final metadata
+        pdf_templates = (
+            self._collect_pdf_templates(model, user=user)
+            if include_pdf_templates
+            else []
+        )
+
         metadata = ModelTableMetadata(
             metadata_version=_get_metadata_version_value(app_name, model_name),
             app=app_label,
@@ -4831,23 +4911,12 @@ class ModelTableExtractor:
             filters=filters,
             permissions=_build_model_permission_matrix(model, user),
             mutations=mutations,
-            pdf_templates=self._collect_pdf_templates(model, user=user),
+            pdf_templates=pdf_templates,
         )
         # Store in TTL cache
-        if not user_authenticated:
+        if cache_enabled and cache_key:
             try:
                 timeout = _get_table_cache_timeout()
-                cache_key = _make_table_cache_key(
-                    self.schema_name,
-                    app_name,
-                    model_name,
-                    counts,
-                    exclude=exclude or [],
-                    only=only or [],
-                    include_nested=include_nested,
-                    only_lookup=only_lookup or [],
-                    exclude_lookup=exclude_lookup or [],
-                )
                 with _table_cache_lock:
                     _table_cache[cache_key] = {
                         "value": metadata,
@@ -5058,6 +5127,17 @@ class ModelMetadataQuery(graphene.ObjectType):
         """Resolve comprehensive table metadata for a Django model."""
         user = getattr(info.context, "user", None)
         extractor = ModelTableExtractor()
+        selection_names = _get_requested_field_names(info)
+        selection_defined = bool(selection_names)
+        include_filters = (
+            True if not selection_defined else "filters" in selection_names
+        )
+        include_mutations = (
+            True if not selection_defined else "mutations" in selection_names
+        )
+        include_pdf_templates = (
+            True if not selection_defined else "pdfTemplates" in selection_names
+        )
         metadata = extractor.extract_model_table_metadata(
             app_name=app_name,
             model_name=model_name,
@@ -5067,6 +5147,9 @@ class ModelMetadataQuery(graphene.ObjectType):
             include_nested=include_nested,
             only_lookup=only_lookup or [],
             exclude_lookup=exclude_lookup or [],
+            include_filters=include_filters,
+            include_mutations=include_mutations,
+            include_pdf_templates=include_pdf_templates,
             user=user,
         )
         return metadata
