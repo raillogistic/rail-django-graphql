@@ -68,6 +68,12 @@ _table_cache_stats = {
     "deletes": 0,
     "invalidations": 0,
 }
+_table_cache_policy = {
+    "enabled": True,
+    "timeout_seconds": 600,
+    "max_entries": 1000,
+    "cache_authenticated": False,
+}
 
 _metadata_version_lock = threading.RLock()
 _metadata_versions: Dict[str, str] = {}
@@ -121,25 +127,47 @@ def _is_fsm_field_instance(field: Any) -> bool:
         return False
 
 
-def _get_table_cache_timeout() -> int:
+def _load_table_cache_policy() -> None:
     """
-    Purpose: Resolve TTL for model_table metadata cache from Django settings.
-    Args: None
-    Returns: int: Timeout in seconds; defaults to 600 (10 minutes) if not set
-    Raises: None
-    Example:
-        >>> _get_table_cache_timeout()
-        600
+    Load cache policy for metadata from Django settings.
+    Supported keys under RAIL_DJANGO_GRAPHQL.METADATA:
+      - table_cache_enabled (bool)
+      - table_cache_timeout_seconds (int)
+      - table_cache_max_entries (int)
+      - table_cache_authenticated (bool)  # allow caching per-user
     """
     try:
         from django.conf import settings as django_settings
 
         config = getattr(django_settings, "RAIL_DJANGO_GRAPHQL", {}) or {}
         metadata_cfg = config.get("METADATA", {}) or {}
+        _table_cache_policy["enabled"] = bool(
+            metadata_cfg.get("table_cache_enabled", True)
+        )
         timeout_val = int(metadata_cfg.get("table_cache_timeout_seconds", 600))
-        return timeout_val if timeout_val > 0 else 600
+        _table_cache_policy["timeout_seconds"] = timeout_val if timeout_val > 0 else 600
+        max_entries_val = int(metadata_cfg.get("table_cache_max_entries", 1000))
+        _table_cache_policy["max_entries"] = (
+            max_entries_val if max_entries_val > 0 else 1000
+        )
+        _table_cache_policy["cache_authenticated"] = bool(
+            metadata_cfg.get("table_cache_authenticated", False)
+        )
     except Exception:
-        return 600
+        # Keep defaults on failure
+        _table_cache_policy.update(
+            {
+                "enabled": True,
+                "timeout_seconds": 600,
+                "max_entries": 1000,
+                "cache_authenticated": False,
+            }
+        )
+
+
+def _get_table_cache_timeout() -> int:
+    """Return current cache timeout for table metadata."""
+    return _table_cache_policy.get("timeout_seconds", 600)
 
 
 def _make_table_cache_key(
@@ -314,6 +342,7 @@ def invalidate_cache_on_startup() -> None:
             logger.info("Metadata cache invalidated on application startup")
     except Exception as e:
         logger.debug(f"Skipping startup cache invalidation: {e}")
+    _load_table_cache_policy()
 
 
 def _get_requested_field_names(info) -> set:
@@ -4140,9 +4169,17 @@ class ModelTableExtractor:
         include_pdf_templates: bool = True,
         user=None,
     ) -> Optional[ModelTableMetadata]:
+        # Refresh cache policy from settings on each call to reflect dynamic changes without restart.
+        _load_table_cache_policy()
         user_authenticated = bool(user and getattr(user, "is_authenticated", False))
         user_cache_key = _get_user_cache_key(user) if user_authenticated else None
         cache_enabled = (not user_authenticated) or bool(user_cache_key)
+        cache_enabled = cache_enabled and bool(_table_cache_policy.get("enabled", True))
+        cache_authenticated_allowed = bool(
+            _table_cache_policy.get("cache_authenticated", False)
+        )
+        if user_authenticated and not cache_authenticated_allowed:
+            cache_enabled = False
         cache_key = None
         if cache_enabled:
             try:
@@ -4917,12 +4954,24 @@ class ModelTableExtractor:
         if cache_enabled and cache_key:
             try:
                 timeout = _get_table_cache_timeout()
+                now = time.time()
                 with _table_cache_lock:
                     _table_cache[cache_key] = {
                         "value": metadata,
-                        "expires_at": time.time() + timeout,
+                        "expires_at": now + timeout,
+                        "created_at": now,
                     }
                     _table_cache_stats["sets"] += 1
+                    max_entries = _table_cache_policy.get("max_entries", 1000) or 0
+                    if max_entries > 0 and len(_table_cache) > max_entries:
+                        excess = len(_table_cache) - max_entries
+                        oldest = sorted(
+                            _table_cache.items(),
+                            key=lambda kv: kv[1].get("created_at", 0),
+                        )[:excess]
+                        for k, _ in oldest:
+                            _table_cache.pop(k, None)
+                            _table_cache_stats["deletes"] += 1
             except Exception:
                 pass
         return metadata
