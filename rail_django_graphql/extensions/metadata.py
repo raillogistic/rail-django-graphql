@@ -16,6 +16,7 @@ from functools import wraps
 from typing import Any, Dict, List, Optional, Type, Union, get_args, get_origin
 
 import graphene
+from graphene.types.generic import GenericScalar
 from django.apps import apps
 from django.db import models
 from django.db.models.signals import m2m_changed, post_delete, post_save
@@ -737,6 +738,8 @@ class TemplateActionMetadata:
     denial_reason: Optional[str] = None
     allow_client_data: bool = False
     client_data_fields: List[str] = field(default_factory=list)
+    client_data_schema: List[Dict[str, Any]] = field(default_factory=list)
+    client_data_schema: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -1262,6 +1265,18 @@ class TemplateActionMetadataType(graphene.ObjectType):
         required=True,
         description="Clés autorisées pour les données client",
         source="client_data_fields",
+    )
+    clientDataSchema = graphene.List(
+        GenericScalar,
+        required=True,
+        description="Schéma des champs client (name/type)",
+        source="client_data_schema",
+    )
+    clientDataSchema = graphene.List(
+        graphene.JSONString,
+        required=True,
+        description="Schéma des champs client (name/type)",
+        source="client_data_schema",
     )
 
 
@@ -3942,6 +3957,14 @@ class ModelTableExtractor:
                     denial_reason=denial_reason,
                     allow_client_data=definition.allow_client_data,
                     client_data_fields=list(definition.client_data_fields or []),
+                    client_data_schema=[
+                        {
+                            "name": entry.get("name"),
+                            "type": entry.get("type", "string"),
+                        }
+                        for entry in (definition.client_data_schema or [])
+                        if entry.get("name")
+                    ],
                 )
             )
 

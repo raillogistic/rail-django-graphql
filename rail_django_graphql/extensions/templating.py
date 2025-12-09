@@ -220,6 +220,7 @@ class TemplateMeta:
     title: Optional[str] = None
     allow_client_data: bool = False
     client_data_fields: Sequence[str] = field(default_factory=tuple)
+    client_data_schema: Sequence[Dict[str, Any]] = field(default_factory=tuple)
 
 
 @dataclass
@@ -240,6 +241,7 @@ class TemplateDefinition:
     title: str
     allow_client_data: bool
     client_data_fields: Sequence[str]
+    client_data_schema: Sequence[Dict[str, Any]]
 
 
 @dataclass
@@ -286,6 +288,31 @@ def _clean_client_value(value: Any) -> str:
     return text[:1024]
 
 
+def _normalize_client_schema(
+    fields: Sequence[str], schema: Sequence[Dict[str, Any]]
+) -> Sequence[Dict[str, Any]]:
+    """
+    Normalize client data schema. When explicit schema is provided, enforce name/type.
+    Otherwise derive from field names.
+    """
+
+    normalized: Dict[str, Dict[str, Any]] = {}
+
+    for entry in schema or []:
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            continue
+        field_type = str(entry.get("type", "string")).strip().lower() or "string"
+        normalized[name] = {"name": name, "type": field_type}
+
+    for name in fields or []:
+        if name in normalized:
+            continue
+        normalized[str(name)] = {"name": str(name), "type": "string"}
+
+    return tuple(normalized.values())
+
+
 class TemplateRegistry:
     """Keeps track of all registered PDF templates exposed by models."""
 
@@ -316,6 +343,7 @@ class TemplateRegistry:
         header = meta.header_template or _default_header()
         footer = meta.footer_template or _default_footer()
         title = meta.title or _derive_template_title(model, method_name)
+        schema = _normalize_client_schema(meta.client_data_fields, meta.client_data_schema)
 
         definition = TemplateDefinition(
             model=model,
@@ -332,6 +360,7 @@ class TemplateRegistry:
             title=title,
             allow_client_data=bool(meta.allow_client_data),
             client_data_fields=tuple(meta.client_data_fields or ()),
+            client_data_schema=schema,
         )
 
         self._templates[url_path] = definition
@@ -369,6 +398,7 @@ def model_pdf_template(
     title: Optional[str] = None,
     allow_client_data: bool = False,
     client_data_fields: Optional[Iterable[str]] = None,
+    client_data_schema: Optional[Iterable[Dict[str, Any]]] = None,
 ) -> Callable:
     """
     Decorator to expose a model method as a PDF endpoint rendered with WeasyPrint.
@@ -387,6 +417,7 @@ def model_pdf_template(
         title: Optional human-readable label surfaced to the frontend.
         allow_client_data: When True, whitelisted query parameters can be injected into the template context.
         client_data_fields: Iterable of allowed client data keys (whitelist). Ignored when allow_client_data is False.
+        client_data_schema: Optional iterable of dicts {"name": str, "type": str} to describe expected client fields.
 
     Returns:
         The original function with attached metadata for automatic registration.
@@ -406,6 +437,7 @@ def model_pdf_template(
             title=title,
             allow_client_data=allow_client_data,
             client_data_fields=tuple(client_data_fields or ()),
+            client_data_schema=tuple(client_data_schema or ()),
         )
         return func
 
@@ -609,7 +641,19 @@ def evaluate_template_access(
                 )
 
     guard_name = template_def.guard or "retrieve"
-    if guard_name and get_model_graphql_meta:
+    if guard_name:
+        if not get_model_graphql_meta:
+            logger.warning(
+                "GraphQL meta unavailable while enforcing template guard '%s' for %s",
+                guard_name,
+                template_def.url_path,
+            )
+            return TemplateAccessDecision(
+                allowed=False,
+                reason="Le contrôle d'accès est indisponible.",
+                status_code=403,
+            )
+
         graphql_meta = None
         try:
             graphql_meta = get_model_graphql_meta(template_def.model)
@@ -667,6 +711,12 @@ def _extract_client_data(
         return {}
 
     allowed_keys = {str(k) for k in (template_def.client_data_fields or [])}
+    # If schema provided, use its names for additional allowance
+    if template_def.client_data_schema:
+        for entry in template_def.client_data_schema:
+            name = str(entry.get("name", "")).strip()
+            if name:
+                allowed_keys.add(name)
     if not allowed_keys:
         return {}
 
