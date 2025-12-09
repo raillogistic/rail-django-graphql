@@ -420,6 +420,45 @@ class JWTManager:
             return None
 
 
+
+def set_auth_cookies(request, access_token=None, refresh_token=None):
+    """Sets secure HttpOnly cookies for authentication tokens."""
+    if not hasattr(request, "_set_auth_cookies"):
+        request._set_auth_cookies = []
+    
+    secure = getattr(settings, "SESSION_COOKIE_SECURE", False)
+    samesite = "Strict"
+    
+    if access_token:
+        request._set_auth_cookies.append({
+            "key": getattr(settings, "JWT_AUTH_COOKIE", "jwt"),
+            "value": access_token,
+            "httponly": True,
+            "secure": secure,
+            "samesite": samesite,
+            "max_age": getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", 3600),
+        })
+        
+    if refresh_token:
+        request._set_auth_cookies.append({
+            "key": getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"),
+            "value": refresh_token,
+            "httponly": True,
+            "secure": secure,
+            "samesite": samesite,
+            "max_age": getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400 * 7),
+            "path": "/api/refresh_token", # Optional: restrict path?
+        })
+
+def delete_auth_cookies(request):
+    """Marks authentication cookies for deletion."""
+    if not hasattr(request, "_delete_auth_cookies"):
+        request._delete_auth_cookies = []
+    
+    request._delete_auth_cookies.append(getattr(settings, "JWT_AUTH_COOKIE", "jwt"))
+    request._delete_auth_cookies.append(getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"))
+
+
 class LoginMutation(graphene.Mutation):
     """Mutation de connexion utilisateur."""
 
@@ -461,6 +500,13 @@ class LoginMutation(graphene.Mutation):
             user.save(update_fields=["last_login"])
 
             logger.info(f"Connexion réussie pour l'utilisateur: {username}")
+
+            # Set HttpOnly cookies
+            set_auth_cookies(
+                info.context, 
+                access_token=token_data["token"], 
+                refresh_token=token_data["refresh_token"]
+            )
 
             return AuthPayload(
                 ok=True,
@@ -550,6 +596,13 @@ class RegisterMutation(graphene.Mutation):
 
             logger.info(f"Inscription réussie pour l'utilisateur: {username}")
 
+            # Set HttpOnly cookies
+            set_auth_cookies(
+                info.context, 
+                access_token=token_data["token"], 
+                refresh_token=token_data["refresh_token"]
+            )
+
             return AuthPayload(
                 ok=True,
                 user=user,
@@ -572,12 +625,12 @@ class RefreshTokenMutation(graphene.Mutation):
 
     class Arguments:
         refresh_token = graphene.String(
-            required=True, description="Token de rafraîchissement"
+            required=False, description="Token de rafraîchissement (optionnel si cookie présent)"
         )
 
     Output = AuthPayload
 
-    def mutate(self, info, refresh_token: str):
+    def mutate(self, info, refresh_token: str = None):
         """
         Rafraîchit un token d'accès.
 
@@ -588,6 +641,16 @@ class RefreshTokenMutation(graphene.Mutation):
             AuthPayload avec le nouveau token
         """
         try:
+            # Try to get refresh token from cookie if not provided
+            if not refresh_token:
+                cookie_name = getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token")
+                refresh_token = info.context.COOKIES.get(cookie_name)
+
+            if not refresh_token:
+                return AuthPayload(
+                    ok=False, errors=["Token de rafraîchissement manquant"]
+                )
+
             token_data = JWTManager.refresh_token(refresh_token)
 
             if not token_data:
@@ -602,6 +665,13 @@ class RefreshTokenMutation(graphene.Mutation):
             permissions = token_data.get(
                 "permissions", []
             ) or _get_effective_permissions(user)
+
+            # Set new HttpOnly cookies
+            set_auth_cookies(
+                info.context, 
+                access_token=token_data["token"], 
+                refresh_token=token_data["refresh_token"]
+            )
 
             return AuthPayload(
                 ok=True,
@@ -637,6 +707,9 @@ class LogoutMutation(graphene.Mutation):
         Cette mutation peut être étendue pour maintenir une blacklist de tokens.
         """
         try:
+            # Clear cookies
+            delete_auth_cookies(info.context)
+
             # Pour l'instant, on retourne simplement un succès
             # Dans une implémentation plus avancée, on pourrait :
             # - Ajouter le token à une blacklist

@@ -129,7 +129,7 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         self, request: HttpRequest, response: HttpResponse
     ) -> HttpResponse:
         """
-        Traite la réponse pour ajouter des headers de sécurité.
+        Traite la réponse pour ajouter des headers de sécurité et gérer les cookies.
 
         Args:
             request: Requête HTTP Django
@@ -147,6 +147,15 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
             # Ajouter des informations d'authentification dans les headers (pour le debug)
             if hasattr(request, "auth_method"):
                 response["X-Auth-Method"] = request.auth_method
+
+        # Handle cookie setting from mutations
+        if hasattr(request, "_set_auth_cookies"):
+            for cookie in request._set_auth_cookies:
+                response.set_cookie(**cookie)
+
+        if hasattr(request, "_delete_auth_cookies"):
+            for cookie_name in request._delete_auth_cookies:
+                response.delete_cookie(cookie_name)
 
         return response
 
