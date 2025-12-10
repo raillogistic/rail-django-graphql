@@ -150,10 +150,16 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
 
         # Handle cookie setting from mutations
         if hasattr(request, "_set_auth_cookies"):
+            if self.debug_mode:
+                logger.debug(f"Auth Middleware - Setting cookies: {len(request._set_auth_cookies)}")
             for cookie in request._set_auth_cookies:
+                if self.debug_mode:
+                    logger.debug(f"Auth Middleware - Set-Cookie: {cookie.get('key')}")
                 response.set_cookie(**cookie)
 
         if hasattr(request, "_delete_auth_cookies"):
+            if self.debug_mode:
+                logger.debug(f"Auth Middleware - Deleting cookies: {request._delete_auth_cookies}")
             for cookie_name in request._delete_auth_cookies:
                 response.delete_cookie(cookie_name)
 
@@ -201,6 +207,14 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
         Returns:
             Token JWT ou None si non trouvé
         """
+        # Debug logging for troubleshooting auth issues
+        cookie_name = getattr(settings, "JWT_AUTH_COOKIE", "jwt")
+        
+        if self.debug_mode:
+            logger.debug(f"Auth Middleware - Headers: {request.headers}")
+            logger.debug(f"Auth Middleware - Cookies keys: {list(request.COOKIES.keys())}")
+            logger.debug(f"Auth Middleware - Looking for cookie: {cookie_name}")
+
         # Vérifier le header Authorization
         auth_header = request.META.get(self.jwt_header_name, "")
         if auth_header:
@@ -213,11 +227,16 @@ class GraphQLAuthenticationMiddleware(MiddlewareMixin):
                     return parts[1]
 
         # Vérifier les cookies (optionnel)
-        cookie_name = getattr(settings, "JWT_AUTH_COOKIE", None)
         if cookie_name:
-            return request.COOKIES.get(cookie_name)
+            token = request.COOKIES.get(cookie_name)
+            if token:
+                if self.debug_mode:
+                    logger.debug("Auth Middleware - Token found in cookie")
+                return token
+            else:
+                if self.debug_mode:
+                    logger.debug("Auth Middleware - Token NOT found in cookie")
 
-        # Vérifier les paramètres de requête (pour les WebSockets)
         # Vérifier les paramètres de requête (pour les WebSockets)
         return request.GET.get("token")
 

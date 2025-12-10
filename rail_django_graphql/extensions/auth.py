@@ -426,8 +426,12 @@ def set_auth_cookies(request, access_token=None, refresh_token=None):
     if not hasattr(request, "_set_auth_cookies"):
         request._set_auth_cookies = []
     
+    # Force secure=False in DEBUG mode to allow cookies on localhost HTTP
     secure = getattr(settings, "SESSION_COOKIE_SECURE", False)
-    samesite = "Strict"
+    if getattr(settings, "DEBUG", False):
+        secure = False
+        
+    samesite = "Lax"
     
     if access_token:
         request._set_auth_cookies.append({
@@ -447,7 +451,7 @@ def set_auth_cookies(request, access_token=None, refresh_token=None):
             "secure": secure,
             "samesite": samesite,
             "max_age": getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400 * 7),
-            "path": "/api/refresh_token", # Optional: restrict path?
+            "path": "/",
         })
 
 def delete_auth_cookies(request):
