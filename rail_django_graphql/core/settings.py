@@ -204,6 +204,9 @@ class QueryGeneratorSettings:
     # Maximum allowed page size
     max_page_size: int = 100
 
+    # Maximum number of buckets returned by grouping queries
+    max_grouping_buckets: int = 200
+
     # Additional fields to use for lookups (e.g., slug, uuid)
     additional_lookup_fields: Dict[str, List[str]] = field(default_factory=dict)
 

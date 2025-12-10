@@ -362,6 +362,11 @@ class SchemaBuilder:
                         )
                         self._query_fields[f"{model_name}s"] = list_query
 
+                        grouping_query = self.query_generator.generate_grouping_query(
+                            model, manager_name
+                        )
+                        self._query_fields[f"{model_name}s_groups"] = grouping_query
+
                     # Paginated query
                     if self.settings.enable_pagination:
                         paginated_query = self.query_generator.generate_paginated_query(
@@ -389,6 +394,12 @@ class SchemaBuilder:
                         self._query_fields[f"{model_name}s__{manager_name}"] = (
                             list_query
                         )
+                        grouping_query = self.query_generator.generate_grouping_query(
+                            model, manager_name
+                        )
+                        self._query_fields[
+                            f"{model_name}s_groups_{manager_name}"
+                        ] = grouping_query
 
                     # Paginated query: modelname_pages_custommanager
                     if self.settings.enable_pagination:
