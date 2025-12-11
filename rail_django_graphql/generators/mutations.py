@@ -40,6 +40,81 @@ class MutationError(graphene.ObjectType):
     )
 
 
+def _normalize_field_path(field: Any, prefix: Optional[str] = None) -> Optional[str]:
+    """
+    Convert backend field identifiers (including dotted, double-underscore or list
+    index notations) to a consistent dot-separated path understood by the frontend.
+    """
+    if field is None:
+        return prefix
+
+    segment = str(field)
+    segment = segment.replace("__", ".")
+    segment = segment.replace("[", ".").replace("]", "")
+    segment = segment.replace("..", ".").strip(".")
+    if prefix:
+        return f"{prefix}.{segment}".strip(".")
+    return segment or None
+
+
+def _flatten_validation_error(
+    detail: Any, path: Optional[str], accumulator: List[MutationError]
+) -> None:
+    """
+    Recursively flatten Django ValidationError payloads (dict/list/ValidationError)
+    into a flat list of MutationError objects with normalized field paths.
+    """
+    if isinstance(detail, ValidationError):
+        if hasattr(detail, "message_dict") and isinstance(detail.message_dict, dict):
+            for field_name, messages in detail.message_dict.items():
+                next_path = _normalize_field_path(field_name, path)
+                _flatten_validation_error(messages, next_path, accumulator)
+            return
+        if hasattr(detail, "error_dict") and isinstance(detail.error_dict, dict):
+            for field_name, messages in detail.error_dict.items():
+                next_path = _normalize_field_path(field_name, path)
+                _flatten_validation_error(messages, next_path, accumulator)
+            return
+        messages = (
+            detail.messages
+            if hasattr(detail, "messages") and isinstance(detail.messages, list)
+            else [str(detail)]
+        )
+        for message in messages:
+            accumulator.append(MutationError(field=path, message=str(message)))
+        return
+
+    if isinstance(detail, dict):
+        for field_name, messages in detail.items():
+            next_path = _normalize_field_path(field_name, path)
+            _flatten_validation_error(messages, next_path, accumulator)
+        return
+
+    if isinstance(detail, (list, tuple)):
+        for index, item in enumerate(detail):
+            next_path = path
+            if isinstance(item, (dict, list, ValidationError)):
+                next_path = _normalize_field_path(index, path)
+            _flatten_validation_error(item, next_path, accumulator)
+        return
+
+    accumulator.append(MutationError(field=path, message=str(detail)))
+
+
+def build_validation_errors(
+    error: ValidationError, prefix: Optional[str] = None
+) -> List[MutationError]:
+    """Convert a ValidationError into a flat list of MutationError objects."""
+    collected: List[MutationError] = []
+    _flatten_validation_error(error, prefix, collected)
+    return collected
+
+
+def build_mutation_error(message: str, field: Optional[str] = None) -> MutationError:
+    """Helper to build a single MutationError with a normalized field path."""
+    return MutationError(field=_normalize_field_path(field), message=str(message))
+
+
 class MutationGenerator:
     """
     Creates GraphQL mutations for Django models, supporting CRUD operations
@@ -154,45 +229,12 @@ class MutationGenerator:
 
                     return cls(ok=True, object=instance, errors=None)
 
-                except ValidationError as e:
-                    # Create structured error objects for validation errors
-                    error_objects = []
-                    # Prefer Django's message_dict for field-specific errors
-                    if hasattr(e, "message_dict") and isinstance(
-                        getattr(e, "message_dict"), dict
-                    ):
-                        for field, messages in e.message_dict.items():
-                            for message in messages:
-                                error_objects.append(
-                                    MutationError(field=field, message=str(message))
-                                )
-                    # Fallback to error_dict if present
-                    elif hasattr(e, "error_dict") and isinstance(
-                        getattr(e, "error_dict"), dict
-                    ):
-                        for field, errors in e.error_dict.items():
-                            for error in errors:
-                                error_objects.append(
-                                    MutationError(field=field, message=str(error))
-                                )
-                    else:
-                        # General validation error: collect messages if available
-                        if hasattr(e, "messages") and isinstance(
-                            getattr(e, "messages"), list
-                        ):
-                            for msg in e.messages:
-                                error_objects.append(
-                                    MutationError(field=None, message=str(msg))
-                                )
-                        else:
-                            error_objects.append(
-                                MutationError(field=None, message=str(e))
-                            )
+                except ValidationError as exc:
+                    error_objects = build_validation_errors(exc)
                     return cls(ok=False, object=None, errors=error_objects)
-                except IntegrityError as e:
+                except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(e)
-                    # Parse not-null constraint violation
+                    error_msg = str(exc)
                     match = re.search(
                         r'null value in column "(\w+)".*violates not-null constraint',
                         error_msg,
@@ -200,25 +242,22 @@ class MutationGenerator:
                     if match:
                         field_name = match.group(1)
                         error_objects = [
-                            MutationError(
-                                field=field_name,
-                                message=f"{field_name} cannot be null.",
+                            build_mutation_error(
+                                message=f"{field_name} cannot be null.", field=field_name
                             )
                         ]
                     else:
                         error_objects = [
-                            MutationError(
-                                field=None,
-                                message=f"Database integrity error: {error_msg}",
+                            build_mutation_error(
+                                message=f"Database integrity error: {error_msg}"
                             )
                         ]
                     return cls(ok=False, object=None, errors=error_objects)
-                except Exception as e:
+                except Exception as exc:
                     transaction.set_rollback(True)
                     error_objects = [
-                        MutationError(
-                            field=None,
-                            message=f"Failed to create {model_name}: {str(e)}",
+                        build_mutation_error(
+                            message=f"Failed to create {model_name}: {str(exc)}"
                         )
                     ]
                     return cls(ok=False, object=None, errors=error_objects)
@@ -530,51 +569,17 @@ class MutationGenerator:
 
                 except model.DoesNotExist:
                     error_objects = [
-                        MutationError(
-                            field=None,
-                            message=f"{model_name} with id {record_id} does not exist",
+                        build_mutation_error(
+                            message=f"{model_name} with id {record_id} does not exist"
                         )
                     ]
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
-                except ValidationError as e:
-                    # Create structured error objects for validation errors
-                    error_objects = []
-                    # Prefer Django's message_dict for field-specific errors
-                    if hasattr(e, "message_dict") and isinstance(
-                        getattr(e, "message_dict"), dict
-                    ):
-                        for field, messages in e.message_dict.items():
-                            for message in messages:
-                                error_objects.append(
-                                    MutationError(field=field, message=str(message))
-                                )
-                    # Fallback to error_dict if present
-                    elif hasattr(e, "error_dict") and isinstance(
-                        getattr(e, "error_dict"), dict
-                    ):
-                        for field, errors in e.error_dict.items():
-                            for error in errors:
-                                error_objects.append(
-                                    MutationError(field=field, message=str(error))
-                                )
-                    else:
-                        # General validation error: collect messages if available
-                        if hasattr(e, "messages") and isinstance(
-                            getattr(e, "messages"), list
-                        ):
-                            for msg in e.messages:
-                                error_objects.append(
-                                    MutationError(field=None, message=str(msg))
-                                )
-                        else:
-                            error_objects.append(
-                                MutationError(field=None, message=str(e))
-                            )
+                except ValidationError as exc:
+                    error_objects = build_validation_errors(exc)
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
-                except IntegrityError as e:
+                except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(e)
-                    # Parse not-null constraint violation
+                    error_msg = str(exc)
                     match = re.search(
                         r'null value in column "(\w+)".*violates not-null constraint',
                         error_msg,
@@ -582,27 +587,25 @@ class MutationGenerator:
                     if match:
                         field_name = match.group(1)
                         error_objects = [
-                            MutationError(
-                                field=field_name,
-                                message=f"{field_name} cannot be null.",
+                            build_mutation_error(
+                                message=f"{field_name} cannot be null.", field=field_name
                             )
                         ]
                     else:
                         error_objects = [
-                            MutationError(
-                                field=None,
-                                message=f"Database integrity error: {error_msg}",
+                            build_mutation_error(
+                                message=f"Database integrity error: {error_msg}"
                             )
                         ]
                     return UpdateMutation(ok=False, object=None, errors=error_objects)
-                except Exception as e:
+                except Exception as exc:
                     transaction.set_rollback(True)
                     error_objects = [
-                        MutationError(
-                            field=None,
-                            message=f"Failed to update {model_name}: {str(e)}",
+                        build_mutation_error(
+                            message=f"Failed to update {model_name}: {str(exc)}"
                         )
                     ]
+                    return UpdateMutation(ok=False, object=None, errors=error_objects)
             @classmethod
             def _sanitize_input_data(cls, input_data: Dict[str, Any]) -> Dict[str, Any]:
                 """
@@ -1051,18 +1054,23 @@ class MutationGenerator:
 
                     return cls(ok=True, objects=instances, errors=[])
 
-                except model.DoesNotExist as e:
+                except model.DoesNotExist as exc:
                     return cls(
                         ok=False,
                         objects=[],
-                        errors=[f"{model_name} not found: {str(e)}"],
+                        errors=[
+                            build_mutation_error(
+                                message=f"{model_name} not found: {str(exc)}"
+                            )
+                        ],
                     )
-                except ValidationError as e:
-                    return cls(ok=False, objects=[], errors=[str(e)])
-                except IntegrityError as e:
+                except ValidationError as exc:
+                    return cls(
+                        ok=False, objects=[], errors=build_validation_errors(exc)
+                    )
+                except IntegrityError as exc:
                     transaction.set_rollback(True)
-                    error_msg = str(e)
-                    # Parse not-null constraint violation
+                    error_msg = str(exc)
                     match = re.search(
                         r'null value in column "(\w+)".*violates not-null constraint',
                         error_msg,
@@ -1070,25 +1078,27 @@ class MutationGenerator:
                     if match:
                         field_name = match.group(1)
                         error_objects = [
-                            MutationError(
-                                field=field_name,
-                                message=f"{field_name} cannot be null.",
+                            build_mutation_error(
+                                message=f"{field_name} cannot be null.", field=field_name
                             )
                         ]
                     else:
                         error_objects = [
-                            MutationError(
-                                field=None,
-                                message=f"Database integrity error: {error_msg}",
+                            build_mutation_error(
+                                message=f"Database integrity error: {error_msg}"
                             )
                         ]
                     return cls(ok=False, objects=[], errors=error_objects)
-                except Exception as e:
+                except Exception as exc:
                     transaction.set_rollback(True)
                     return cls(
                         ok=False,
                         objects=[],
-                        errors=[f"Failed to bulk update {model_name}s: {str(e)}"],
+                        errors=[
+                            build_mutation_error(
+                                message=f"Failed to bulk update {model_name}s: {str(exc)}"
+                            )
+                        ],
                     )
 
         return type(
@@ -1130,7 +1140,9 @@ class MutationGenerator:
                             ok=False,
                             objects=[],
                             errors=[
-                                f"Some {model_name} instances not found: {', '.join(missing_ids)}"
+                                build_mutation_error(
+                                    message=f"Some {model_name} instances not found: {', '.join(missing_ids)}"
+                                )
                             ],
                         )
 
@@ -1142,14 +1154,20 @@ class MutationGenerator:
                     instances.delete()
                     return cls(ok=True, objects=deleted_instances, errors=[])
 
-                except model.DoesNotExist as e:
-                    return cls(ok=False, objects=[], errors=[str(e)])
-                except Exception as e:
+                except model.DoesNotExist as exc:
+                    return cls(
+                        ok=False, objects=[], errors=[build_mutation_error(str(exc))]
+                    )
+                except Exception as exc:
                     transaction.set_rollback(True)
                     return cls(
                         ok=False,
                         objects=[],
-                        errors=[f"Failed to bulk delete {model_name}s: {str(e)}"],
+                        errors=[
+                            build_mutation_error(
+                                message=f"Failed to bulk delete {model_name}s: {str(exc)}"
+                            )
+                        ],
                     )
 
         return type(
@@ -1249,13 +1267,17 @@ class MutationGenerator:
                         if hasattr(info, "context") and hasattr(info.context, "user"):
                             if not info.context.user.has_perm(permission):
                                 return cls(
-                                    ok=False, result=None, errors=["Permission denied"]
+                                    ok=False,
+                                    result=None,
+                                    errors=[build_mutation_error("Permission denied")],
                                 )
                         else:
                             return cls(
                                 ok=False,
                                 result=None,
-                                errors=["Authentication required"],
+                                errors=[
+                                    build_mutation_error("Authentication required")
+                                ],
                             )
 
                     instance = model.objects.get(pk=id)
@@ -1280,14 +1302,22 @@ class MutationGenerator:
                     return cls(
                         ok=False,
                         result=None,
-                        errors=[f"{model_name} with id {id} does not exist"],
+                        errors=[
+                            build_mutation_error(
+                                message=f"{model_name} with id {id} does not exist"
+                            )
+                        ],
                     )
-                except Exception as e:
+                except Exception as exc:
                     transaction.set_rollback(True)
                     return cls(
                         ok=False,
                         result=None,
-                        errors=[f"Failed to execute {method_name}: {str(e)}"],
+                        errors=[
+                            build_mutation_error(
+                                message=f"Failed to execute {method_name}: {str(exc)}"
+                            )
+                        ],
                     )
 
         # Add method parameters as individual arguments
@@ -1518,20 +1548,11 @@ class MutationGenerator:
                 except ValidationError as exc:
                     if atomic:
                         transaction.set_rollback(True)
-                    error_payload: List[Dict[str, Optional[str]]] = []
-                    if hasattr(exc, "message_dict"):
-                        for field, messages in exc.message_dict.items():
-                            if not isinstance(messages, (list, tuple)):
-                                messages = [messages]
-                            for message in messages:
-                                error_payload.append(
-                                    {"field": field or None, "message": str(message)}
-                                )
-                    else:
-                        messages = exc.messages if hasattr(exc, "messages") else [str(exc)]
-                        for message in messages:
-                            error_payload.append({"field": None, "message": str(message)})
-                    return cls(ok=False, result=None, errors=error_payload)
+                    return cls(
+                        ok=False,
+                        result=None,
+                        errors=build_validation_errors(exc),
+                    )
                 except Exception as e:
                     if atomic:
                         transaction.set_rollback(True)
