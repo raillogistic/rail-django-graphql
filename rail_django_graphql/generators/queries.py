@@ -36,6 +36,9 @@ from .inheritance import inheritance_handler
 from .types import TypeGenerator
 from .introspector import ModelIntrospector
 
+# Default ordering applied when no explicit ordering is provided.
+DEFAULT_ORDERING_FALLBACK = ["-id"]
+
 
 class PaginationInfo(graphene.ObjectType):
     """
@@ -337,8 +340,11 @@ class QueryGenerator:
         """
 
         normalized = [spec for spec in (order_by or []) if spec]
-        if not normalized and ordering_config.default:
-            normalized = list(ordering_config.default)
+        if not normalized:
+            if ordering_config.default:
+                normalized = list(ordering_config.default)
+            else:
+                normalized = list(DEFAULT_ORDERING_FALLBACK)
 
         allowed = getattr(ordering_config, "allowed", None) or []
         if allowed and normalized:
@@ -613,7 +619,7 @@ class QueryGenerator:
                 arguments["order_by"] = graphene.List(
                     graphene.String,
                     description=order_desc,
-                    default_value=ordering_config.default or None,
+                    default_value=ordering_config.default or DEFAULT_ORDERING_FALLBACK,
                 )
 
             return graphene.List(
@@ -837,7 +843,7 @@ class QueryGenerator:
             arguments["order_by"] = graphene.List(
                 graphene.String,
                 description=order_desc,
-                default_value=ordering_config.default or None,
+                default_value=ordering_config.default or DEFAULT_ORDERING_FALLBACK,
             )
 
         return graphene.Field(
