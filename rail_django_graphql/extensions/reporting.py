@@ -130,7 +130,9 @@ def _safe_formula_eval(formula: str, context: Dict[str, Any]) -> Any:
     return eval(compiled, {"__builtins__": {}}, context)
 
 
-def _to_filter_list(raw_filters: Optional[Iterable[Dict[str, Any]]]) -> List[FilterSpec]:
+def _to_filter_list(
+    raw_filters: Optional[Iterable[Dict[str, Any]]],
+) -> List[FilterSpec]:
     if not raw_filters:
         return []
 
@@ -180,7 +182,9 @@ class DatasetExecutionEngine:
 
     def _load_model(self) -> models.Model:
         try:
-            return apps.get_model(self.dataset.source_app_label, self.dataset.source_model)
+            return apps.get_model(
+                self.dataset.source_app_label, self.dataset.source_model
+            )
         except LookupError as exc:
             raise ReportingError(
                 f"Impossible de trouver le modele {self.dataset.source_app_label}.{self.dataset.source_model}"
@@ -195,7 +199,9 @@ class DatasetExecutionEngine:
                     DimensionSpec(
                         name=item.get("name") or item.get("field"),
                         field=item.get("field"),
-                        label=item.get("label") or item.get("name") or item.get("field"),
+                        label=item.get("label")
+                        or item.get("name")
+                        or item.get("field"),
                         transform=item.get("transform"),
                         help_text=item.get("help_text", ""),
                     )
@@ -214,7 +220,9 @@ class DatasetExecutionEngine:
                         name=item.get("name") or item.get("field"),
                         field=item.get("field"),
                         aggregation=item.get("aggregation") or "sum",
-                        label=item.get("label") or item.get("name") or item.get("field"),
+                        label=item.get("label")
+                        or item.get("name")
+                        or item.get("field"),
                         help_text=item.get("help_text", ""),
                         format=item.get("format"),
                     )
@@ -291,7 +299,9 @@ class DatasetExecutionEngine:
             context = {key: row.get(key, 0) for key in row.keys()}
             for computed in self.computed_fields:
                 try:
-                    row[computed.name] = _safe_formula_eval(computed.formula, dict(context))
+                    row[computed.name] = _safe_formula_eval(
+                        computed.formula, dict(context)
+                    )
                 except ReportingError as exc:
                     row[computed.name] = None
                     row.setdefault("_warnings", []).append(str(exc))
@@ -460,7 +470,9 @@ class ReportingDataset(models.Model):
     code = models.SlugField(unique=True, max_length=80, verbose_name="Code")
     title = models.CharField(max_length=120, verbose_name="Titre")
     description = models.TextField(blank=True, verbose_name="Description detaillee")
-    source_app_label = models.CharField(max_length=120, verbose_name="Application source")
+    source_app_label = models.CharField(
+        max_length=120, verbose_name="Application source"
+    )
     source_model = models.CharField(max_length=120, verbose_name="Modele source")
     source_kind = models.CharField(
         max_length=30,
@@ -535,7 +547,7 @@ class ReportingDataset(models.Model):
             ]
         )
         ordering = GraphQLMetaBase.Ordering(
-            allowed=["code", "title", "created_at", "updated_at"],
+            allowed=["id", "code", "title", "created_at", "updated_at"],
             default=["title"],
         )
         access = GraphQLMetaBase.AccessControl(
@@ -548,7 +560,9 @@ class ReportingDataset(models.Model):
 
     def clean(self) -> None:
         if not self.source_app_label or not self.source_model:
-            raise ValidationError("L application et le modele source sont obligatoires.")
+            raise ValidationError(
+                "L application et le modele source sont obligatoires."
+            )
         try:
             apps.get_model(self.source_app_label, self.source_model)
         except LookupError:
@@ -665,7 +679,9 @@ class ReportingVisualization(models.Model):
         verbose_name="Options UI",
         help_text="Preferences de rendu (theme, animations).",
     )
-    is_default = models.BooleanField(default=False, verbose_name="Visualisation par defaut")
+    is_default = models.BooleanField(
+        default=False, verbose_name="Visualisation par defaut"
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="Creation")
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Mise a jour")
 
@@ -685,7 +701,7 @@ class ReportingVisualization(models.Model):
             },
         )
         ordering = GraphQLMetaBase.Ordering(
-            allowed=["title", "code", "created_at"],
+            allowed=["id", "title", "code", "created_at"],
             default=["title"],
         )
         fields = GraphQLMetaBase.Fields(
@@ -780,7 +796,7 @@ class ReportingReport(models.Model):
             quick=["code", "title", "description"],
         )
         ordering = GraphQLMetaBase.Ordering(
-            allowed=["title", "code", "created_at"],
+            allowed=["id", "title", "code", "created_at"],
             default=["title"],
         )
         fields = GraphQLMetaBase.Fields(read_only=["created_at", "updated_at"])
@@ -793,9 +809,13 @@ class ReportingReport(models.Model):
         return f"{self.title} ({self.code})"
 
     def _resolved_blocks(self) -> List["ReportingReportBlock"]:
-        return list(self.blocks.select_related("visualization", "visualization__dataset"))
+        return list(
+            self.blocks.select_related("visualization", "visualization__dataset")
+        )
 
-    def _render_visualizations(self, quick: str, limit: int, filters: Optional[dict]) -> List[dict]:
+    def _render_visualizations(
+        self, quick: str, limit: int, filters: Optional[dict]
+    ) -> List[dict]:
         rendered: List[dict] = []
         for block in self._resolved_blocks():
             payload = block.visualization.render(
@@ -849,7 +869,10 @@ class ReportingReportBlock(models.Model):
     """Through table used to assign visualizations to a report with layout hints."""
 
     report = models.ForeignKey(
-        ReportingReport, related_name="blocks", on_delete=models.CASCADE, verbose_name="Rapport"
+        ReportingReport,
+        related_name="blocks",
+        on_delete=models.CASCADE,
+        verbose_name="Rapport",
     )
     visualization = models.ForeignKey(
         ReportingVisualization,
@@ -878,6 +901,10 @@ class ReportingReportBlock(models.Model):
         access = GraphQLMetaBase.AccessControl(
             roles=_reporting_roles(),
             operations=_reporting_operations(),
+        )
+        ordering = GraphQLMetaBase.Ordering(
+            allowed=["id", "position"],
+            default=["position"],
         )
 
     def __str__(self) -> str:
@@ -962,7 +989,7 @@ class ReportingExportJob(models.Model):
             quick=["title", "status", "format"],
         )
         ordering = GraphQLMetaBase.Ordering(
-            allowed=["created_at", "status", "title"],
+            allowed=["id", "created_at", "status", "title"],
             default=["-created_at"],
         )
         fields = GraphQLMetaBase.Fields(read_only=["started_at", "finished_at"])
@@ -978,9 +1005,7 @@ class ReportingExportJob(models.Model):
         if self.report:
             return self.report.build_payload(quick="", limit=500, filters=self.filters)
         if self.visualization:
-            return self.visualization.render(
-                quick="", limit=500, filters=self.filters
-            )
+            return self.visualization.render(quick="", limit=500, filters=self.filters)
         if self.dataset:
             return self.dataset.preview(
                 quick="",
