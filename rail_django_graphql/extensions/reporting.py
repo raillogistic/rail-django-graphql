@@ -165,6 +165,50 @@ def _to_ordering(ordering: Optional[Iterable[str]]) -> List[str]:
     return [str(value) for value in ordering if value]
 
 
+def _coerce_int(value: Any, *, default: int) -> int:
+    """
+    Coerce a GraphQL input value to an integer.
+
+    The reporting extension is consumed through the auto-generated GraphQL
+    schema, where action form inputs can reach the backend as strings even when
+    declared as numbers. This helper makes BI preview/render endpoints tolerant
+    to that behavior.
+    """
+
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        return default
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, float):
+        return int(value)
+
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned == "":
+            return default
+        try:
+            return int(cleaned)
+        except ValueError:
+            try:
+                return int(float(cleaned))
+            except ValueError as exc:
+                raise ReportingError(
+                    f"Limite invalide '{value}'. Valeur attendue: entier."
+                ) from exc
+
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise ReportingError(
+            f"Limite invalide '{value}'. Valeur attendue: entier."
+        ) from exc
+
+
 class DatasetExecutionEngine:
     """
     Executes a ReportingDataset definition against its underlying model.
@@ -604,15 +648,16 @@ class ReportingDataset(models.Model):
     def preview(
         self,
         quick: str = "",
-        limit: int = 50,
+        limit: Any = 50,
         ordering: str = "",
         filters: Optional[dict] = None,
     ) -> dict:
         engine = self.build_engine()
         runtime_filters = self._runtime_filters(filters)
+        coerced_limit = _coerce_int(limit, default=self.preview_limit)
         result = engine.run(
             runtime_filters=runtime_filters,
-            limit=limit or self.preview_limit,
+            limit=coerced_limit or self.preview_limit,
             ordering=_to_ordering(ordering),
             quick_search=quick,
         )
@@ -735,14 +780,15 @@ class ReportingVisualization(models.Model):
     def render(
         self,
         quick: str = "",
-        limit: int = 200,
+        limit: Any = 200,
         filters: Optional[dict] = None,
     ) -> dict:
         engine = self.dataset.build_engine()
         merged_filters = self._merge_filters(filters)
+        coerced_limit = _coerce_int(limit, default=self.dataset.preview_limit)
         payload = engine.run(
             runtime_filters=merged_filters,
-            limit=limit or self.dataset.preview_limit,
+            limit=coerced_limit or self.dataset.preview_limit,
             quick_search=quick,
         )
         return {

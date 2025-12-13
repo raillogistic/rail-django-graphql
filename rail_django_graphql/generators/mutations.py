@@ -16,12 +16,13 @@ from ..core.error_handling import get_error_handler
 from ..conf import get_mutation_generator_settings
 import inspect
 import re
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, List, Optional, Type, Union, get_origin
 
 import graphene
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, models, transaction
 from graphene_django import DjangoObjectType
+from graphene.types.generic import GenericScalar
 
 
 class MutationError(graphene.ObjectType):
@@ -1374,13 +1375,47 @@ class MutationGenerator:
         Returns:
             Corresponding GraphQL type
         """
+        if isinstance(python_type, str):
+            normalized = (
+                python_type.replace("typing.", "").replace("builtins.", "").strip()
+            )
+            base = normalized.split("[", 1)[0].strip()
+            if base.lower() in {"dict", "mapping"}:
+                python_type = dict
+            elif base.lower() in {"list", "tuple", "set"}:
+                python_type = list
+            elif base == "str":
+                python_type = str
+            elif base == "int":
+                python_type = int
+            elif base == "float":
+                python_type = float
+            elif base == "bool":
+                python_type = bool
+            elif base in {"Any", "object"}:
+                python_type = Any
+            elif base in {"None", "NoneType"}:
+                python_type = type(None)
+
+        origin = get_origin(python_type)
+        if origin is dict:
+            python_type = dict
+        elif origin in {list, tuple, set}:
+            python_type = list
+        elif origin is Union:
+            args = getattr(python_type, "__args__", ())
+            non_none_types = [arg for arg in args if arg is not type(None)]
+            if non_none_types:
+                return self._convert_python_type_to_graphql(non_none_types[0])
+
         type_mapping = {
             str: graphene.String,
             int: graphene.Int,
             float: graphene.Float,
             bool: graphene.Boolean,
-            dict: graphene.JSONString,
-            Any: graphene.String,
+            dict: GenericScalar,
+            list: GenericScalar,
+            Any: GenericScalar,
             type(None): graphene.String,
         }
 
