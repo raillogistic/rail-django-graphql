@@ -145,6 +145,7 @@ LIBRARY_DEFAULTS: Dict[str, Any] = {
         "URL": {"enabled": True},
         "Phone": {"enabled": True},
         "Decimal": {"enabled": True},
+        "Binary": {"enabled": True},
     },
     "monitoring_settings": {
         "enable_metrics": False,
