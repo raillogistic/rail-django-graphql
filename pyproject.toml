@@ -130,6 +130,9 @@ full = [
 ]
 
 
+[project.scripts]
+rail-admin = "rail_django_graphql.bin.rail_admin:main"
+
 [project.urls]
 Homepage = "https://github.com/raillogistic/rail-django-graphql"
 Documentation = "https://rail-django-graphql.readthedocs.io/"

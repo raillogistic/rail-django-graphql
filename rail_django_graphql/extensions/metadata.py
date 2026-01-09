@@ -5283,6 +5283,9 @@ class ModelMetadataQuery(graphene.ObjectType):
         extractor = ModelMetadataExtractor(max_depth=max_depth)
         models_metadata: List[ModelMetadataType] = []
         for model in app_config.get_models():
+            # Filter out Historical models (django-simple-history)
+            if model.__name__.startswith("Historical"):
+                continue
             try:
                 metadata = extractor.extract_model_metadata(
                     app_name=app_name,

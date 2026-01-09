@@ -1,0 +1,43 @@
+#!/usr/bin/env python
+"""Django's command-line utility for administrative tasks."""
+import os
+import sys
+
+
+def main():
+    """Run administrative tasks."""
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', '{{ project_name }}.settings')
+    
+    # Custom logic for 'startapp': default to creating inside 'apps/' directory
+    if len(sys.argv) > 1 and sys.argv[1] == 'startapp':
+        # Check if we have a name (sys.argv[2]) and NO destination (len == 3)
+        if len(sys.argv) == 3:
+            app_name = sys.argv[2]
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            apps_dir = os.path.join(base_dir, 'apps')
+            target_dir = os.path.join(apps_dir, app_name)
+            
+            # Create apps/ directory if it doesn't exist
+            if not os.path.exists(apps_dir):
+                os.makedirs(apps_dir)
+            
+            # Create the app specific directory if it doesn't exist
+            if not os.path.exists(target_dir):
+                os.makedirs(target_dir)
+                
+            # Append the target directory to the arguments
+            sys.argv.append(target_dir)
+
+    try:
+        from django.core.management import execute_from_command_line
+    except ImportError as exc:
+        raise ImportError(
+            "Couldn't import Django. Are you sure it's installed and "
+            "available on your PYTHONPATH environment variable? Did you "
+            "forget to activate a virtual environment?"
+        ) from exc
+    execute_from_command_line(sys.argv)
+
+
+if __name__ == '__main__':
+    main()

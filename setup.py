@@ -107,11 +107,18 @@ setup(
     keywords="django graphql schema generation api graphene",
     license="MIT",
     zip_safe=False,
+    entry_points={
+        "console_scripts": [
+            "rail-admin=rail_django_graphql.bin.rail_admin:main",
+        ],
+    },
     package_data={
         "rail_django_graphql": [
             "templates/**/*",
             "static/**/*",
             "management/commands/*.py",
+            "bin/*",
+            "conf/**/*",
         ],
     },
 )
