@@ -12,6 +12,10 @@ from django.db import models
 from django.db.models.fields import Field
 from django.db.models.fields.related import ForeignKey, ManyToManyField, OneToOneField
 from graphene_django import DjangoObjectType
+from graphene_django.converter import (
+    convert_django_field,
+    get_django_field_description,
+)
 
 # Resilient import: DjangoFilterConnectionField may not exist in some graphene-django versions
 try:
@@ -27,11 +31,23 @@ from datetime import date
 from ..conf import get_mutation_generator_settings, get_type_generator_settings
 from ..core.meta import get_model_graphql_meta
 from ..core.performance import get_query_optimizer
+from ..core.scalars import Binary as BinaryScalar
 from ..core.scalars import get_custom_scalar, get_enabled_scalars
 from ..core.settings import MutationGeneratorSettings, TypeGeneratorSettings
 from ..utils.history import serialize_history_changes
 from .inheritance import inheritance_handler
 from .introspector import FieldInfo, ModelIntrospector
+
+
+@convert_django_field.register(models.BinaryField)
+def convert_binary_field(field, registry=None):
+    """
+    Convert BinaryField values into download links backed by the MEDIA folder.
+    """
+    scalar_cls = get_custom_scalar("Binary") or BinaryScalar
+    description = get_django_field_description(field)
+    required = not field.null
+    return scalar_cls(description=description, required=required)
 
 
 class TypeGenerator:
@@ -71,6 +87,7 @@ class TypeGenerator:
         models.SlugField: graphene.String,
         models.SmallIntegerField: graphene.Int,
         models.TextField: graphene.String,
+        models.BinaryField: graphene.String,
         models.TimeField: graphene.Time,
         models.URLField: graphene.String,
         models.UUIDField: graphene.UUID,
@@ -181,6 +198,9 @@ class TypeGenerator:
 
         if "Decimal" in self.custom_scalars:
             self.FIELD_TYPE_MAP[models.DecimalField] = self.custom_scalars["Decimal"]
+
+        if "Binary" in self.custom_scalars:
+            self.FIELD_TYPE_MAP[models.BinaryField] = self.custom_scalars["Binary"]
 
     def _get_excluded_fields(self, model: Type[models.Model]) -> List[str]:
         """Get excluded fields for a specific model.

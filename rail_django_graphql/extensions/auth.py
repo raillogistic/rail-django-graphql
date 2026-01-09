@@ -124,7 +124,9 @@ class DummySettingsType(graphene.ObjectType):
     theme = graphene.String(description="Thème de l'interface")
     mode = graphene.String(description="Mode d'affichage")
     layout = graphene.String(description="Disposition de l'interface")
-    sidebar_collapse_mode = graphene.String(description="Mode de repli de la barre latérale")
+    sidebar_collapse_mode = graphene.String(
+        description="Mode de repli de la barre latérale"
+    )
     font_size = graphene.String(description="Taille de police")
     font_family = graphene.String(description="Famille de police")
 
@@ -420,47 +422,53 @@ class JWTManager:
             return None
 
 
-
 def set_auth_cookies(request, access_token=None, refresh_token=None):
     """Sets secure HttpOnly cookies for authentication tokens."""
     if not hasattr(request, "_set_auth_cookies"):
         request._set_auth_cookies = []
-    
+
     # Force secure=False in DEBUG mode to allow cookies on localhost HTTP
     secure = getattr(settings, "SESSION_COOKIE_SECURE", False)
     if getattr(settings, "DEBUG", False):
         secure = False
-        
+
     samesite = "Lax"
-    
+
     if access_token:
-        request._set_auth_cookies.append({
-            "key": getattr(settings, "JWT_AUTH_COOKIE", "jwt"),
-            "value": access_token,
-            "httponly": True,
-            "secure": secure,
-            "samesite": samesite,
-            "max_age": getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", 3600),
-        })
-        
+        request._set_auth_cookies.append(
+            {
+                "key": getattr(settings, "JWT_AUTH_COOKIE", "jwt"),
+                "value": access_token,
+                "httponly": True,
+                "secure": secure,
+                "samesite": samesite,
+                "max_age": getattr(settings, "JWT_ACCESS_TOKEN_LIFETIME", 3600),
+            }
+        )
+
     if refresh_token:
-        request._set_auth_cookies.append({
-            "key": getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"),
-            "value": refresh_token,
-            "httponly": True,
-            "secure": secure,
-            "samesite": samesite,
-            "max_age": getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400 * 7),
-            "path": "/",
-        })
+        request._set_auth_cookies.append(
+            {
+                "key": getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"),
+                "value": refresh_token,
+                "httponly": True,
+                "secure": secure,
+                "samesite": samesite,
+                "max_age": getattr(settings, "JWT_REFRESH_TOKEN_LIFETIME", 86400 * 7),
+                "path": "/",
+            }
+        )
+
 
 def delete_auth_cookies(request):
     """Marks authentication cookies for deletion."""
     if not hasattr(request, "_delete_auth_cookies"):
         request._delete_auth_cookies = []
-    
+
     request._delete_auth_cookies.append(getattr(settings, "JWT_AUTH_COOKIE", "jwt"))
-    request._delete_auth_cookies.append(getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token"))
+    request._delete_auth_cookies.append(
+        getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token")
+    )
 
 
 class LoginMutation(graphene.Mutation):
@@ -507,9 +515,9 @@ class LoginMutation(graphene.Mutation):
 
             # Set HttpOnly cookies
             set_auth_cookies(
-                info.context, 
-                access_token=token_data["token"], 
-                refresh_token=token_data["refresh_token"]
+                info.context,
+                access_token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
             )
 
             return AuthPayload(
@@ -602,9 +610,9 @@ class RegisterMutation(graphene.Mutation):
 
             # Set HttpOnly cookies
             set_auth_cookies(
-                info.context, 
-                access_token=token_data["token"], 
-                refresh_token=token_data["refresh_token"]
+                info.context,
+                access_token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
             )
 
             return AuthPayload(
@@ -629,7 +637,8 @@ class RefreshTokenMutation(graphene.Mutation):
 
     class Arguments:
         refresh_token = graphene.String(
-            required=False, description="Token de rafraîchissement (optionnel si cookie présent)"
+            required=False,
+            description="Token de rafraîchissement (optionnel si cookie présent)",
         )
 
     Output = AuthPayload
@@ -672,9 +681,9 @@ class RefreshTokenMutation(graphene.Mutation):
 
             # Set new HttpOnly cookies
             set_auth_cookies(
-                info.context, 
-                access_token=token_data["token"], 
-                refresh_token=token_data["refresh_token"]
+                info.context,
+                access_token=token_data["token"],
+                refresh_token=token_data["refresh_token"],
             )
 
             return AuthPayload(
@@ -735,7 +744,7 @@ class MeQuery(graphene.ObjectType):
     me = graphene.Field(
         lambda: UserType(), description="Informations de l'utilisateur connecté"
     )
-    xx = graphene.String()
+    # xx = graphene.String()
 
     def resolve_me(self, info):
         """
